@@ -308,6 +308,8 @@ export interface SDKConfig {
   ageGateEnabled?: boolean;
   /** Minimum age for age gate */
   ageGateMinAge?: number;
+  /** Feature flag: show bonus entries (watch video) screen in SDK flow */
+  bonusEntriesEnabled?: boolean;
 }
 
 export interface RefreshTokenRequest {

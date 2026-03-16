@@ -298,8 +298,8 @@ export class ExperienceScreen {
 
       this.claimedToday = true;
 
-      // If giveaway has ads, go to bonus; otherwise complete
-      if (this.giveawayModel?.hasAdsEnabled() && this.giveawayModel.doublingEnabled) {
+      // If bonus entries feature flag is on and giveaway has ads, go to bonus; otherwise complete
+      if (this.sdkConfig?.bonusEntriesEnabled && this.giveawayModel?.hasAdsEnabled() && this.giveawayModel.doublingEnabled) {
         this.transitionTo({ kind: 'bonus', baseEntries: entries });
       } else {
         this.transitionTo({ kind: 'completed', totalEntries: result.totalEntries });
