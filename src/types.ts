@@ -356,6 +356,8 @@ export interface ClaimBonusEntriesResponse {
 
 export interface SubmitEmailRequest {
   email: string;
+  marketingConsent?: boolean;
+  publisherUserId?: string;
 }
 
 export interface SubmitEmailResponse {

@@ -10,6 +10,7 @@ import { WINR_CONSTANTS } from '../../types';
 export class EmailCaptureScreen {
   private element: HTMLElement | null = null;
   private isAgeConfirmed = false;
+  private isMarketingConsent = false;
   private emailValue = '';
   private callbacks: {
     onSubmitted?: () => void;
@@ -145,6 +146,29 @@ export class EmailCaptureScreen {
     ageGate.appendChild(ageLabel);
     this.element.appendChild(ageGate);
 
+    // Marketing consent checkbox
+    const marketingConsent = document.createElement('div');
+    marketingConsent.className = 'winr-marketing-consent';
+
+    const marketingIcon = document.createElement('span');
+    marketingIcon.className = 'winr-marketing-consent-icon';
+    marketingIcon.textContent = '☐';
+
+    const marketingLabel = document.createElement('span');
+    marketingLabel.className = 'winr-marketing-consent-text';
+    marketingLabel.textContent = this.sdkConfig?.copy?.emailCapture?.emailConsentText
+      ?? 'I agree to receive marketing communications and prize notifications';
+
+    marketingConsent.appendChild(marketingIcon);
+    marketingConsent.appendChild(marketingLabel);
+    this.element.appendChild(marketingConsent);
+
+    marketingConsent.addEventListener('click', () => {
+      this.isMarketingConsent = !this.isMarketingConsent;
+      marketingIcon.textContent = this.isMarketingConsent ? '☑' : '☐';
+      marketingIcon.style.color = this.isMarketingConsent ? 'var(--winr-btn-color)' : 'var(--winr-muted)';
+    });
+
     // CTA button
     const submitButtonText = this.sdkConfig?.copy?.emailCapture?.submitButton ?? 'ENTER NOW';
     const btn = document.createElement('button');
@@ -233,6 +257,7 @@ export class EmailCaptureScreen {
     await client.post('/submitEmail', {
       email,
       hasConsent: true,
+      marketingConsent: this.isMarketingConsent,
       ...(this.publisherUserId ? { publisherUserId: this.publisherUserId } : {}),
     });
   }
