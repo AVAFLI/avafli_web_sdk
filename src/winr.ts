@@ -74,6 +74,13 @@ export class WINR {
         );
       }
 
+      if (!config.user || !config.user.id || !config.user.firstName || !config.user.lastName) {
+        throw new WINRError(
+          WINRErrorCode.InvalidConfiguration,
+          'User with id, firstName, and lastName is required'
+        );
+      }
+
       // Create singleton instance
       WINR.instance = new WINR(config);
       
@@ -91,6 +98,32 @@ export class WINR {
         analyticsAdapter.setAdapter(config.options.analyticsAdapter);
       }
 
+      // Auto-setup user from configuration
+      const user = config.user;
+      WINR.instance.currentUser = user;
+
+      // Submit user profile to server
+      try {
+        await WINR.instance.client.post<{ success: boolean }>('/submitUserProfile', {
+          firstName: user.firstName,
+          lastName: user.lastName,
+          phone: user.phone,
+          smsConsent: false,
+          publisherUserId: user.id,
+        } as SubmitUserProfileRequest);
+      } catch (profileError) {
+        logger.warn('Failed to submit user profile:', profileError);
+        // Non-fatal — continue
+      }
+
+      // Identify user in analytics
+      analyticsAdapter.identify(user.id, {
+        firstName: user.firstName,
+        lastName: user.lastName,
+      });
+
+      logger.debug('User set from configuration:', { userId: user.id });
+
     } catch (error) {
       WINR.instance = null;
       WINR.isConfigured = false;
@@ -106,24 +139,6 @@ export class WINR {
       logger.error('WINR configuration failed:', winrError);
       throw winrError;
     }
-  }
-
-  /**
-   * Set the current user
-   */
-  public static setUser(user: WINRUser): void {
-    if (!WINR.ensureConfigured()) return;
-    
-    WINR.instance!.currentUser = user;
-    
-    // Track user identification
-    analyticsAdapter.identify(user.id, {
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-    });
-    
-    logger.debug('User set:', { userId: user.id, email: user.email });
   }
 
   /**
@@ -150,7 +165,7 @@ export class WINR {
         options,
         false, // claimedToday
         false, // hasEmail
-        WINR.instance!.currentUser?.id
+        WINR.instance!.config.user.id
       );
       
       // Track modal presentation
@@ -203,7 +218,7 @@ export class WINR {
         options,
         false, // claimedToday
         false, // hasEmail
-        WINR.instance!.currentUser?.id
+        WINR.instance!.config.user.id
       );
       
       // Track inline presentation

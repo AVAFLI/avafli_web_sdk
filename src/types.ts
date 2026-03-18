@@ -28,6 +28,8 @@ export interface WINRConfiguration {
   apiKey: string;
   /** Application bundle/package identifier */
   bundleId: string;
+  /** Current user — required */
+  user: WINRUser;
   /** SDK configuration options */
   options?: WINROptions;
   /** Custom branding configuration */
@@ -50,16 +52,12 @@ export interface WINRBranding {
 export interface WINRUser {
   /** User ID */
   id: string;
-  /** User email */
-  email?: string;
   /** First name */
-  firstName?: string;
+  firstName: string;
   /** Last name */
-  lastName?: string;
+  lastName: string;
   /** Phone number */
   phone?: string;
-  /** SMS consent */
-  isSMSPermissioned?: boolean;
 }
 
 // ─── Domain Types ───

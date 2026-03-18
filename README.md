@@ -49,26 +49,19 @@ The UMD build exposes a global `WINR` object on `window`.
 ```typescript
 import { WINR } from 'winr-web-sdk';
 
-// 1. Configure once at app startup
+// 1. Configure with user
 await WINR.configure({
-  apiKey: 'your-api-key',
-  bundleId: 'com.example.mysite',
-});
-
-// 2. Identify the user
-WINR.setUser({
-  id: 'user_123',
-  firstName: 'Jane',
-  lastName: 'Doe',
-});
-
-// 3. Present the experience
-await WINR.present({
-  onComplete: (result) => {
-    console.log(`Earned ${result.entries} entries (day ${result.streakDay})`);
+  apiKey: 'YOUR_API_KEY',
+  bundleId: 'com.example.myapp',
+  user: {
+    id: 'user_123',
+    firstName: 'Jane',
+    lastName: 'Doe',
   },
-  onClose: () => console.log('Dismissed'),
 });
+
+// 2. Present the experience
+WINR.present();
 ```
 
 ### UMD / Script tag
@@ -78,11 +71,11 @@ await WINR.present({
 <script>
   (async function () {
     await WINR.configure({
-      apiKey: 'your-api-key',
-      bundleId: 'com.example.mysite',
+      apiKey: 'YOUR_API_KEY',
+      bundleId: 'com.example.myapp',
+      user: { id: 'user_123', firstName: 'Jane', lastName: 'Doe' },
     });
 
-    WINR.setUser({ id: 'user_123' });
     await WINR.present();
   })();
 </script>
@@ -97,11 +90,10 @@ await WINR.present({
   import { WINR } from 'winr-web-sdk';
 
   await WINR.configure({
-    apiKey: 'your-api-key',
-    bundleId: 'com.example.mysite',
+    apiKey: 'YOUR_API_KEY',
+    bundleId: 'com.example.myapp',
+    user: { id: 'user_123', firstName: 'Jane', lastName: 'Doe' },
   });
-
-  WINR.setUser({ id: 'user_123' });
 
   await WINR.presentInline('winr-container', {
     onComplete: (result) => {
@@ -115,12 +107,18 @@ await WINR.present({
 
 ### `WINR.configure(config)`
 
-Initialize the SDK. Call once before any other method.
+Initialize the SDK and identify the user. Call once before any other method.
 
 ```typescript
 await WINR.configure({
   apiKey: string;            // Required — your publisher API key
   bundleId: string;          // Required — your app/site identifier
+  user: {                    // Required — current user
+    id: string;              // Stable unique user ID
+    firstName: string;       // User's first name
+    lastName: string;        // User's last name
+    phone?: string;          // Phone number (optional)
+  };
   options?: {
     environment?: 'production' | 'staging' | 'qa';   // Default: 'production'
     debug?: boolean;                                   // Enable verbose logging
@@ -131,18 +129,7 @@ await WINR.configure({
 });
 ```
 
-### `WINR.setUser(user)`
-
-Identify the current user. Call after `configure` and before `present`.
-
-```typescript
-WINR.setUser({
-  id: string;            // Required — stable unique user ID
-  firstName?: string;
-  lastName?: string;
-  phone?: string;
-});
-```
+The SDK automatically submits the user profile and identifies the user in analytics during configuration.
 
 > **Note:** Email is captured directly by the SDK's built-in UI. Publishers do not need to collect or pass email addresses.
 
@@ -248,8 +235,9 @@ class MyAdProvider implements RewardedVideoProvider {
 }
 
 await WINR.configure({
-  apiKey: 'your-api-key',
-  bundleId: 'com.example.mysite',
+  apiKey: 'YOUR_API_KEY',
+  bundleId: 'com.example.myapp',
+  user: { id: 'user_123', firstName: 'Jane', lastName: 'Doe' },
   options: {
     rewardedVideoProvider: new MyAdProvider(),
   },
@@ -271,8 +259,9 @@ const analytics: AnalyticsAdapter = {
 };
 
 await WINR.configure({
-  apiKey: 'your-api-key',
-  bundleId: 'com.example.mysite',
+  apiKey: 'YOUR_API_KEY',
+  bundleId: 'com.example.myapp',
+  user: { id: 'user_123', firstName: 'Jane', lastName: 'Doe' },
   options: { analyticsAdapter: analytics },
 });
 ```
