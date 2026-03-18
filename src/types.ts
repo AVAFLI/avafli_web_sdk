@@ -370,6 +370,7 @@ export interface SubmitUserProfileRequest {
   phone?: string;
   smsConsent: boolean;
   maidId?: string;
+  publisherUserId?: string;
 }
 
 export interface SubmitUserProfileResponse {

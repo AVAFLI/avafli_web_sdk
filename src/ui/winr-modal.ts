@@ -37,7 +37,8 @@ export class WINRModal {
     private sdkConfig: SDKConfig | null,
     private options: PresentationOptions = {},
     private claimedToday = false,
-    private hasEmail = false
+    private hasEmail = false,
+    private publisherUserId?: string
   ) {
     this.theme = createTheme(this.sdkConfig?.branding);
   }
@@ -158,7 +159,8 @@ export class WINRModal {
       this.streakState,
       this.sdkConfig,
       this.claimedToday,
-      this.hasEmail
+      this.hasEmail,
+      this.publisherUserId
     );
 
     this.experienceScreen.setCallbacks({

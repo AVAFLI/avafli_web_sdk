@@ -58,7 +58,8 @@ export class ExperienceScreen {
     private streakState: StreakState | null,
     private sdkConfig: SDKConfig | null,
     private claimedToday = false,
-    private hasEmail = false
+    private hasEmail = false,
+    private publisherUserId?: string
   ) {
     this.giveawayModel = giveaway ? GiveawayModel.fromJSON(giveaway) : null;
   }
@@ -170,7 +171,8 @@ export class ExperienceScreen {
       this.sdkConfig,
       this.giveaway,
       this.sdkConfig?.rulesUrl || this.giveaway?.rulesUrl,
-      undefined // prefillEmail
+      undefined, // prefillEmail
+      this.publisherUserId
     );
     screen.setCallbacks({
       onSubmitted: () => {

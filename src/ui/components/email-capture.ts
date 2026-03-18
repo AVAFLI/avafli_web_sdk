@@ -20,7 +20,8 @@ export class EmailCaptureScreen {
     private sdkConfig: SDKConfig | null,
     private giveaway: Giveaway | null = null,
     private rulesUrl?: string,
-    private prefillEmail?: string
+    private prefillEmail?: string,
+    private publisherUserId?: string
   ) {
     if (prefillEmail) this.emailValue = prefillEmail;
   }
@@ -229,7 +230,11 @@ export class EmailCaptureScreen {
       apiKey: '',
       logger: logger,
     });
-    await client.post('/submitEmail', { email, hasConsent: true });
+    await client.post('/submitEmail', {
+      email,
+      hasConsent: true,
+      ...(this.publisherUserId ? { publisherUserId: this.publisherUserId } : {}),
+    });
   }
 
   private showError(wrapper: HTMLElement, errorEl: HTMLElement, msg: string): void {

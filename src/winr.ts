@@ -147,7 +147,10 @@ export class WINR {
         WINR.instance!.currentGiveaway,
         streakState,
         WINR.instance!.getCurrentSDKConfig(),
-        options
+        options,
+        false, // claimedToday
+        false, // hasEmail
+        WINR.instance!.currentUser?.id
       );
       
       // Track modal presentation
@@ -197,7 +200,10 @@ export class WINR {
         WINR.instance!.currentGiveaway,
         streakState,
         WINR.instance!.getCurrentSDKConfig(),
-        options
+        options,
+        false, // claimedToday
+        false, // hasEmail
+        WINR.instance!.currentUser?.id
       );
       
       // Track inline presentation
