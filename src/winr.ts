@@ -466,7 +466,16 @@ export class WINR {
       this.storage.setItem(WINR_CONSTANTS.STORAGE_KEYS.UUID, response.uuid);
 
       // Store giveaway data and server SDK config
-      this.currentGiveaway = response.giveaway;
+      if (response.giveaway === null) {
+        // Clear cached giveaway data when no active giveaway
+        this.currentGiveaway = null;
+        this.storage.removeItem(WINR_CONSTANTS.STORAGE_KEYS.CACHED_GIVEAWAY);
+      } else {
+        // Store and cache the active giveaway
+        this.currentGiveaway = response.giveaway;
+        this.storage.setItem(WINR_CONSTANTS.STORAGE_KEYS.CACHED_GIVEAWAY, JSON.stringify(response.giveaway));
+      }
+      
       if (response.sdkConfig) {
         this.serverSDKConfig = response.sdkConfig;
       }
@@ -549,16 +558,36 @@ export class WINR {
   private async refreshGiveawayData(): Promise<void> {
     try {
       const response = await this.client.get<GetActiveGiveawayResponse>('/getActiveGiveaway');
-      this.currentGiveaway = response.giveaway;
+      
+      if (response.giveaway === null) {
+        // Clear cached giveaway data when no active giveaway
+        this.currentGiveaway = null;
+        this.storage.removeItem(WINR_CONSTANTS.STORAGE_KEYS.CACHED_GIVEAWAY);
+        logger.debug('No active giveaway - cleared cached data');
+      } else {
+        // Store and cache the active giveaway
+        this.currentGiveaway = response.giveaway;
+        this.storage.setItem(WINR_CONSTANTS.STORAGE_KEYS.CACHED_GIVEAWAY, JSON.stringify(response.giveaway));
+        logger.debug('Giveaway data refreshed');
+      }
+      
       if (response.sdkConfig) {
         this.serverSDKConfig = response.sdkConfig;
       }
       
-      logger.debug('Giveaway data refreshed');
-      
     } catch (error) {
       logger.warn('Failed to refresh giveaway data:', error);
-      // Continue with cached data
+      // Try to load cached giveaway data if network fails
+      const cachedGiveaway = this.storage.getItem(WINR_CONSTANTS.STORAGE_KEYS.CACHED_GIVEAWAY);
+      if (cachedGiveaway && !this.currentGiveaway) {
+        try {
+          this.currentGiveaway = JSON.parse(cachedGiveaway);
+          logger.debug('Using cached giveaway data');
+        } catch (parseError) {
+          logger.warn('Failed to parse cached giveaway data:', parseError);
+          this.storage.removeItem(WINR_CONSTANTS.STORAGE_KEYS.CACHED_GIVEAWAY);
+        }
+      }
     }
   }
 

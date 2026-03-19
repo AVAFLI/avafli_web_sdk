@@ -18,6 +18,7 @@ import { EmailCaptureScreen } from './email-capture';
  */
 type ExperienceState =
   | { kind: 'loading' }
+  | { kind: 'noActiveGiveaway' }
   | { kind: 'emailCapture' }
   | { kind: 'streak'; claimedToday: boolean }
   | { kind: 'bonus'; baseEntries: number }
@@ -79,8 +80,10 @@ export class ExperienceScreen {
     this.element.appendChild(this.contentEl);
 
     // Start state machine
-    if (!this.giveawayModel || !this.giveawayModel.isActive()) {
-      this.transitionTo({ kind: 'error', message: 'No active giveaway at the moment.' });
+    if (!this.giveaway) {
+      this.transitionTo({ kind: 'noActiveGiveaway' });
+    } else if (!this.giveawayModel || !this.giveawayModel.isActive()) {
+      this.transitionTo({ kind: 'noActiveGiveaway' });
     } else if (!this.hasEmail) {
       this.transitionTo({ kind: 'emailCapture' });
     } else if (!this.claimedToday) {
@@ -132,6 +135,9 @@ export class ExperienceScreen {
       case 'loading':
         this.renderLoading();
         break;
+      case 'noActiveGiveaway':
+        this.renderNoActiveGiveaway();
+        break;
       case 'emailCapture':
         this.renderEmailCapture();
         break;
@@ -163,6 +169,42 @@ export class ExperienceScreen {
       <div class="winr-loading-spinner"></div>
       <span class="winr-loading-text">${loadingText}</span>
     `;
+    this.contentEl!.appendChild(el);
+  }
+
+  private renderNoActiveGiveaway(): void {
+    const title = this.sdkConfig?.copy?.noActiveGiveaway?.title ?? 'No Active Giveaway';
+    const subtitle = this.sdkConfig?.copy?.noActiveGiveaway?.subtitle ?? 'Check back soon for your next chance to win!';
+    const closeText = this.sdkConfig?.copy?.noActiveGiveaway?.closeButton ?? 'Close';
+
+    const el = document.createElement('div');
+    el.className = 'winr-card-state winr-no-giveaway-state';
+    
+    // Publisher logo if available
+    const logoUrl = this.sdkConfig?.branding?.logoUrl;
+    if (logoUrl) {
+      const logoEl = document.createElement('div');
+      logoEl.className = 'winr-publisher-logo';
+      logoEl.innerHTML = `<img src="${logoUrl}" alt="Publisher Logo" style="max-width: 120px; max-height: 60px; object-fit: contain;">`;
+      el.appendChild(logoEl);
+    }
+    
+    const titleEl = document.createElement('h2');
+    titleEl.textContent = title;
+    titleEl.className = 'winr-no-giveaway-title';
+    el.appendChild(titleEl);
+    
+    const subtitleEl = document.createElement('p');
+    subtitleEl.textContent = subtitle;
+    subtitleEl.className = 'winr-no-giveaway-subtitle';
+    el.appendChild(subtitleEl);
+    
+    const btn = document.createElement('button');
+    btn.textContent = closeText;
+    btn.className = 'winr-close-button';
+    btn.addEventListener('click', () => this.callbacks?.onClose?.());
+    el.appendChild(btn);
+    
     this.contentEl!.appendChild(el);
   }
 

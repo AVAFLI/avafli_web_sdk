@@ -252,6 +252,11 @@ export interface SDKCopy {
     subtitle?: string;
     closeButton?: string;
   };
+  noActiveGiveaway?: {
+    title?: string;
+    subtitle?: string;
+    closeButton?: string;
+  };
   howItWorks?: {
     title?: string;
     subtitle?: string;
@@ -528,6 +533,7 @@ export const WINR_CONSTANTS = {
     EMAIL_SUBMITTED: 'winr_email_submitted',
     LAST_CLAIM_DATE: 'winr_last_claim_date',
     DEVICE_FINGERPRINT: 'winr_device_fingerprint',
+    CACHED_GIVEAWAY: 'winr_cached_giveaway',
   },
   DEFAULT_MILESTONES: [
     { day: 5, bonusEntries: 10 },
