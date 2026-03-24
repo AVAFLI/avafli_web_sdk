@@ -252,4 +252,4 @@ For detailed API documentation, see the [WINR Docs](https://avafli-website.web.a
 
 ---
 
-© 2026 Avafli. All Rights Reserved.
+© 2025 Avafli. All Rights Reserved.
