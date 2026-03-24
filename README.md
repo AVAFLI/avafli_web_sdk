@@ -81,7 +81,7 @@ pnpm add winr-web-sdk
 <script src="https://unpkg.com/winr-web-sdk@latest/dist/winr-sdk.umd.js"></script>
 ```
 
-> **Note:** Contact [team@avafli.com](mailto:team@avafli.com) to obtain an API key.
+> **Note:** Contact [AVAFLI](https://avafli-website.web.app/sdk/pricing) to obtain an API key.
 
 ## Configuration
 
@@ -242,12 +242,12 @@ interface DailyEntryGrant {
 }
 ```
 
-For detailed API documentation, see the [WINR Docs](https://docs.avafli.com).
+For detailed API documentation, see the [WINR Docs](https://avafli-website.web.app/sdk/web).
 
 ## Links
 
 - **Dashboard:** [https://avafli-website.web.app/sdk/dashboard](https://avafli-website.web.app/sdk/dashboard)
-- **Documentation:** [https://docs.avafli.com](https://docs.avafli.com)
+- **Documentation:** [https://avafli-website.web.app/sdk/web](https://avafli-website.web.app/sdk/web)
 - **Support:** [team@avafli.com](mailto:team@avafli.com)
 
 ---
