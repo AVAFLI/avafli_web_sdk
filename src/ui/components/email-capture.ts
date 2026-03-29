@@ -187,7 +187,7 @@ export class EmailCaptureScreen {
       legalParts.push(`<a href="#">${rulesLinkText}</a>`);
     }
     legalParts.push('<span>&amp;</span>');
-    legalParts.push('<a href="https://winfrastructure.us/privacy" target="_blank" rel="noopener">Privacy Policy</a>');
+    legalParts.push('<a href="https://avafli-website.web.app/sdk/privacy" target="_blank" rel="noopener">Privacy Policy</a>');
     legal.innerHTML = legalParts.join(' ');
     this.element.appendChild(legal);
 
