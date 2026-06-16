@@ -4,7 +4,7 @@
 
 - Initial release
 - Daily streak engagement system (3-tier: base, weekly bonus, monthly bonus)
-- Email capture with age gate (13+)
+- Email capture with age gate (18+)
 - Rewarded video provider interface
 - Server-driven SDK config
 - GDPR compliance (deleteUserData)

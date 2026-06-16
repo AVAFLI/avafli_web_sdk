@@ -144,8 +144,15 @@ export class WINRLogger implements Logger {
    */
   public static fromEnvironment(): WINRLogger {
     try {
-      if (typeof window !== 'undefined') {
-        // Check for debug flags in browser
+      // Determine whether we are in a development build. Rollup replaces
+      // process.env.NODE_ENV at build time; production bundles are NOT 'development'.
+      const isDevBuild =
+        typeof process !== 'undefined' && process.env?.['NODE_ENV'] === 'development';
+
+      // Verbose logging via URL/localStorage flags is ONLY honored in dev builds.
+      // In production this prevents end-users from trivially enabling debug
+      // logging (and potential PII leakage) via a query param.
+      if (isDevBuild && typeof window !== 'undefined') {
         const params = new URLSearchParams(window.location.search);
         if (params.get('winr_debug') === 'true') {
           return new WINRLogger(LogLevel.Debug);
@@ -157,8 +164,8 @@ export class WINRLogger implements Logger {
         }
       }
 
-      // Check for NODE_ENV in development environments
-      if (typeof process !== 'undefined' && process.env?.['NODE_ENV'] === 'development') {
+      // Dev builds default to verbose logging.
+      if (isDevBuild) {
         return new WINRLogger(LogLevel.Debug);
       }
     } catch {

@@ -7,6 +7,7 @@ import {
   WINRErrorCode,
 } from '../../types';
 import { GiveawayModel } from '../../domain/giveaway';
+import { WINR } from '../../winr';
 import { logger } from '../../services/logger';
 import { StreakDashboard } from './streak-dashboard';
 import { BonusEntriesScreen } from './bonus-entries';
@@ -330,14 +331,23 @@ export class ExperienceScreen {
     try {
       logger.debug('Claiming daily entries...');
 
-      const currentDay = this.streakState?.currentDay || 1;
-      const entries = this.giveawayModel?.getBaseEntries(currentDay) || 0;
+      // Call the real backend endpoint via the singleton's authed API client.
+      // The server is the source of truth for entries/streakDay/totals and
+      // enforces the same-day duplicate check + consent gate.
+      const response = await WINR.getAPI().claimDailyEntries();
 
-      // TODO: Call backend API
+      const entries = response.entries;
       const result: DailyEntryGrant = {
-        entries,
-        streakDay: currentDay,
-        totalEntries: (this.streakState?.totalEntriesEarned || 0) + entries,
+        entries: response.entries,
+        streakDay: response.streakDay,
+        totalEntries: response.totalEntries,
+      };
+
+      // Reflect server truth in local streak state.
+      this.streakState = {
+        ...(this.streakState ?? { weeklyCurrent: 0, monthlyCurrent: 0 }),
+        currentDay: response.streakDay,
+        totalEntriesEarned: response.totalEntries,
       };
 
       this.claimedToday = true;

@@ -17,11 +17,52 @@ import {
   WINR_CONSTANTS,
 } from './types';
 import { NetworkClient } from './network/client';
+import { WINRAPI, createWINRAPI } from './network/api';
 import { WINRModal } from './ui/winr-modal';
 import { StreakEngine } from './domain/streak-engine';
 import { LocalStorageProvider } from './storage/local-storage';
+import { SessionStorageProvider } from './storage/session-storage';
 import { logger } from './services/logger';
 import { analyticsAdapter } from './services/analytics';
+
+/** UUID v4 validation regex (per Master Field List: user_uid). */
+const UUID_V4_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** Name validation regex (first_name / last_name per spec). */
+const NAME_REGEX = /^[a-zA-Z '-]{1,50}$/;
+
+/** US 10-digit phone regex (applied after stripping non-digits). */
+const PHONE_REGEX = /^\+?1?\d{10}$/;
+
+/**
+ * Validate a JWT's structure and expiry without verifying the signature.
+ * Signature verification happens server-side; the SDK only needs to know
+ * whether the token is well-formed and still valid so it can proactively
+ * refresh rather than wait for a 401.
+ */
+function isJwtValid(token: string | null): boolean {
+  if (!token) return false;
+  const parts = token.split('.');
+  if (parts.length !== 3) return false;
+  const payloadPart = parts[1];
+  if (!payloadPart) return false;
+  try {
+    const base64 = payloadPart.replace(/-/g, '+').replace(/_/g, '/');
+    const payloadJson =
+      typeof atob === 'function'
+        ? atob(base64)
+        : Buffer.from(base64, 'base64').toString('utf-8');
+    const payload = JSON.parse(payloadJson) as { exp?: number };
+    if (typeof payload.exp === 'number') {
+      // exp is seconds since epoch; treat as expired with a small skew buffer.
+      if (Date.now() >= payload.exp * 1000 - 5000) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Main WINR Web SDK class
@@ -32,11 +73,26 @@ export class WINR {
   private static isConfigured = false;
 
   private client: NetworkClient;
+  private api: WINRAPI;
   private config: WINRConfiguration;
   private currentUser: WINRUser | null = null;
   private currentGiveaway: Giveaway | null = null;
   private streakEngine: StreakEngine;
+  /**
+   * Non-sensitive preferences (device fingerprint, cached giveaway, streak
+   * state, last claim date). Persisted in localStorage.
+   */
   private storage: LocalStorageProvider;
+  /**
+   * Sensitive auth material (session_token, refresh token, user_uid).
+   *
+   * SECURITY: These are stored in sessionStorage rather than localStorage to
+   * limit persistence and exposure window. The ideal is httpOnly cookies set
+   * by the backend (not readable by JS, immune to XSS token theft); production
+   * deployments SHOULD prefer that. Within the SDK's control, sessionStorage is
+   * the least-persistent option available and is self-documented for secrets.
+   */
+  private secureStorage: SessionStorageProvider;
   private deviceFingerprint: string | null = null;
   private currentModal: WINRModal | null = null;
   private serverSDKConfig: SDKConfig | null = null;
@@ -44,16 +100,55 @@ export class WINR {
   private constructor(config: WINRConfiguration) {
     this.config = config;
     this.storage = new LocalStorageProvider();
+    this.secureStorage = new SessionStorageProvider();
     this.streakEngine = new StreakEngine();
-    
+
     // Initialize network client
     this.client = new NetworkClient({
       baseURL: WINR_CONSTANTS.getApiBaseUrl(config.options?.environment),
       apiKey: config.apiKey,
-      tokenProvider: () => this.storage.getItem(WINR_CONSTANTS.STORAGE_KEYS.TOKEN),
+      tokenProvider: () => this.getValidToken(),
       refreshHandler: () => this.refreshToken(),
       logger: logger,
     });
+    this.api = createWINRAPI(this.client);
+  }
+
+  /**
+   * Internal accessor for the authed, typed API client bound to the singleton.
+   * Used by UI components so they route through the authenticated network
+   * client instead of constructing their own unauthenticated one.
+   */
+  public static getAPI(): WINRAPI {
+    WINR.ensureConfigured();
+    return WINR.instance!.api;
+  }
+
+  /** Expose the resolved consent / age-gate config to UI components. */
+  public static getResolvedSDKConfig(): SDKConfig {
+    WINR.ensureConfigured();
+    return WINR.instance!.getCurrentSDKConfig();
+  }
+
+  /**
+   * Return the stored session token, proactively refreshing it if it is
+   * structurally invalid or expired. The network client previously only
+   * reacted to a 401; this validates `exp` up front.
+   */
+  private getValidToken(): string | null {
+    const token = this.secureStorage.getItem(WINR_CONSTANTS.STORAGE_KEYS.TOKEN);
+    if (token && isJwtValid(token)) {
+      return token;
+    }
+    // Token missing/expired/malformed — kick off a refresh (best-effort, async)
+    // and return the current value so the in-flight request can still attempt;
+    // a resulting 401 will trigger the reactive refresh path as a fallback.
+    if (this.secureStorage.getItem(WINR_CONSTANTS.STORAGE_KEYS.REFRESH_TOKEN)) {
+      this.refreshToken().catch((err) =>
+        logger.debug('Proactive token refresh failed:', err)
+      );
+    }
+    return token;
   }
 
   /**
@@ -79,6 +174,26 @@ export class WINR {
           WINRErrorCode.InvalidConfiguration,
           'User with id, firstName, and lastName is required'
         );
+      }
+
+      // Validate name characters/length (first_name / last_name per spec).
+      if (!NAME_REGEX.test(config.user.firstName) || !NAME_REGEX.test(config.user.lastName)) {
+        throw new WINRError(
+          WINRErrorCode.InvalidConfiguration,
+          'First and last name may only contain letters, spaces, hyphens, or apostrophes (max 50 chars)'
+        );
+      }
+
+      // Validate phone (optional). Strip non-digits, then check US 10-digit format.
+      if (config.user.phone) {
+        const normalizedPhone = config.user.phone.replace(/\D/g, '');
+        if (!PHONE_REGEX.test(normalizedPhone)) {
+          throw new WINRError(
+            WINRErrorCode.InvalidConfiguration,
+            'Please enter a valid 10-digit mobile number'
+          );
+        }
+        config.user.phone = normalizedPhone;
       }
 
       // Create singleton instance
@@ -293,8 +408,9 @@ export class WINR {
       // Call API to delete server-side data
       await WINR.instance!.client.delete<DeleteUserDataResponse>('/deleteUserData');
       
-      // Clear local storage
+      // Clear local + session (sensitive) storage
       WINR.instance!.storage.clear();
+      WINR.instance!.secureStorage.clear();
       
       // Reset internal state
       WINR.instance!.currentUser = null;
@@ -460,10 +576,19 @@ export class WINR {
         { requiresAuth: false }
       );
 
-      // Store authentication tokens
-      this.storage.setItem(WINR_CONSTANTS.STORAGE_KEYS.TOKEN, response.token);
-      this.storage.setItem(WINR_CONSTANTS.STORAGE_KEYS.REFRESH_TOKEN, response.refreshToken);
-      this.storage.setItem(WINR_CONSTANTS.STORAGE_KEYS.UUID, response.uuid);
+      // Validate user_uid (UUID v4) returned from the handshake before storing.
+      if (!response.uuid || !UUID_V4_REGEX.test(response.uuid)) {
+        logger.error('registerDevice returned a malformed user_uid:', response.uuid);
+        throw new WINRError(
+          WINRErrorCode.InvalidState,
+          'Device registration returned an invalid user identifier'
+        );
+      }
+
+      // Store authentication tokens + uuid in sessionStorage (sensitive).
+      this.secureStorage.setItem(WINR_CONSTANTS.STORAGE_KEYS.TOKEN, response.token);
+      this.secureStorage.setItem(WINR_CONSTANTS.STORAGE_KEYS.REFRESH_TOKEN, response.refreshToken);
+      this.secureStorage.setItem(WINR_CONSTANTS.STORAGE_KEYS.UUID, response.uuid);
 
       // Store giveaway data and server SDK config
       if (response.giveaway === null) {
@@ -508,7 +633,7 @@ export class WINR {
   }
 
   private async refreshToken(): Promise<string | null> {
-    const refreshToken = this.storage.getItem(WINR_CONSTANTS.STORAGE_KEYS.REFRESH_TOKEN);
+    const refreshToken = this.secureStorage.getItem(WINR_CONSTANTS.STORAGE_KEYS.REFRESH_TOKEN);
     if (!refreshToken) {
       throw new WINRError(
         WINRErrorCode.AuthenticationRequired,
@@ -523,17 +648,17 @@ export class WINR {
       );
 
       // Update stored tokens
-      this.storage.setItem(WINR_CONSTANTS.STORAGE_KEYS.TOKEN, response.token);
-      this.storage.setItem(WINR_CONSTANTS.STORAGE_KEYS.REFRESH_TOKEN, response.refreshToken);
+      this.secureStorage.setItem(WINR_CONSTANTS.STORAGE_KEYS.TOKEN, response.token);
+      this.secureStorage.setItem(WINR_CONSTANTS.STORAGE_KEYS.REFRESH_TOKEN, response.refreshToken);
 
       logger.debug('Token refreshed successfully');
       return response.token;
-      
+
     } catch (error) {
       logger.error('Token refresh failed:', error);
       // Clear invalid tokens
-      this.storage.removeItem(WINR_CONSTANTS.STORAGE_KEYS.TOKEN);
-      this.storage.removeItem(WINR_CONSTANTS.STORAGE_KEYS.REFRESH_TOKEN);
+      this.secureStorage.removeItem(WINR_CONSTANTS.STORAGE_KEYS.TOKEN);
+      this.secureStorage.removeItem(WINR_CONSTANTS.STORAGE_KEYS.REFRESH_TOKEN);
       throw error;
     }
   }
@@ -627,7 +752,7 @@ export class WINR {
       copy: this.serverSDKConfig?.copy || {},
       rulesUrl: this.serverSDKConfig?.rulesUrl,
       ageGateEnabled: this.serverSDKConfig?.ageGateEnabled ?? this.config.options?.enableAgeGate ?? true,
-      ageGateMinAge: this.serverSDKConfig?.ageGateMinAge ?? this.config.options?.ageGateMinAge ?? 13,
+      ageGateMinAge: this.serverSDKConfig?.ageGateMinAge ?? this.config.options?.ageGateMinAge ?? 18,
     };
   }
 }

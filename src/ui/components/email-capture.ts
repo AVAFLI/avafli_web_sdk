@@ -1,8 +1,7 @@
-import { WINRError, WINRErrorCode, SDKConfig, Giveaway } from '../../types';
+import { WINRError, SDKConfig, Giveaway, SubmitEmailRequest } from '../../types';
 import { logger } from '../../services/logger';
 import { analyticsAdapter } from '../../services/analytics';
-import { NetworkClient } from '../../network/client';
-import { WINR_CONSTANTS } from '../../types';
+import { WINR } from '../../winr';
 
 /**
  * Email capture and age gate — matches iOS EmailCaptureView.swift
@@ -220,15 +219,16 @@ export class EmailCaptureScreen {
     wrapper: HTMLElement,
     errorEl: HTMLElement
   ): void {
-    const trimmed = this.emailValue.trim();
+    // Normalize per spec: trim leading/trailing whitespace then lowercase.
+    const normalized = this.emailValue.trim().toLowerCase();
 
-    if (!trimmed) {
+    if (!normalized) {
       this.showError(wrapper, errorEl, 'Email is required');
       return;
     }
 
     const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-    if (!emailPattern.test(trimmed)) {
+    if (!emailPattern.test(normalized)) {
       this.showError(wrapper, errorEl, 'Please enter a valid email address');
       return;
     }
@@ -241,7 +241,9 @@ export class EmailCaptureScreen {
     this.clearError();
 
     // Fire-and-forget backend submit
-    this.submitEmailToBackend(trimmed).catch(() => {});
+    this.submitEmailToBackend(normalized).catch((err) => {
+      logger.warn('Failed to submit email:', err);
+    });
 
     analyticsAdapter.track('winr_email_captured');
     logger.info('Email submitted successfully');
@@ -249,17 +251,15 @@ export class EmailCaptureScreen {
   }
 
   private async submitEmailToBackend(email: string): Promise<void> {
-    const client = new NetworkClient({
-      baseURL: WINR_CONSTANTS.getApiBaseUrl(),
-      apiKey: '',
-      logger: logger,
-    });
-    await client.post('/submitEmail', {
+    // Route through the singleton's authenticated, typed API client.
+    // Consent timestamps + entry_source are generated server-side; the SDK
+    // sends the real marketing-consent boolean (never hardcoded).
+    const request: SubmitEmailRequest = {
       email,
-      hasConsent: true,
       marketingConsent: this.isMarketingConsent,
       ...(this.publisherUserId ? { publisherUserId: this.publisherUserId } : {}),
-    });
+    };
+    await WINR.getAPI().submitEmail(request);
   }
 
   private showError(wrapper: HTMLElement, errorEl: HTMLElement, msg: string): void {
