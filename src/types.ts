@@ -399,6 +399,13 @@ export enum WINRErrorCode {
   AgeVerificationRequired = 'age_verification_required',
   RewardedVideoUnavailable = 'rewarded_video_unavailable',
   InvalidConfiguration = 'invalid_configuration',
+  /**
+   * The WINR experience is not available for this publisher — e.g. the
+   * publisher's account/API key has been suspended or revoked (billing lapse).
+   * The SDK degrades gracefully: the default modal is not rendered, and custom
+   * UI can query {@link WINR.isAvailable} to show its own messaging.
+   */
+  ServiceUnavailable = 'service_unavailable',
 }
 
 export class WINRError extends Error {

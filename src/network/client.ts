@@ -122,7 +122,7 @@ export class NetworkClient {
             }
 
             throw new WINRError(
-              this.mapHttpStatusToErrorCode(response.status),
+              this.mapErrorToCode(response.status, errorMessage),
               errorMessage
             );
           }
@@ -158,7 +158,12 @@ export class NetworkClient {
         
         // Don't retry for certain error types
         if (error instanceof WINRError) {
-          if (error.code === WINRErrorCode.AuthenticationRequired) {
+          if (
+            error.code === WINRErrorCode.AuthenticationRequired ||
+            // A suspended/revoked publisher is a terminal state — retrying with
+            // backoff just delays surfacing the service-unavailable error.
+            error.code === WINRErrorCode.ServiceUnavailable
+          ) {
             throw error;
           }
         }
@@ -244,6 +249,19 @@ export class NetworkClient {
     }
   ): Promise<T> {
     return this.request<T>(endpoint, { ...options, method: 'DELETE' });
+  }
+
+  /**
+   * Map an HTTP error response to a WINRErrorCode. A "suspended"/"revoked"
+   * message (publisher billing lapse) is mapped to ServiceUnavailable
+   * regardless of status so the SDK can degrade gracefully; otherwise fall
+   * back to the status-based mapping.
+   */
+  private mapErrorToCode(status: number, message: string): WINRErrorCode {
+    if (/suspend|revok/i.test(message)) {
+      return WINRErrorCode.ServiceUnavailable;
+    }
+    return this.mapHttpStatusToErrorCode(status);
   }
 
   private mapHttpStatusToErrorCode(status: number): WINRErrorCode {

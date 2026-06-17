@@ -71,6 +71,13 @@ function isJwtValid(token: string | null): boolean {
 export class WINR {
   private static instance: WINR | null = null;
   private static isConfigured = false;
+  /**
+   * Cached service-unavailable error captured during a failed configure() when
+   * the publisher is suspended/revoked. Held at the static level because a
+   * failed configure() tears down the instance — custom-UI publishers still
+   * need to query {@link WINR.isAvailable}/{@link WINR.unavailableReason}.
+   */
+  private static serviceUnavailable: WINRError | null = null;
 
   private client: NetworkClient;
   private api: WINRAPI;
@@ -96,6 +103,13 @@ export class WINR {
   private deviceFingerprint: string | null = null;
   private currentModal: WINRModal | null = null;
   private serverSDKConfig: SDKConfig | null = null;
+  /**
+   * Cached "publisher suspended / service unavailable" state. Set when device
+   * registration fails because the publisher's API key has been suspended or
+   * revoked (billing lapse). Once set, present/presentInline short-circuit
+   * without rendering the modal, and {@link WINR.isAvailable} reports false.
+   */
+  private serviceUnavailableError: WINRError | null = null;
 
   private constructor(config: WINRConfiguration) {
     this.config = config;
@@ -131,6 +145,47 @@ export class WINR {
   }
 
   /**
+   * Whether the WINR experience is currently available for this publisher.
+   *
+   * Returns false when the SDK has not been configured, or when device
+   * registration determined the publisher's account/API key is suspended or
+   * revoked. Publishers embedding their own (custom) UI can poll this to decide
+   * whether to render the WINR entry point or show their own "no longer
+   * available" message instead of calling {@link WINR.present}.
+   */
+  public static get isAvailable(): boolean {
+    if (WINR.serviceUnavailable) return false;
+    if (!WINR.isConfigured || !WINR.instance) return false;
+    return WINR.instance.serviceUnavailableError === null;
+  }
+
+  /**
+   * The service-unavailable error, if the publisher has been suspended/revoked,
+   * otherwise null. Lets custom-UI publishers read the message/code without
+   * triggering an exception. Returns null until the SDK is configured.
+   */
+  public static get unavailableReason(): WINRError | null {
+    if (WINR.serviceUnavailable) return WINR.serviceUnavailable;
+    if (!WINR.isConfigured || !WINR.instance) return null;
+    return WINR.instance.serviceUnavailableError;
+  }
+
+  /**
+   * Detect whether an error from the backend indicates the publisher's account
+   * has been suspended or revoked. The backend surfaces these as messages
+   * containing "suspended" (e.g. "API key suspended or revoked",
+   * "Publisher account suspended").
+   */
+  private static isSuspendedError(error: unknown): boolean {
+    if (error instanceof WINRError && error.code === WINRErrorCode.ServiceUnavailable) {
+      return true;
+    }
+    const message =
+      error instanceof Error ? error.message : typeof error === 'string' ? error : '';
+    return /suspend|revok/i.test(message);
+  }
+
+  /**
    * Return the stored session token, proactively refreshing it if it is
    * structurally invalid or expired. The network client previously only
    * reacted to a 401; this validates `exp` up front.
@@ -159,6 +214,10 @@ export class WINR {
       logger.warn('WINR already configured, skipping reconfiguration');
       return;
     }
+
+    // Clear any service-unavailable state from a prior failed attempt so this
+    // configure() starts clean.
+    WINR.serviceUnavailable = null;
 
     try {
       // Validate configuration
@@ -242,15 +301,36 @@ export class WINR {
     } catch (error) {
       WINR.instance = null;
       WINR.isConfigured = false;
-      
-      const winrError = error instanceof WINRError 
-        ? error 
+
+      // Preserve a service-unavailable (publisher suspended) error verbatim and
+      // cache it at the static level so isAvailable / unavailableReason still
+      // report it after the instance is torn down. Detect both the typed error
+      // (thrown from registerDevice) and any raw suspended message.
+      if (
+        (error instanceof WINRError && error.code === WINRErrorCode.ServiceUnavailable) ||
+        WINR.isSuspendedError(error)
+      ) {
+        const winrError =
+          error instanceof WINRError && error.code === WINRErrorCode.ServiceUnavailable
+            ? error
+            : new WINRError(
+                WINRErrorCode.ServiceUnavailable,
+                'WINR is no longer available',
+                error instanceof Error ? error : undefined
+              );
+        WINR.serviceUnavailable = winrError;
+        logger.warn('WINR configuration failed — publisher account suspended or revoked');
+        throw winrError;
+      }
+
+      const winrError = error instanceof WINRError
+        ? error
         : new WINRError(
             WINRErrorCode.InvalidConfiguration,
             'Failed to configure WINR SDK',
             error instanceof Error ? error : undefined
           );
-      
+
       logger.error('WINR configuration failed:', winrError);
       throw winrError;
     }
@@ -260,8 +340,19 @@ export class WINR {
    * Present the WINR experience as a modal
    */
   public static async present(options?: PresentationOptions): Promise<void> {
+    // If the publisher has been suspended, do NOT render the modal. Surface the
+    // cached service-unavailable error via the onError callback + rejection so a
+    // half-rendered modal is never left on screen. Checked before
+    // ensureConfigured() because a suspended configure() tears down the instance.
+    const unavailable = WINR.unavailableReason;
+    if (unavailable) {
+      logger.warn('present() called while WINR is unavailable — not rendering modal');
+      options?.onError?.(unavailable);
+      throw unavailable;
+    }
+
     if (!WINR.ensureConfigured()) return;
-    
+
     try {
       // Refresh SDK config to ensure latest branding/settings
       await WINR.instance!.refreshConfig();
@@ -313,18 +404,26 @@ export class WINR {
     containerId: string, 
     options?: PresentationOptions
   ): Promise<void> {
+    // If the publisher has been suspended, do NOT render the inline experience.
+    const unavailable = WINR.unavailableReason;
+    if (unavailable) {
+      logger.warn('presentInline() called while WINR is unavailable — not rendering modal');
+      options?.onError?.(unavailable);
+      throw unavailable;
+    }
+
     if (!WINR.ensureConfigured()) return;
-    
+
     try {
       // Refresh SDK config to ensure latest branding/settings
       await WINR.instance!.refreshConfig();
-      
+
       // Refresh giveaway data
       await WINR.instance!.refreshGiveawayData();
-      
+
       // Get current streak state
       const streakState = WINR.instance!.getStreakState();
-      
+
       // Create and present inline modal
       WINR.instance!.currentModal = new WINRModal(
         WINR.instance!.currentGiveaway,
@@ -627,6 +726,21 @@ export class WINR {
       });
       
     } catch (error) {
+      // Publisher billing lapse: the backend rejects registration with a
+      // "suspended"/"revoked" message. Cache this as a dedicated
+      // service-unavailable state so repeat calls short-circuit and custom UI
+      // can query WINR.isAvailable, then surface it as a typed WINRError.
+      if (WINR.isSuspendedError(error)) {
+        const winrError = new WINRError(
+          WINRErrorCode.ServiceUnavailable,
+          'WINR is no longer available',
+          error instanceof Error ? error : undefined
+        );
+        this.serviceUnavailableError = winrError;
+        logger.warn('WINR unavailable — publisher account suspended or revoked');
+        throw winrError;
+      }
+
       logger.error('Device registration failed:', error);
       throw error;
     }
