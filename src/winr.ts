@@ -25,10 +25,6 @@ import { SessionStorageProvider } from './storage/session-storage';
 import { logger } from './services/logger';
 import { analyticsAdapter } from './services/analytics';
 
-/** UUID v4 validation regex (per Master Field List: user_uid). */
-const UUID_V4_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
 /** Name validation regex (first_name / last_name per spec). */
 const NAME_REGEX = /^[a-zA-Z '-]{1,50}$/;
 
@@ -675,9 +671,12 @@ export class WINR {
         { requiresAuth: false }
       );
 
-      // Validate user_uid (UUID v4) returned from the handshake before storing.
-      if (!response.uuid || !UUID_V4_REGEX.test(response.uuid)) {
-        logger.error('registerDevice returned a malformed user_uid:', response.uuid);
+      // The backend returns the user identifier from the handshake. It is currently a
+      // Firestore document ID (not a UUID v4), so accept any non-empty identifier rather
+      // than enforcing a v4 shape that the server doesn't emit. (If user_uid is migrated
+      // to UUID v4 server-side per spec #22, tighten this back up.)
+      if (!response.uuid || typeof response.uuid !== 'string') {
+        logger.error('registerDevice returned no user identifier:', response.uuid);
         throw new WINRError(
           WINRErrorCode.InvalidState,
           'Device registration returned an invalid user identifier'
