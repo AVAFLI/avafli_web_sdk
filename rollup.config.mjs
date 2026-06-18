@@ -52,13 +52,16 @@ const buildConfigs = [
     ].filter(Boolean),
   },
 
-  // UMD build
+  // UMD build — uses the UMD entry so the global `WINR` is the class itself
+  // (with named exports attached), making the documented `WINR.configure(...)` work.
   {
     ...baseConfig,
+    input: 'src/umd.ts',
     output: {
       file: 'dist/winr-sdk.umd.js',
       format: 'umd',
       name: 'WINR',
+      exports: 'default',
       banner,
       sourcemap: true,
     },
