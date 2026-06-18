@@ -49,13 +49,13 @@ export class NetworkClient {
     for (let attempt = 0; attempt < retries; attempt++) {
       try {
         const headers = new Headers(fetchOptions.headers);
-        
-        // Set content type for POST requests
-        if (fetchOptions.method === 'POST' && !headers.has('content-type')) {
-          headers.set('content-type', 'application/json');
-        }
+        // The backend functions are Firebase callable (onCall): POST + JSON only.
+        headers.set('content-type', 'application/json');
 
-        // Add authentication
+        // Authentication: onCall reads the Firebase ID token from the Authorization
+        // bearer to populate request.auth. No x-api-key header — onCall doesn't use it
+        // and a non-allowlisted custom header trips CORS. The publisher apiKey travels
+        // inside the request payload (e.g. registerDevice), not a header.
         if (requiresAuth && this.tokenProvider) {
           const token = this.tokenProvider();
           if (token) {
@@ -63,15 +63,11 @@ export class NetworkClient {
           }
         }
 
-        // Add API key if not already present
-        if (this.apiKey && !headers.has('x-api-key')) {
-          headers.set('x-api-key', this.apiKey);
-        }
+        // Wrap the payload in the callable envelope: { data: ... }.
+        const rawBody = typeof fetchOptions.body === 'string' ? fetchOptions.body : undefined;
+        const payload = rawBody ? JSON.parse(rawBody) : {};
 
-        this.logger?.debug(`Making request to ${url}`, {
-          method: fetchOptions.method || 'GET',
-          headers: Object.fromEntries(headers.entries()),
-        });
+        this.logger?.debug(`Making request to ${url}`);
 
         // Create abort controller for timeout
         const controller = new AbortController();
@@ -80,7 +76,9 @@ export class NetworkClient {
         try {
           const response = await fetch(url, {
             ...fetchOptions,
+            method: 'POST', // onCall endpoints are POST-only
             headers,
+            body: JSON.stringify({ data: payload }),
             signal: controller.signal,
           });
 
@@ -114,8 +112,9 @@ export class NetworkClient {
 
             try {
               errorBody = await response.text();
-              const parsed = JSON.parse(errorBody as string) as Record<string, string>;
-              errorMessage = parsed['message'] || parsed['error'] || errorMessage;
+              const parsed = JSON.parse(errorBody as string) as { error?: { message?: string } | string; message?: string };
+              // onCall errors come back as { error: { message, status } }.
+              errorMessage = (typeof parsed.error === "object" ? parsed.error?.message : parsed.error) || parsed.message || errorMessage;
             } catch {
               // Use raw text or default message
               errorMessage = (typeof errorBody === 'string' ? errorBody : '') || errorMessage;
@@ -132,7 +131,9 @@ export class NetworkClient {
           const contentType = response.headers.get('content-type') || '';
           
           if (contentType.includes('application/json')) {
-            result = await response.json() as T;
+            const json = await response.json() as Record<string, unknown>;
+            // onCall wraps success payloads as { result: ... } — unwrap it.
+            result = (json && typeof json === 'object' && 'result' in json ? json.result : json) as T;
           } else {
             result = await response.text() as T;
           }
