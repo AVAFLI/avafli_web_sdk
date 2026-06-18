@@ -131,9 +131,12 @@ export class NetworkClient {
           const contentType = response.headers.get('content-type') || '';
           
           if (contentType.includes('application/json')) {
-            const json = await response.json() as Record<string, unknown>;
+            const json = await response.json();
             // onCall wraps success payloads as { result: ... } — unwrap it.
-            result = (json && typeof json === 'object' && 'result' in json ? json.result : json) as T;
+            const unwrapped = (json && typeof json === 'object' && 'result' in (json as object))
+              ? (json as { result: unknown }).result
+              : json;
+            result = unwrapped as T;
           } else {
             result = await response.text() as T;
           }
