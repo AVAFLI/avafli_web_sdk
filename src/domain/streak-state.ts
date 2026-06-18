@@ -74,7 +74,9 @@ export class StreakStateModel implements StreakState {
     if (this.isBroken() || !this.lastClaimedDate) {
       return 1;
     }
-    return Math.min(this.currentDay + 1, 6);
+    // Counter climbs past 7 (Day 8/9/10…); the reward is capped separately at the
+    // day-7 ladder value (see Giveaway.getBaseEntries, which clamps the ladder index).
+    return this.currentDay + 1;
   }
 
   /**
