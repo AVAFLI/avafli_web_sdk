@@ -1,4 +1,4 @@
-import { WINRError, SDKConfig, Giveaway, SubmitEmailRequest } from '../../types';
+import { WINRError, WINRErrorCode, SDKConfig, Giveaway, SubmitEmailRequest } from '../../types';
 import { logger } from '../../services/logger';
 import { analyticsAdapter } from '../../services/analytics';
 import { WINR } from '../../winr';
@@ -240,14 +240,21 @@ export class EmailCaptureScreen {
 
     this.clearError();
 
-    // Fire-and-forget backend submit
-    this.submitEmailToBackend(normalized).catch((err) => {
-      logger.warn('Failed to submit email:', err);
-    });
-
-    analyticsAdapter.track('winr_email_captured');
-    logger.info('Email submitted successfully');
-    this.callbacks.onSubmitted?.();
+    // Await the backend submit BEFORE advancing. The backend consent gate blocks
+    // a claim until the email is on file, so the old fire-and-forget pattern could
+    // race into a failed claim on the next screen.
+    this.submitEmailToBackend(normalized)
+      .then(() => {
+        analyticsAdapter.track('winr_email_captured');
+        logger.info('Email submitted successfully');
+        this.callbacks.onSubmitted?.();
+      })
+      .catch((err) => {
+        logger.warn('Failed to submit email:', err);
+        this.callbacks.onError?.(
+          err instanceof WINRError ? err : new WINRError(WINRErrorCode.NetworkError, 'Failed to submit email')
+        );
+      });
   }
 
   private async submitEmailToBackend(email: string): Promise<void> {
@@ -259,7 +266,10 @@ export class EmailCaptureScreen {
       marketingConsent: this.isMarketingConsent,
       ...(this.publisherUserId ? { publisherUserId: this.publisherUserId } : {}),
     };
-    await WINR.getAPI().submitEmail(request);
+    // Cross-device streak unification: if this email already belonged to an
+    // existing user under this publisher (another device/SDK), this switches the
+    // session to that canonical user so the streak follows the person.
+    await WINR.submitEmailAndAdopt(request);
   }
 
   private showError(wrapper: HTMLElement, errorEl: HTMLElement, msg: string): void {

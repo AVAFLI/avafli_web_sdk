@@ -9,6 +9,7 @@ import {
   GetActiveGiveawayResponse,
   ClaimDailyEntriesResponse,
   SubmitEmailRequest,
+  SubmitEmailResponse,
   SubmitUserProfileRequest,
   DeleteUserDataResponse,
   Giveaway,
@@ -80,6 +81,12 @@ export class WINR {
   private config: WINRConfiguration;
   private currentUser: WINRUser | null = null;
   private currentGiveaway: Giveaway | null = null;
+  // Authoritative per-user state from the backend (getActiveGiveaway). The modal
+  // is gated on these so a recognized user isn't re-prompted for email and can't
+  // re-claim after reopening — the web stores tokens in sessionStorage, so each
+  // reopen re-registers, but registerDevice reuses the user by device fingerprint.
+  private currentClaimedToday = false;
+  private currentEmailConsentStatus = false;
   private streakEngine: StreakEngine;
   /**
    * Non-sensitive preferences (device fingerprint, cached giveaway, streak
@@ -132,6 +139,27 @@ export class WINR {
   public static getAPI(): WINRAPI {
     WINR.ensureConfigured();
     return WINR.instance!.api;
+  }
+
+  /**
+   * Submit the user's email and, if the backend adopts an existing account under
+   * this publisher (cross-device streak unification), switch this session to that
+   * canonical user's credentials so the streak follows the person across devices.
+   * Tokens are read fresh on each request, so persisting them here is sufficient.
+   */
+  public static async submitEmailAndAdopt(request: SubmitEmailRequest): Promise<SubmitEmailResponse> {
+    WINR.ensureConfigured();
+    const response = await WINR.instance!.api.submitEmail(request);
+    if (response.adopted && response.token && response.uuid) {
+      const store = WINR.instance!.secureStorage;
+      store.setItem(WINR_CONSTANTS.STORAGE_KEYS.TOKEN, response.token);
+      if (response.refreshToken) {
+        store.setItem(WINR_CONSTANTS.STORAGE_KEYS.REFRESH_TOKEN, response.refreshToken);
+      }
+      store.setItem(WINR_CONSTANTS.STORAGE_KEYS.UUID, response.uuid);
+      logger.info('Adopted existing account — streak unified across devices');
+    }
+    return response;
   }
 
   /** Expose the resolved consent / age-gate config to UI components. */
@@ -365,8 +393,8 @@ export class WINR {
         streakState,
         WINR.instance!.getCurrentSDKConfig(),
         options,
-        false, // claimedToday
-        false, // hasEmail
+        WINR.instance!.currentClaimedToday, // claimedToday (backend truth)
+        WINR.instance!.currentEmailConsentStatus, // hasEmail (backend truth)
         WINR.instance!.config.user.id
       );
       
@@ -426,8 +454,8 @@ export class WINR {
         streakState,
         WINR.instance!.getCurrentSDKConfig(),
         options,
-        false, // claimedToday
-        false, // hasEmail
+        WINR.instance!.currentClaimedToday, // claimedToday (backend truth)
+        WINR.instance!.currentEmailConsentStatus, // hasEmail (backend truth)
         WINR.instance!.config.user.id
       );
       
@@ -808,11 +836,29 @@ export class WINR {
         this.storage.setItem(WINR_CONSTANTS.STORAGE_KEYS.CACHED_GIVEAWAY, JSON.stringify(response.giveaway));
         logger.debug('Giveaway data refreshed');
       }
-      
+
+      // Capture the backend's authoritative per-user state. The modal reads these
+      // (instead of hardcoded false) so a returning user is recognized and can't
+      // re-claim. Backend is the source of truth, so seed the local streak from it
+      // too — this is what makes the streak follow the person across sessions and
+      // devices (it previously only ever read local storage).
+      this.currentClaimedToday = response.claimedToday === true;
+      this.currentEmailConsentStatus = response.emailConsentStatus === true;
+      if (typeof response.streakDay === 'number') {
+        const existing = this.getStreakState();
+        this.setStreakState({
+          currentDay: response.streakDay,
+          lastClaimedDate: response.claimedToday ? new Date() : existing?.lastClaimedDate,
+          totalEntriesEarned: response.totalEntries ?? existing?.totalEntriesEarned ?? 0,
+          weeklyCurrent: response.weeklyCurrent ?? existing?.weeklyCurrent ?? 0,
+          monthlyCurrent: response.monthlyCurrent ?? existing?.monthlyCurrent ?? 0,
+        } as StreakState);
+      }
+
       if (response.sdkConfig) {
         this.serverSDKConfig = response.sdkConfig;
       }
-      
+
     } catch (error) {
       logger.warn('Failed to refresh giveaway data:', error);
       // Try to load cached giveaway data if network fails

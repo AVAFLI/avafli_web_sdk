@@ -181,8 +181,12 @@ export class StreakDashboard {
       doneBtn.addEventListener('click', () => this.onClose?.());
       footer.appendChild(doneBtn);
     } else {
-      const dayRewardLabel = (this.sdkConfig?.copy?.streakDashboard?.dayRewardLabel ?? "Day {currentDay} reward")
-        .replace("{currentDay}", String(currentDay));
+      // The configured copy uses {day} (the canonical token iOS/Android/Flutter
+      // all substitute); older copy used {currentDay}. Replace both so neither
+      // leaks to the UI as a literal "Day {day} reward".
+      const dayRewardLabel = (this.sdkConfig?.copy?.streakDashboard?.dayRewardLabel ?? "Day {day} reward")
+        .replace("{currentDay}", String(currentDay))
+        .replace("{day}", String(currentDay));
       const claimDescription = (this.sdkConfig?.copy?.streakDashboard?.claimDescription ?? "Claim {entriesToday} entries for today's visit to keep your streak alive.")
         .replace("{entriesToday}", String(entriesToday));
       const claimButtonText = this.sdkConfig?.copy?.streakDashboard?.claimButton 

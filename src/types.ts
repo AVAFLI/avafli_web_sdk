@@ -333,6 +333,14 @@ export interface GetActiveGiveawayResponse {
   claimedToday: boolean;
   /** Current streak day */
   streakDay: number;
+  /** Total entries earned to date (backend is source of truth) */
+  totalEntries?: number;
+  /** Weekly / monthly bonus progress */
+  weeklyCurrent?: number;
+  monthlyCurrent?: number;
+  /** Whether this user has confirmed an email + consent. Drives the email-capture
+   * gate so a recognized user isn't asked to re-enter their email on reopen. */
+  emailConsentStatus?: boolean;
   /** SDK configuration */
   sdkConfig?: SDKConfig | null;
 }
@@ -367,6 +375,16 @@ export interface SubmitEmailRequest {
 
 export interface SubmitEmailResponse {
   success: boolean;
+  /**
+   * When the email matched an existing account under this publisher (another
+   * device/SDK), the backend adopts that canonical user so the streak follows the
+   * person across devices. If `adopted` is true, the SDK switches to these
+   * credentials. Absent on a normal first-time submit.
+   */
+  adopted?: boolean;
+  uuid?: string;
+  token?: string;
+  refreshToken?: string;
 }
 
 export interface SubmitUserProfileRequest {
