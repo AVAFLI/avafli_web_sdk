@@ -381,6 +381,9 @@ export class ExperienceScreen {
               error instanceof Error ? error : undefined
             );
       this.callbacks?.onError(real);
+      // Re-render the streak so the claim button resets out of its loading state
+      // (it disabled itself on click). The user can read the error and retry.
+      this.transitionTo({ kind: 'streak', claimedToday: false });
     } finally {
       this.isProcessing = false;
     }

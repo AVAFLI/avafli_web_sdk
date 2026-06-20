@@ -14,6 +14,8 @@ export const defaultTheme: Theme = {
     success: '#10b981',          // emerald green
     error: '#ef4444',            // red
     warning: '#f59e0b',          // amber
+    accent: '#5B4CFF',           // brand accent (CTA/active tile) — overridden by branding.primaryColor
+    accentGlow: '#FFD700',       // radial glow — overridden by branding.secondaryColor
   },
   fonts: {
     family: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
@@ -107,6 +109,10 @@ export function createIOSColors(theme: Theme): IOSColors {
     secondaryTextColor: theme.colors.secondary,
     cardBackgroundColor: theme.colors.surface,
     inputFieldBackgroundColor: theme.colors.surface,
+    // The brand accent drives the CTA button + active highlights; the secondary
+    // brand color drives the glow. Both come from the publisher/admin branding.
+    primaryButtonColor: theme.colors.accent,
+    accentGlowColor: theme.colors.accentGlow,
   };
 }
 
@@ -117,8 +123,16 @@ export function createTheme(branding?: WINRBranding): Theme {
   const theme: Theme = JSON.parse(JSON.stringify(defaultTheme));
 
   if (branding) {
-    if (branding.primaryColor) theme.colors.primary = branding.primaryColor;
-    if (branding.secondaryColor) theme.colors.secondary = branding.secondaryColor;
+    // primaryColor is the BRAND ACCENT (CTA, active tile, highlights) — NOT body
+    // text. Text stays high-contrast (white) on the dark background.
+    if (branding.primaryColor) {
+      theme.colors.accent = branding.primaryColor;
+      theme.colors.accentGlow = branding.primaryColor;
+    }
+    if (branding.secondaryColor) {
+      theme.colors.secondary = branding.secondaryColor;
+      theme.colors.accentGlow = branding.secondaryColor;
+    }
     if (branding.backgroundColor) theme.colors.background = branding.backgroundColor;
     if (branding.fontFamily) theme.fonts.family = branding.fontFamily;
   }

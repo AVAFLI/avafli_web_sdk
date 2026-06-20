@@ -378,10 +378,9 @@ export class WINR {
     if (!WINR.ensureConfigured()) return;
 
     try {
-      // Refresh SDK config to ensure latest branding/settings
-      await WINR.instance!.refreshConfig();
-      
-      // Refresh giveaway data
+      // Single round-trip: getActiveGiveaway returns the giveaway, the user's claim
+      // state, AND the sdkConfig (branding/copy). refreshConfig() hit the same
+      // endpoint a second time — dropped to halve open latency.
       await WINR.instance!.refreshGiveawayData();
       
       // Get current streak state

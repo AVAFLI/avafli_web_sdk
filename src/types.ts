@@ -482,6 +482,11 @@ export interface Theme {
     success: string;
     error: string;
     warning: string;
+    /** Brand accent — drives CTAs, the active streak tile, highlights. Comes from
+     * branding.primaryColor (publisher/admin config), not text. */
+    accent: string;
+    /** Secondary brand accent — drives the radial glow. From branding.secondaryColor. */
+    accentGlow: string;
   };
   fonts: {
     family: string;

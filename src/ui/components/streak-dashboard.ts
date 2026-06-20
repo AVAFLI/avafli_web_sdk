@@ -170,7 +170,16 @@ export class StreakDashboard {
       const claimBtn = document.createElement('button');
       claimBtn.className = 'winr-claim-button';
       claimBtn.textContent = claimButtonText;
-      claimBtn.addEventListener('click', () => this.onClaim?.());
+      claimBtn.addEventListener('click', () => {
+        if (claimBtn.disabled) return;
+        // Immediate feedback: disable + spinner so a slow claim doesn't feel broken
+        // and a double-tap can't fire two claims. Resets if the claim errors (the
+        // screen re-renders); on success the screen transitions away.
+        claimBtn.disabled = true;
+        claimBtn.classList.add('is-loading');
+        claimBtn.innerHTML = '<span class="winr-btn-spinner"></span>Claiming…';
+        this.onClaim?.();
+      });
 
       footer.appendChild(ftTitle);
       footer.appendChild(ftDesc);

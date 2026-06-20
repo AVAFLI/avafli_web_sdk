@@ -502,6 +502,21 @@ export function generateModalStyles(theme: Theme): string {
 }
 
 .winr-claim-button:active { transform: scale(0.97); }
+.winr-claim-button:disabled, .winr-claim-button.is-loading {
+  opacity: 0.7;
+  cursor: default;
+}
+.winr-btn-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  vertical-align: -3px;
+  border: 2px solid color-mix(in srgb, var(--winr-btn-text) 40%, transparent);
+  border-top-color: var(--winr-btn-text);
+  border-radius: 50%;
+  animation: winr-spin 0.7s linear infinite;
+}
 
 .winr-claimed-icon {
   font-size: 28px;
