@@ -121,43 +121,9 @@ export class StreakDashboard {
     carousel.appendChild(row);
     scroll.appendChild(carousel);
 
-    // Bonus progress pills
-    const config = this.giveawayModel;
-    if (config.streakConfig) {
-      const bonusSection = document.createElement('div');
-      bonusSection.className = 'winr-bonus-progress-section';
-
-      const bonusProgressLabel = this.sdkConfig?.copy?.streakDashboard?.bonusProgressLabel ?? 'Bonus Progress';
-      const bonusLabel = document.createElement('div');
-      bonusLabel.className = 'winr-bonus-progress-label';
-      bonusLabel.textContent = bonusProgressLabel;
-      bonusSection.appendChild(bonusLabel);
-
-      const pillRow = document.createElement('div');
-      pillRow.className = 'winr-bonus-progress-row';
-
-      // Weekly
-      const sc = config.streakConfig;
-      const weekLabel = this.sdkConfig?.copy?.streakDashboard?.weekLabel ?? 'Week';
-      const monthLabel = this.sdkConfig?.copy?.streakDashboard?.monthLabel ?? 'Month';
-      pillRow.appendChild(this.createBonusPill(
-        weekLabel,
-        this.streakState?.weeklyCurrent ?? 0,
-        sc.weeklyBonusThreshold ?? 5,
-        sc.weeklyBonusEntries ?? 0
-      ));
-
-      // Monthly
-      pillRow.appendChild(this.createBonusPill(
-        monthLabel,
-        this.streakState?.monthlyCurrent ?? 0,
-        sc.monthlyBonusThreshold ?? 20,
-        sc.monthlyBonusEntries ?? 0
-      ));
-
-      bonusSection.appendChild(pillRow);
-      scroll.appendChild(bonusSection);
-    }
+    // NOTE: the weekly/monthly "Bonus Progress" section was intentionally removed —
+    // those are the Phase-2 weekly/monthly streak fields that were suspended per the
+    // 2/26 team call, and the native (iOS/Android/Flutter) SDKs no longer show them.
 
     this.element.appendChild(scroll);
 

@@ -2,10 +2,12 @@ import {
   Giveaway,
   StreakState,
   SDKConfig,
+  SDKMedia,
   DailyEntryGrant,
   WINRError,
   WINRErrorCode,
 } from '../../types';
+import { renderLottie } from '../lottie';
 import { GiveawayModel } from '../../domain/giveaway';
 import { WINR } from '../../winr';
 import { logger } from '../../services/logger';
@@ -224,6 +226,7 @@ export class ExperienceScreen {
       },
       onError: (err) => this.callbacks?.onError(err),
     });
+    this.renderHeroMedia(this.contentEl!, 'emailCapture');
     this.contentEl!.appendChild(screen.render());
   }
 
@@ -240,6 +243,7 @@ export class ExperienceScreen {
       onClaim: () => this.handleClaim(),
       onClose: () => this.callbacks?.onClose?.(),
     });
+    this.renderHeroMedia(this.contentEl!, 'streakDashboard');
     this.contentEl!.appendChild(dashboard.render());
   }
 
@@ -266,6 +270,7 @@ export class ExperienceScreen {
       },
       onError: (err) => this.callbacks?.onError(err),
     });
+    this.renderHeroMedia(this.contentEl!, 'bonusEntries');
     this.contentEl!.appendChild(bonus.render());
   }
 
@@ -274,6 +279,7 @@ export class ExperienceScreen {
     hiw.setCallbacks({
       onClose: () => this.hideHowItWorks(),
     });
+    this.renderHeroMedia(this.contentEl!, 'howItWorks');
     this.contentEl!.appendChild(hiw.render());
   }
 
@@ -361,13 +367,20 @@ export class ExperienceScreen {
       }
     } catch (error) {
       logger.error('Claim failed:', error);
-      this.callbacks?.onError(
-        new WINRError(
-          WINRErrorCode.NetworkError,
-          'Failed to claim entries. Please try again.',
-          error instanceof Error ? error : undefined
-        )
-      );
+      // Surface the REAL backend reason (e.g. "Sweepstakes entries are not available
+      // in your state (NY)" / "Already claimed today" / "Email confirmation required")
+      // instead of a generic message — the client already parsed it onto the error.
+      const real =
+        error instanceof WINRError
+          ? error
+          : new WINRError(
+              WINRErrorCode.NetworkError,
+              error instanceof Error && error.message
+                ? error.message
+                : 'Failed to claim entries. Please try again.',
+              error instanceof Error ? error : undefined
+            );
+      this.callbacks?.onError(real);
     } finally {
       this.isProcessing = false;
     }
@@ -412,24 +425,35 @@ export class ExperienceScreen {
     }
   }
 
-  private renderHeroMedia(containerElement: HTMLElement, screenType: 'milestone' | 'completed'): void {
+  private renderHeroMedia(containerElement: HTMLElement, screenType: keyof SDKMedia): void {
     const media = this.sdkConfig?.media?.[screenType];
-    if (!media) return;
+    if (!media || (!media.lottieUrl && !media.imageUrl)) return;
 
     const heroWrap = document.createElement('div');
     heroWrap.className = 'winr-hero-media';
 
     if (media.lottieUrl) {
-      // For future Lottie support, fallback to image for now
-      const img = document.createElement('img');
-      img.src = media.imageUrl || media.lottieUrl;
-      img.alt = 'Hero Media';
-      img.style.cssText = 'max-width: 200px; max-height: 150px; object-fit: contain; border-radius: 12px;';
-      heroWrap.appendChild(img);
+      // Render the real Lottie animation (lazy-loads the player). On failure, fall
+      // back to the configured image if present.
+      const stage = document.createElement('div');
+      stage.style.cssText = 'width: 180px; height: 180px; margin: 0 auto;';
+      heroWrap.appendChild(stage);
+      const lottieUrl = media.lottieUrl;
+      const imageUrl = media.imageUrl;
+      void renderLottie(stage, lottieUrl).then((ok) => {
+        if (!ok && imageUrl) {
+          stage.innerHTML = '';
+          const img = document.createElement('img');
+          img.src = imageUrl;
+          img.alt = '';
+          img.style.cssText = 'max-width: 180px; max-height: 180px; object-fit: contain; border-radius: 12px;';
+          stage.appendChild(img);
+        }
+      });
     } else if (media.imageUrl) {
       const img = document.createElement('img');
       img.src = media.imageUrl;
-      img.alt = 'Hero Image';
+      img.alt = '';
       img.style.cssText = 'max-width: 200px; max-height: 150px; object-fit: contain; border-radius: 12px;';
       heroWrap.appendChild(img);
     }

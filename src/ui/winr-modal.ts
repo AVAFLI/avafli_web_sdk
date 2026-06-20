@@ -31,6 +31,19 @@ export class WINRModal {
   private leftBtn: HTMLButtonElement | null = null;
   private leftSpacer: HTMLDivElement | null = null;
 
+  // present() promise settlement. Dismissing the modal (Done / X / backdrop /
+  // Escape) is NOT an error — it must RESOLVE the promise (with null when no claim
+  // happened) so callers awaiting present() don't hang or see a spurious rejection.
+  private settled = false;
+  private resolvePresent?: (value: DailyEntryGrant | null) => void;
+
+  /** Resolve present() exactly once. Safe to call from any dismiss path. */
+  private settleDismiss(value: DailyEntryGrant | null = null): void {
+    if (this.settled) return;
+    this.settled = true;
+    this.resolvePresent?.(value);
+  }
+
   constructor(
     private giveaway: Giveaway | null,
     private streakState: StreakState | null,
@@ -43,8 +56,9 @@ export class WINRModal {
     this.theme = createTheme(this.sdkConfig?.branding);
   }
 
-  public async present(): Promise<DailyEntryGrant> {
+  public async present(): Promise<DailyEntryGrant | null> {
     return new Promise((resolve, reject) => {
+      this.resolvePresent = resolve;
       try {
         this.show(resolve, reject);
       } catch (error) {
@@ -57,8 +71,9 @@ export class WINRModal {
     });
   }
 
-  public async presentInline(containerId: string): Promise<DailyEntryGrant> {
+  public async presentInline(containerId: string): Promise<DailyEntryGrant | null> {
     return new Promise((resolve, reject) => {
+      this.resolvePresent = resolve;
       try {
         const container = document.getElementById(containerId);
         if (!container) {
@@ -124,7 +139,7 @@ export class WINRModal {
 
     overlay.addEventListener('click', (e) => {
       if (e.target === overlay) {
-        reject(new WINRError(WINRErrorCode.InvalidState, 'Modal dismissed by user'));
+        this.settleDismiss();
         this.dismiss();
       }
     });
@@ -167,6 +182,7 @@ export class WINRModal {
       onComplete: (result) => {
         logger.debug('Experience completed:', result);
         this.options.onComplete?.(result);
+        this.settled = true;
         resolve(result);
       },
       onError: (error) => {
@@ -178,6 +194,7 @@ export class WINRModal {
         logger.debug('Email capture required');
       },
       onClose: () => {
+        this.settleDismiss();
         this.dismiss();
       },
     });
@@ -197,7 +214,7 @@ export class WINRModal {
     // Escape key
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        reject(new WINRError(WINRErrorCode.InvalidState, 'Modal dismissed by user'));
+        this.settleDismiss();
         this.dismiss();
         document.removeEventListener('keydown', handleEscape);
       }
@@ -238,7 +255,7 @@ export class WINRModal {
     closeBtn.textContent = '✕';
     closeBtn.setAttribute('aria-label', 'Close');
     closeBtn.addEventListener('click', () => {
-      reject(new WINRError(WINRErrorCode.InvalidState, 'Modal dismissed by user'));
+      this.settleDismiss();
       this.dismiss();
     });
     header.appendChild(closeBtn);
