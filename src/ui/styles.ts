@@ -371,20 +371,15 @@ export function generateModalStyles(theme: Theme): string {
 }
 
 .winr-streak-carousel {
-  overflow-x: auto;
-  overflow-y: visible;
-  -webkit-overflow-scrolling: touch;
-  padding: 20px 20px;
-  margin: 0 -14px;
+  padding: 16px 6px 4px;
 }
 
-.winr-streak-carousel::-webkit-scrollbar { display: none; }
-.winr-streak-carousel { -ms-overflow-style: none; scrollbar-width: none; }
-
+/* 7 day-tiles laid out as a 4 + 3 grid (matches the native iOS/Android dashboards),
+   not a horizontal scroller. */
 .winr-streak-tiles-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
   gap: 10px;
-  width: max-content;
 }
 
 /* Bonus progress pills */
@@ -518,6 +513,19 @@ export function generateModalStyles(theme: Theme): string {
   animation: winr-spin 0.7s linear infinite;
 }
 
+.winr-reward-pill {
+  display: inline-block;
+  margin: 6px auto 2px;
+  padding: 5px 14px;
+  border-radius: 9999px;
+  border: 1px solid var(--winr-card-border);
+  background: color-mix(in srgb, var(--winr-card-bg) 70%, transparent);
+  color: var(--winr-color-text);
+  font-size: 14px;
+  font-family: var(--winr-font-family);
+}
+.winr-reward-pill .winr-reward-arrow { color: var(--winr-btn-color); margin: 0 2px; }
+
 .winr-claimed-icon {
   font-size: 28px;
   color: var(--winr-glow);
@@ -543,18 +551,17 @@ export function generateModalStyles(theme: Theme): string {
    ═══════════════════════════════════════════ */
 
 .winr-tile {
-  width: 90px;
-  height: 115px;
+  width: 100%;
+  aspect-ratio: 5 / 6;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 4px;
-  padding: 10px;
+  padding: 8px 4px;
   border-radius: 16px;
   box-sizing: border-box;
   position: relative;
-  flex-shrink: 0;
   transition: transform 0.2s;
 }
 
@@ -938,7 +945,6 @@ export function generateModalStyles(theme: Theme): string {
 
 /* Responsive */
 @media (max-width: 380px) {
-  .winr-tile { width: 80px; height: 105px; }
   .winr-tile-entries { font-size: 18px; }
 }
 `;

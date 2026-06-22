@@ -163,6 +163,14 @@ export class StreakDashboard {
       ftTitle.className = 'winr-streak-footer-title';
       ftTitle.textContent = dayRewardLabel;
 
+      // Reward transition pill ("0 → 10 entries") — matches the native dashboards.
+      const prevEntries = this.streakState?.totalEntriesEarned ?? 0;
+      const pill = document.createElement('div');
+      pill.className = 'winr-reward-pill';
+      pill.innerHTML =
+        `${prevEntries} <span class="winr-reward-arrow">→</span> ` +
+        `<strong>${prevEntries + entriesToday}</strong> entries`;
+
       const ftDesc = document.createElement('div');
       ftDesc.className = 'winr-streak-footer-desc';
       ftDesc.textContent = claimDescription;
@@ -182,6 +190,7 @@ export class StreakDashboard {
       });
 
       footer.appendChild(ftTitle);
+      footer.appendChild(pill);
       footer.appendChild(ftDesc);
       footer.appendChild(claimBtn);
     }

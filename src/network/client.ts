@@ -120,10 +120,14 @@ export class NetworkClient {
               errorMessage = (typeof errorBody === 'string' ? errorBody : '') || errorMessage;
             }
 
-            throw new WINRError(
+            const httpErr = new WINRError(
               this.mapErrorToCode(response.status, errorMessage),
               errorMessage
             );
+            // Tag the status so the retry loop can tell a definitive client error
+            // (4xx — already-claimed, consent, geo, validation) from a transient one.
+            (httpErr as unknown as { httpStatus: number }).httpStatus = response.status;
+            throw httpErr;
           }
 
           // Parse response
@@ -170,6 +174,16 @@ export class NetworkClient {
           ) {
             throw error;
           }
+        }
+
+        // Definitive client errors (4xx) are NOT retryable — retrying just masks the
+        // real backend message ("You've already entered today", consent required,
+        // geo, validation) as a generic "Request failed after N attempts". Surface
+        // the real error immediately. Only transient failures (network/timeout/5xx)
+        // fall through to the retry/backoff below.
+        const httpStatus = (error as { httpStatus?: number }).httpStatus;
+        if (typeof httpStatus === 'number' && httpStatus >= 400 && httpStatus < 500) {
+          throw error;
         }
 
         // Log retry attempts
