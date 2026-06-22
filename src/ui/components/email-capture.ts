@@ -2,6 +2,7 @@ import { WINRError, WINRErrorCode, SDKConfig, Giveaway, SubmitEmailRequest } fro
 import { logger } from '../../services/logger';
 import { analyticsAdapter } from '../../services/analytics';
 import { WINR } from '../../winr';
+import { renderLottie } from '../lottie';
 
 /**
  * Email capture and age gate — matches iOS EmailCaptureView.swift
@@ -303,13 +304,12 @@ export class EmailCaptureScreen {
     const heroWrap = document.createElement('div');
     heroWrap.className = 'winr-hero-media';
 
-    if (emailMedia.lottieUrl) {
-      // For future Lottie support, fallback to image for now
-      const img = document.createElement('img');
-      img.src = emailMedia.imageUrl || emailMedia.lottieUrl;
-      img.alt = 'Hero Media';
-      img.style.cssText = 'max-width: 200px; max-height: 150px; object-fit: contain; border-radius: 12px;';
-      heroWrap.appendChild(img);
+    if (emailMedia.lottieUrl && !emailMedia.imageUrl) {
+      // Render the configured Lottie animation (lazy-loads lottie-web).
+      const stage = document.createElement('div');
+      stage.style.cssText = 'width: 200px; height: 150px; margin: 0 auto;';
+      heroWrap.appendChild(stage);
+      void renderLottie(stage, emailMedia.lottieUrl);
     } else if (emailMedia.imageUrl) {
       const img = document.createElement('img');
       img.src = emailMedia.imageUrl;

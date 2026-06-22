@@ -1,6 +1,7 @@
 import { Giveaway, StreakState, SDKConfig } from '../../types';
 import { GiveawayModel } from '../../domain/giveaway';
 import { StreakDayTile } from './streak-day-tile';
+import { renderLottie } from '../lottie';
 
 /**
  * Streak dashboard — matches iOS StreakDashboardView.swift
@@ -135,10 +136,14 @@ export class StreakDashboard {
       const claimedTitle = this.sdkConfig?.copy?.alreadyClaimed?.title ?? "Today's entries claimed!";
       const claimedSubtitle = this.sdkConfig?.copy?.alreadyClaimed?.subtitle ?? "Come back tomorrow to continue your streak.";
       const doneButtonText = this.sdkConfig?.copy?.alreadyClaimed?.doneButton ?? "Done";
+      // Running total of entries the user has accumulated — matches the native
+      // dashboards' "★ Total: N entries" pill on the claimed state.
+      const totalEntries = this.streakState?.totalEntriesEarned ?? 0;
 
       footer.innerHTML = `
         <div class="winr-claimed-icon">✅</div>
         <div class="winr-streak-footer-title">${claimedTitle}</div>
+        <div class="winr-reward-pill">★ Total: <strong>${totalEntries}</strong> entries</div>
         <div class="winr-streak-footer-desc">${claimedSubtitle}</div>
       `;
       const doneBtn = document.createElement('button');
@@ -282,15 +287,35 @@ export class StreakDashboard {
 
   private renderHeroMedia(heroElement: HTMLElement): void {
     const streakMedia = this.sdkConfig?.media?.streakDashboard;
-    
+
     if (streakMedia?.lottieUrl) {
-      // For future Lottie support, fallback to image for now
-      const img = document.createElement('img');
-      img.src = streakMedia.imageUrl || streakMedia.lottieUrl;
-      img.alt = 'Hero Media';
-      img.className = 'winr-streak-hero-logo';
-      img.style.cssText = 'max-width: 200px; max-height: 150px; object-fit: contain; border-radius: 12px;';
-      heroElement.appendChild(img);
+      // Render the configured Lottie animation (lazy-loads lottie-web). Prefer an
+      // explicit imageUrl if one is set; otherwise animate the Lottie.
+      if (streakMedia.imageUrl) {
+        const img = document.createElement('img');
+        img.src = streakMedia.imageUrl;
+        img.alt = 'Hero Media';
+        img.className = 'winr-streak-hero-logo';
+        img.style.cssText = 'max-width: 200px; max-height: 150px; object-fit: contain; border-radius: 12px;';
+        heroElement.appendChild(img);
+      } else {
+        const stage = document.createElement('div');
+        stage.style.cssText = 'width: 200px; height: 150px; margin: 0 auto;';
+        heroElement.appendChild(stage);
+        const fallbackToLogo = () => {
+          const logoUrl = this.sdkConfig?.branding?.logoUrl;
+          if (logoUrl) {
+            const img = document.createElement('img');
+            img.src = logoUrl;
+            img.alt = 'Logo';
+            img.className = 'winr-streak-hero-logo';
+            stage.replaceWith(img);
+          }
+        };
+        renderLottie(stage, streakMedia.lottieUrl)
+          .then((ok) => { if (!ok) fallbackToLogo(); })
+          .catch(fallbackToLogo);
+      }
     } else if (streakMedia?.imageUrl) {
       const img = document.createElement('img');
       img.src = streakMedia.imageUrl;

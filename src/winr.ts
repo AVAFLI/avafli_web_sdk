@@ -908,6 +908,10 @@ export class WINR {
         fontFamily: serverBranding?.fontFamily || clientBranding?.fontFamily,
       },
       copy: this.serverSDKConfig?.copy || {},
+      // Pass the configured media through — without this the SDK never receives the
+      // per-screen Lottie/image URLs and every screen falls back to the logo.
+      media: this.serverSDKConfig?.media,
+      bonusEntriesEnabled: this.serverSDKConfig?.bonusEntriesEnabled,
       rulesUrl: this.serverSDKConfig?.rulesUrl,
       ageGateEnabled: this.serverSDKConfig?.ageGateEnabled ?? this.config.options?.enableAgeGate ?? true,
       ageGateMinAge: this.serverSDKConfig?.ageGateMinAge ?? this.config.options?.ageGateMinAge ?? 18,
