@@ -1,6 +1,7 @@
 import { WINRError, WINRErrorCode, RewardedVideoProvider, SDKConfig } from '../../types';
 import { logger } from '../../services/logger';
 import { analyticsAdapter } from '../../services/analytics';
+import { renderLottie } from '../lottie';
 
 /**
  * Bonus entries screen — matches iOS BonusEntriesView.swift
@@ -129,13 +130,11 @@ export class BonusEntriesScreen {
     const heroWrap = document.createElement('div');
     heroWrap.className = 'winr-hero-media';
 
-    if (bonusMedia.lottieUrl) {
-      // For future Lottie support, fallback to image for now
-      const img = document.createElement('img');
-      img.src = bonusMedia.imageUrl || bonusMedia.lottieUrl;
-      img.alt = 'Hero Media';
-      img.style.cssText = 'max-width: 200px; max-height: 150px; object-fit: contain; border-radius: 12px;';
-      heroWrap.appendChild(img);
+    if (bonusMedia.lottieUrl && !bonusMedia.imageUrl) {
+      const stage = document.createElement('div');
+      stage.style.cssText = 'width: 200px; height: 150px; margin: 0 auto;';
+      heroWrap.appendChild(stage);
+      void renderLottie(stage, bonusMedia.lottieUrl);
     } else if (bonusMedia.imageUrl) {
       const img = document.createElement('img');
       img.src = bonusMedia.imageUrl;

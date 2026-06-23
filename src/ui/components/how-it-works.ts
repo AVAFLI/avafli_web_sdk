@@ -1,5 +1,6 @@
 import { analyticsAdapter } from '../../services/analytics';
 import { SDKConfig } from '../../types';
+import { renderLottie } from '../lottie';
 
 /**
  * How It Works screen — matches iOS HowItWorksView.swift
@@ -124,14 +125,11 @@ export class HowItWorksScreen {
   private renderHeroMedia(heroElement: HTMLElement): void {
     const howItWorksMedia = this.sdkConfig?.media?.howItWorks;
     
-    if (howItWorksMedia?.lottieUrl) {
-      // For future Lottie support, fallback to image for now
-      const img = document.createElement('img');
-      img.src = howItWorksMedia.imageUrl || howItWorksMedia.lottieUrl;
-      img.alt = 'Hero Media';
-      img.className = 'winr-how-hero-emoji';
-      img.style.cssText = 'max-width: 200px; max-height: 150px; object-fit: contain; border-radius: 12px;';
-      heroElement.appendChild(img);
+    if (howItWorksMedia?.lottieUrl && !howItWorksMedia.imageUrl) {
+      const stage = document.createElement('div');
+      stage.style.cssText = 'width: 200px; height: 150px; margin: 0 auto;';
+      heroElement.appendChild(stage);
+      void renderLottie(stage, howItWorksMedia.lottieUrl);
     } else if (howItWorksMedia?.imageUrl) {
       const img = document.createElement('img');
       img.src = howItWorksMedia.imageUrl;

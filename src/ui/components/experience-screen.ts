@@ -226,7 +226,8 @@ export class ExperienceScreen {
       },
       onError: (err) => this.callbacks?.onError(err),
     });
-    this.renderHeroMedia(this.contentEl!, 'emailCapture');
+    // (Hero media is rendered by the EmailCapture component itself — don't inject
+    // it here too, or it shows twice.)
     this.contentEl!.appendChild(screen.render());
   }
 
@@ -243,7 +244,7 @@ export class ExperienceScreen {
       onClaim: () => this.handleClaim(),
       onClose: () => this.callbacks?.onClose?.(),
     });
-    this.renderHeroMedia(this.contentEl!, 'streakDashboard');
+    // (Hero media is rendered by the StreakDashboard component itself.)
     this.contentEl!.appendChild(dashboard.render());
   }
 
@@ -270,7 +271,7 @@ export class ExperienceScreen {
       },
       onError: (err) => this.callbacks?.onError(err),
     });
-    this.renderHeroMedia(this.contentEl!, 'bonusEntries');
+    // (Hero media is rendered by the BonusEntries component itself.)
     this.contentEl!.appendChild(bonus.render());
   }
 
@@ -279,7 +280,7 @@ export class ExperienceScreen {
     hiw.setCallbacks({
       onClose: () => this.hideHowItWorks(),
     });
-    this.renderHeroMedia(this.contentEl!, 'howItWorks');
+    // (Hero media is rendered by the HowItWorks component itself.)
     this.contentEl!.appendChild(hiw.render());
   }
 
