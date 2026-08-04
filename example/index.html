@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WINR Web SDK — V2 Demo</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0; background: #f4f5f7; color: #1d2330; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 32px 20px 80px; }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  .sub { color: #667; margin: 0 0 24px; }
+  .card { background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+  .card h2 { font-size: 15px; text-transform: uppercase; letter-spacing: .06em; color: #889; margin: 0 0 12px; }
+  label { display: flex; align-items: center; gap: 8px; margin: 8px 0; font-size: 14px; }
+  select, input[type=text], input[type=color] { padding: 6px 8px; border: 1px solid #ccd; border-radius: 6px; font-size: 14px; }
+  button { padding: 10px 16px; border: none; border-radius: 8px; background: #268fff; color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; margin: 4px 6px 4px 0; }
+  button.secondary { background: #e4e7ec; color: #1d2330; }
+  button.danger { background: #e5484d; }
+  .log { background: #0b0d12; color: #9fd; border-radius: 8px; padding: 12px; font: 12px/1.5 ui-monospace, monospace; height: 160px; overflow-y: auto; white-space: pre-wrap; }
+  .hint { font-size: 12px; color: #889; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>WINR Web SDK — V2 Demo</h1>
+  <p class="sub">The experience <strong>auto-opens on the first visit of each calendar day</strong> (drawer &lt;768px wide, centered modal &ge;768px). Resize the window and re-open to see both presentations.</p>
+
+  <div class="card">
+    <h2>Scenario (mock backend)</h2>
+    <label>Prize
+      <select id="prize">
+        <option value="cash">$1,000 cash (default hero)</option>
+        <option value="gift">$500 Amazon Gift Card</option>
+        <option value="image">Prize with custom prizeImageUrl</option>
+      </select>
+    </label>
+    <label>Streak mode
+      <select id="mode">
+        <option value="daily">daily (streak resets on a miss)</option>
+        <option value="visit">visit (never resets)</option>
+      </select>
+    </label>
+    <label><input type="checkbox" id="winner" checked> latestWinner set (shows "WE HAVE A WINNER!" banner)</label>
+    <label>Brand accent <input type="color" id="accent" value="#268fff"></label>
+    <label><input type="checkbox" id="autoOpen" checked> server kill switch: experience.autoOpenEnabled</label>
+    <p class="hint">Scenario changes are saved and applied on reload.</p>
+    <button id="applyBtn">Apply scenario &amp; reload</button>
+  </div>
+
+  <div class="card">
+    <h2>Actions</h2>
+    <button id="presentBtn">Present now</button>
+    <button id="nextDayBtn" class="secondary">Simulate next day &amp; reload (auto-open again)</button>
+    <button id="resetBtn" class="danger">Reset user (fresh install) &amp; reload</button>
+    <p class="hint">"Simulate next day" clears today's auto-open mark and the mock claim, so the SDK auto-opens and auto-claims the next streak day. "Reset user" clears everything (email consent, streak, impression cap).</p>
+  </div>
+
+  <div class="card">
+    <h2>Log</h2>
+    <div class="log" id="log"></div>
+  </div>
+</div>
+
+<script>
+/* ─── Demo scenario config (persisted) ─── */
+const DEMO_KEY = 'winr_demo_config';
+const STATE_KEY = 'winr_demo_state';
+const BUNDLE_ID = 'com.example.demo';
+
+const demo = Object.assign(
+  { prize: 'cash', mode: 'daily', winner: true, accent: '#268fff', autoOpen: true },
+  JSON.parse(localStorage.getItem(DEMO_KEY) || '{}')
+);
+// Per-user mock backend state.
+const state = Object.assign(
+  { streakDay: 0, totalEntries: 0, emailConsent: false, claimedOn: null },
+  JSON.parse(localStorage.getItem(STATE_KEY) || '{}')
+);
+const saveState = () => localStorage.setItem(STATE_KEY, JSON.stringify(state));
+
+document.getElementById('prize').value = demo.prize;
+document.getElementById('mode').value = demo.mode;
+document.getElementById('winner').checked = demo.winner;
+document.getElementById('accent').value = demo.accent;
+document.getElementById('autoOpen').checked = demo.autoOpen;
+
+const logEl = document.getElementById('log');
+const log = (...args) => {
+  logEl.textContent += args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ') + '\n';
+  logEl.scrollTop = logEl.scrollHeight;
+};
+
+/* ─── Mock backend (intercepts the SDK's cloud-functions calls) ─── */
+const today = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+};
+const claimedToday = () => state.claimedOn === today();
+
+const LADDER = [10, 30, 60, 130, 240, 300];
+const MILESTONES = [
+  { day: 7, bonusEntries: 25 },
+  { day: 14, bonusEntries: 50 },
+  { day: 30, bonusEntries: 100 },
+];
+function ladderValue(day) {
+  if (day <= LADDER.length) return LADDER[Math.max(0, day - 1)];
+  let value = LADDER[LADDER.length - 1];
+  for (let d = LADDER.length + 1; d <= day; d++) {
+    let rate = 0;
+    for (const m of MILESTONES) if (m.day < d) rate = m.bonusEntries;
+    value += rate;
+  }
+  return value;
+}
+
+function giveaway() {
+  const base = {
+    id: 'demo-giveaway', title: 'Demo Giveaway',
+    startDate: '2026-01-01T00:00:00Z', endDate: '2027-01-01T00:00:00Z',
+    streakLadder: LADDER, doublingEnabled: false, maxDailyBaseEntries: 300,
+    rulesUrl: 'https://example.com/rules',
+    streakConfig: { weeklyResetDay: 0, monthlyResetDay: 1, weeklyBonusThreshold: 5, weeklyBonusEntries: 0, monthlyBonusThreshold: 20, monthlyBonusEntries: 0 },
+    milestones: MILESTONES,
+    streakMode: demo.mode,
+    latestWinner: demo.winner ? {
+      name: 'Catherine C.', location: 'Brooklyn, New York', awardedAt: '2026-07-20',
+    } : undefined,
+  };
+  if (demo.prize === 'gift') {
+    return { ...base, prizeDescription: '$500 Amazon Gift Card', prizeValue: 500 };
+  }
+  if (demo.prize === 'image') {
+    return {
+      ...base, prizeDescription: 'Weekend Getaway', prizeValue: 2500,
+      prizeImageUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=880&q=70',
+    };
+  }
+  return { ...base, prizeDescription: 'Cash Prize', prizeValue: 1000 };
+}
+
+const sdkConfig = () => ({
+  branding: { primaryColor: demo.accent },
+  rulesUrl: 'https://example.com/rules',
+  experience: { autoOpenEnabled: demo.autoOpen, unregisteredImpressionCap: 3 },
+});
+
+const fakeJwt = () => {
+  const b64 = (o) => btoa(JSON.stringify(o)).replace(/=+$/,'');
+  return `${b64({alg:'none'})}.${b64({exp: 4102444800})}.sig`;
+};
+
+const userPayload = () => ({
+  claimedToday: claimedToday(),
+  streakDay: Math.max(1, state.streakDay || 1),
+  totalEntries: state.totalEntries,
+  emailConsentStatus: state.emailConsent,
+  weeklyCurrent: 0, monthlyCurrent: 0,
+  optedOut: false,
+});
+
+const realFetch = window.fetch.bind(window);
+window.fetch = async (url, init) => {
+  const u = String(url);
+  if (!u.includes('cloudfunctions.net')) return realFetch(url, init);
+  const endpoint = u.split('/').pop();
+  const body = init && init.body ? JSON.parse(init.body).data : {};
+  const ok = (result) => new Response(JSON.stringify({ result }), { status: 200, headers: { 'content-type': 'application/json' } });
+  const err = (status, message) => new Response(JSON.stringify({ error: { message, status: 'FAILED_PRECONDITION' } }), { status, headers: { 'content-type': 'application/json' } });
+  await new Promise(r => setTimeout(r, 250)); // a touch of latency
+
+  switch (endpoint) {
+    case 'registerDevice':
+      log('→ registerDevice', body.deviceFingerprint || '');
+      return ok({ token: fakeJwt(), refreshToken: 'rt', uuid: 'demo-user-1',
+        giveaway: giveaway(), isReturningUser: state.streakDay > 0, sdkConfig: sdkConfig(), ...userPayload() });
+    case 'refreshToken':
+      return ok({ token: fakeJwt(), refreshToken: 'rt' });
+    case 'getActiveGiveaway':
+      log('→ getActiveGiveaway (claimedToday:', claimedToday() + ')');
+      return ok({ giveaway: giveaway(), sdkConfig: sdkConfig(), ...userPayload() });
+    case 'submitEmail':
+      log('→ submitEmail', body.email);
+      state.emailConsent = true; saveState();
+      return ok({ success: true });
+    case 'claimDailyEntries': {
+      if (!state.emailConsent) return err(412, 'Email confirmation required');
+      if (claimedToday()) { log('→ claimDailyEntries → Already claimed today'); return err(409, 'Already claimed today'); }
+      state.streakDay = (state.streakDay || 0) + 1;
+      const entries = ladderValue(state.streakDay);
+      state.totalEntries += entries;
+      state.claimedOn = today();
+      saveState();
+      log('→ claimDailyEntries → day', state.streakDay, '+' + entries, 'entries');
+      return ok({ entries, streakDay: state.streakDay, totalEntries: state.totalEntries });
+    }
+    case 'submitUserProfile':
+      return ok({ success: true });
+    default:
+      return err(404, 'Unknown endpoint ' + endpoint);
+  }
+};
+</script>
+<script src="../dist/winr-sdk.umd.js"></script>
+<script>
+/* ─── SDK integration ─── */
+WINR.configure({
+  apiKey: 'demo-api-key',
+  bundleId: BUNDLE_ID,
+  user: { id: 'demo-user-1', firstName: 'Demo', lastName: 'User' },
+  options: { environment: 'production', debug: true },
+}).then(() => log('SDK configured — auto-open will fire on the first visit of the day'))
+  .catch((e) => log('configure failed:', e.message));
+
+document.getElementById('presentBtn').addEventListener('click', () => {
+  WINR.present({
+    onComplete: (grant) => log('onComplete:', grant),
+    onClose: () => log('experience closed'),
+    onError: (e) => log('onError:', e.message),
+  }).then((r) => log('present() resolved')).catch(() => {});
+});
+
+document.getElementById('applyBtn').addEventListener('click', () => {
+  localStorage.setItem(DEMO_KEY, JSON.stringify({
+    prize: document.getElementById('prize').value,
+    mode: document.getElementById('mode').value,
+    winner: document.getElementById('winner').checked,
+    accent: document.getElementById('accent').value,
+    autoOpen: document.getElementById('autoOpen').checked,
+  }));
+  location.reload();
+});
+
+document.getElementById('nextDayBtn').addEventListener('click', () => {
+  state.claimedOn = null; saveState();                       // backend: new day, unclaimed
+  localStorage.removeItem('winr_last_auto_present_' + BUNDLE_ID); // SDK: auto-open mark cleared
+  location.reload();
+});
+
+document.getElementById('resetBtn').addEventListener('click', () => {
+  Object.keys(localStorage).filter(k => k.startsWith('winr')).forEach(k => localStorage.removeItem(k));
+  sessionStorage.clear();
+  location.reload();
+});
+</script>
+</body>
+</html>

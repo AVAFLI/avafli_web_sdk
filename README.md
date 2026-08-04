@@ -14,11 +14,12 @@ WINR lets you add daily-entry sweepstakes and prize experiences to your app in u
 
 **Key capabilities:**
 - **Daily entry sweepstakes** — Users earn entries every day they engage
-- **Bonus entries via rewarded video** — Monetize attention with opt-in ads
-- **Server-driven UI** — Branding, prizes, and copy update without app releases
+- **Auto-open experience** — Opens automatically on the first visit of each day; entries are claimed automatically, no tap required
+- **Responsive V2 design** — Bottom drawer on mobile (<768px), centered modal card on desktop (≥768px)
+- **Publisher branding** — Logo, primary color, and prize image configured from the WINR dashboard
 - **GDPR/CCPA compliant** — Built-in consent flows and user data deletion
 - **Analytics forwarding** — Route SDK events to your existing analytics stack
-- **Shadow DOM isolation** — Styles never leak into your page
+- **Shadow DOM isolation** — Styles never leak into your page; fonts and imagery are bundled (no CDN fetches)
 
 ## Quick Start
 
@@ -38,9 +39,12 @@ await WINR.configure({
   },
 });
 
-// 2. Present the experience
+// 2. That's it — the experience auto-opens on the first visit of each day.
+//    You can also open it manually at any time:
 await WINR.present();
 ```
+
+> **Auto-open:** After `configure()`, the SDK presents the experience automatically once per calendar day (and re-checks when the tab regains focus). It can be disabled remotely via the dashboard's `experience.autoOpenEnabled` kill switch; unregistered users see at most 3 auto-opens until they submit an email.
 
 ### CDN (UMD)
 
@@ -201,10 +205,10 @@ await WINR.configure({
 ```
 
 **Events emitted by the SDK:**
-- `winr.session_started` — User opened the WINR experience
-- `winr.entry_granted` — Daily entries awarded
-- `winr.bonus_entry_granted` — Bonus entries earned via rewarded video
-- `winr.session_completed` — User closed the WINR experience
+- `winr_modal_presented` — The WINR experience opened (auto-open or manual)
+- `winr_email_captured` — User completed the email/consent capture
+- `winr_daily_entry_claimed` — Daily entries awarded (auto-claimed on open)
+- `winr_modal_dismissed` — User closed the WINR experience
 
 ## GDPR / Delete User Data
 
@@ -243,6 +247,19 @@ interface DailyEntryGrant {
 ```
 
 For detailed API documentation, see the [WINR Docs](https://avafli-website.web.app/sdk/web).
+
+## Example / Demo
+
+A self-contained demo page (with a mock backend) lives in [`example/index.html`](example/index.html). It exercises the auto-open flow, email capture, auto-claim + celebration, streak modes, winner banner/dialog, and the responsive drawer/modal split.
+
+```bash
+npm install
+npm run build
+npm run demo        # serves the repo at http://localhost:8787
+# open http://localhost:8787/example/
+```
+
+Use the on-page controls to simulate the next day (auto-open fires again), switch prize types/streak modes, or reset to a fresh install.
 
 ## Links
 
