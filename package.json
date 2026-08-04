@@ -1,6 +1,6 @@
 {
   "name": "winr-web-sdk",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Web SDK for WINR sweepstakes platform",
   "main": "dist/winr-sdk.umd.js",
   "module": "dist/winr-sdk.esm.js",
@@ -64,10 +64,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/winr-sdk/winr-web-sdk.git"
+    "url": "git+https://github.com/AVAFLI/winr_web_sdk.git"
   },
   "bugs": {
-    "url": "https://github.com/winr-sdk/winr-web-sdk/issues"
+    "url": "https://github.com/AVAFLI/winr_web_sdk/issues"
   },
-  "homepage": "https://github.com/winr-sdk/winr-web-sdk#readme"
+  "homepage": "https://github.com/AVAFLI/winr_web_sdk#readme"
 }

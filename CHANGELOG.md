@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.0.0 (unreleased)
+## 2.0.0 (2026-08-03)
 
 - **V2 experience** — full port of the iOS V2 design (Joe's Figma): gunmetal drawer,
   bundled Inter/Oswald fonts, prize card with default cash hero, horizontally

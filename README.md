@@ -1,10 +1,8 @@
 # WINR Web SDK
 **Drop-in sweepstakes, prizing, and gamification for your web application**
 
-[![npm](https://img.shields.io/npm/v/winr-web-sdk.svg)](https://www.npmjs.com/package/winr-web-sdk)
-[![npm downloads](https://img.shields.io/npm/dm/winr-web-sdk.svg)](https://www.npmjs.com/package/winr-web-sdk)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0%2B-blue.svg?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
-[![License](https://img.shields.io/npm/l/winr-web-sdk.svg)](https://github.com/avafli/winr-web-sdk/blob/main/LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/AVAFLI/winr_web_sdk/blob/main/LICENSE)
 
 ---
 
@@ -46,10 +44,10 @@ await WINR.present();
 
 > **Auto-open:** After `configure()`, the SDK presents the experience automatically once per calendar day (and re-checks when the tab regains focus). It can be disabled remotely via the dashboard's `experience.autoOpenEnabled` kill switch; unregistered users see at most 3 auto-opens until they submit an email.
 
-### CDN (UMD)
+### Script Tag (UMD)
 
 ```html
-<script src="https://unpkg.com/winr-web-sdk@latest/dist/winr-sdk.umd.js"></script>
+<script src="/vendor/winr/winr-sdk.umd.js"></script>
 <script>
   (async function () {
     await WINR.configure({
@@ -57,33 +55,28 @@ await WINR.present();
       bundleId: 'com.example.myapp',
       user: { id: 'user_123', firstName: 'Jane', lastName: 'Doe' },
     });
-    
-    await WINR.present();
   })();
 </script>
 ```
 
 ## Installation
 
-### npm / yarn / pnpm
+The SDK ships as self-hosted ESM and UMD bundles (with TypeScript declarations). Build them from this repo and serve them with your app:
 
 ```bash
-npm install winr-web-sdk
+git clone https://github.com/AVAFLI/winr_web_sdk.git
+cd winr_web_sdk
+npm install
+npm run build
+# outputs: dist/winr-sdk.esm.js, dist/winr-sdk.umd.js, dist/winr-sdk.d.ts
 ```
 
-```bash
-yarn add winr-web-sdk
-```
+- **ESM / bundlers:** copy `dist/winr-sdk.esm.js` (and `winr-sdk.d.ts`) into your project, or add the repo as a git dependency (`npm install github:AVAFLI/winr_web_sdk`) and import `winr-web-sdk`.
+- **Script tag:** self-host `dist/winr-sdk.umd.js` and load it with a `<script>` tag — it exposes a global `WINR`.
 
-```bash
-pnpm add winr-web-sdk
-```
+The bundles are fully self-contained (fonts and imagery embedded, zero runtime dependencies).
 
-### CDN
-
-```html
-<script src="https://unpkg.com/winr-web-sdk@latest/dist/winr-sdk.umd.js"></script>
-```
+> **npm:** The package is not yet published to the public npm registry — `npm install winr-web-sdk` will not work until it is.
 
 > **Note:** Contact [AVAFLI](https://avafli-website.web.app/sdk/pricing) to obtain an API key.
 
@@ -167,7 +160,7 @@ Embed the experience inside an existing DOM element:
 
 ## Push Notifications
 
-For web applications, push notifications are not applicable. The SDK focuses on in-app engagement and retention through the sweepstakes experience itself.
+Streak reminder pushes are primarily a mobile-SDK feature. On the web, `WINR.registerForPushNotifications()` requests the browser's notification permission where supported; otherwise the SDK focuses on in-app engagement through the daily auto-open experience itself.
 
 ## Customization
 
@@ -205,10 +198,14 @@ await WINR.configure({
 ```
 
 **Events emitted by the SDK:**
-- `winr_modal_presented` — The WINR experience opened (auto-open or manual)
+- `winr_device_registered` — Device registered with WINR
+- `winr_modal_presented` — The WINR experience opened as a modal (auto-open or manual)
+- `winr_inline_presented` — The WINR experience embedded inline
 - `winr_email_captured` — User completed the email/consent capture
 - `winr_daily_entry_claimed` — Daily entries awarded (auto-claimed on open)
 - `winr_modal_dismissed` — User closed the WINR experience
+- `winr_push_notifications_enabled` — Browser notification permission granted
+- `winr_user_data_deleted` — User data deletion completed
 
 ## GDPR / Delete User Data
 
@@ -230,6 +227,9 @@ This permanently removes all user data, entries, preferences, and consent record
 | `WINR.present(options?)` | `Promise<void>` | Launch the full-screen WINR experience |
 | `WINR.presentInline(containerId, options?)` | `Promise<void>` | Embed the experience in a container |
 | `WINR.dismiss()` | `void` | Programmatically close the experience |
+| `WINR.isAvailable` | `boolean` | Whether the experience can currently be presented |
+| `WINR.refreshConfig()` | `Promise<void>` | Re-fetch the giveaway/SDK config from the backend |
+| `WINR.registerForPushNotifications()` | `Promise<void>` | Request browser notification permission |
 | `WINR.deleteUserData()` | `Promise<void>` | Permanently delete all user data |
 
 ### Callback Types
@@ -269,4 +269,4 @@ Use the on-page controls to simulate the next day (auto-open fires again), switc
 
 ---
 
-© 2025 Avafli. All Rights Reserved.
+© 2026 Avafli. All Rights Reserved.
