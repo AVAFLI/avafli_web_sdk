@@ -6,7 +6,13 @@ import {
   PrizeClaimBlock,
   SubmitPrizeClaimResponse,
 } from '../src/types';
-import { PrizeClaimForm } from '../src/ui/v2/claim';
+import {
+  PrizeClaimForm,
+  hasAllConsents,
+  isClaimFormValid,
+  isStep1Valid,
+  isStep2Valid,
+} from '../src/ui/v2/claim';
 import { WINRAPI } from '../src/network/api';
 import { LocalStorageProvider } from '../src/storage/local-storage';
 
@@ -41,6 +47,7 @@ const PENDING_CLAIM: PrizeClaimBlock = {
   giveawayId: 'g1',
   prizeDescription: 'Cash Prize',
   prizeValue: 1000,
+  maskedEmail: 'a********e@winr.example.com',
 };
 
 const VALID_FORM: PrizeClaimForm = {
@@ -52,6 +59,10 @@ const VALID_FORM: PrizeClaimForm = {
   city: 'Brooklyn',
   state: 'New York',
   zip: '11201',
+  story: '',
+  confirmsAccuracy: true,
+  authorizesLikeness: true,
+  agreesToRules: true,
 };
 
 function fakeStorage(seed: Record<string, string> = {}): LocalStorageProvider {
@@ -219,6 +230,31 @@ describe('Winner prize-claim routing', () => {
     expect(controller.winnerClaimStep.kind).toBe('form');
   });
 
+  it('missing consents block the submit (likeness release must be affirmative)', async () => {
+    const { controller, api } = makeController({
+      giveawayResponse: { claimedToday: true, prizeClaim: PENDING_CLAIM },
+    });
+    await controller.load();
+    controller.winnerClaimContinue();
+
+    await controller.submitPrizeClaim({ ...VALID_FORM, authorizesLikeness: false });
+    expect(api.submitPrizeClaim).not.toHaveBeenCalled();
+    expect(controller.winnerClaimStep.kind).toBe('form');
+  });
+
+  it('a non-empty story is sent trimmed; an empty one is omitted', async () => {
+    const { controller, api } = makeController({
+      giveawayResponse: { claimedToday: true, prizeClaim: PENDING_CLAIM },
+    });
+    await controller.load();
+    controller.winnerClaimContinue();
+
+    await controller.submitPrizeClaim({ ...VALID_FORM, story: '  Buying a telescope!  ' });
+    expect(api.submitPrizeClaim).toHaveBeenCalledWith(
+      expect.objectContaining({ story: 'Buying a telescope!' })
+    );
+  });
+
   it('"Already submitted" rejection suppresses the winner flow and falls back to the dashboard', async () => {
     const { controller, api } = makeController({
       giveawayResponse: { claimedToday: true, prizeClaim: PENDING_CLAIM },
@@ -245,6 +281,25 @@ describe('Winner prize-claim routing', () => {
 
     await controller.submitPrizeClaim(VALID_FORM);
     expect(controller.state.kind).toBe('dashboard');
+  });
+
+  it('per-step validity gates match the iOS stepped flow', () => {
+    // Step 1: names required; optional phone must be empty or a US number.
+    expect(isStep1Valid(VALID_FORM)).toBe(true);
+    expect(isStep1Valid({ ...VALID_FORM, firstName: ' ' })).toBe(false);
+    expect(isStep1Valid({ ...VALID_FORM, phone: '555' })).toBe(false);
+    expect(isStep1Valid({ ...VALID_FORM, phone: '+1 (212) 555-0100' })).toBe(true);
+
+    // Step 2: full US shipping address with a 5-digit zip.
+    expect(isStep2Valid(VALID_FORM)).toBe(true);
+    expect(isStep2Valid({ ...VALID_FORM, state: '' })).toBe(false);
+    expect(isStep2Valid({ ...VALID_FORM, zip: '1120' })).toBe(false);
+
+    // Review: all three consents required for the overall form validity.
+    expect(hasAllConsents(VALID_FORM)).toBe(true);
+    expect(isClaimFormValid({ ...VALID_FORM, agreesToRules: false })).toBe(false);
+    // Steps 3/4 (photo, story) are optional — validity ignores them.
+    expect(isClaimFormValid({ ...VALID_FORM, story: '', photoBase64: undefined })).toBe(true);
   });
 
   it('a transport failure stays on the form with an inline error', async () => {

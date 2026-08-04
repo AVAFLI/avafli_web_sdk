@@ -5,7 +5,7 @@ import {
   renderCapture,
   renderCelebrationModal,
   renderClaimConfirmation,
-  renderClaimForm,
+  renderClaimSteps,
   renderDashboard,
   renderEmpty,
   renderHowItWorks,
@@ -208,14 +208,14 @@ export class WINRV2Experience {
         this.sheet.appendChild(renderHowItWorks(c, logoUrl));
         break;
       case 'winnerClaim': {
-        // Winner prize-claim flow: splash → form → confirmation, routed by the
-        // controller's winnerClaimStep sub-state (mirrors iOS
-        // WINRV2WinnerClaimFlow).
+        // Winner prize-claim flow: splash → stepped form (4 steps + review) →
+        // confirmation, routed by the controller's winnerClaimStep sub-state
+        // (mirrors iOS WINRV2WinnerClaimFlow).
         const step = c.winnerClaimStep;
         if (step.kind === 'splash') {
           this.sheet.appendChild(renderWinnerSplash(c, state.claim, logoUrl));
         } else if (step.kind === 'form') {
-          this.sheet.appendChild(renderClaimForm(c, logoUrl));
+          this.sheet.appendChild(renderClaimSteps(c, state.claim, logoUrl));
         } else {
           this.sheet.appendChild(
             renderClaimConfirmation(c, step.claimNumber, step.submittedAt, logoUrl)

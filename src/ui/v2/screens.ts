@@ -4,27 +4,35 @@ import { createAnimatedCheck, createConfetti } from './effects';
 import {
   arrowDownIcon,
   calendarIcon,
+  cameraIcon,
   checkSquareIcon,
   chevronLeftIcon,
   closeIcon,
   flameIcon,
   lockIcon,
   mailIcon,
-  paperclipIcon,
+  personIcon,
   plusIcon,
   shieldIcon,
+  socialFacebookIcon,
+  socialInstagramIcon,
+  socialSnapchatIcon,
+  socialTiktokIcon,
+  socialXIcon,
   squareIcon,
   ticketIcon,
+  uploadIcon,
 } from './icons';
 import { V2ExperienceController } from './controller';
 import {
-  CLAIM_CONSENTS,
   CLAIM_COUNTRY,
   PrizeClaimForm,
   US_STATES,
   claimDisplayName,
   claimPhotoBase64Jpeg,
   isClaimFormValid,
+  isStep1Valid,
+  isStep2Valid,
   monthYearDisplay,
 } from './claim';
 import {
@@ -903,8 +911,9 @@ export function renderHowItWorks(c: V2ExperienceController, logoUrl?: string | n
   return screen;
 }
 
-// ═══ Winner prize-claim flow (splash → form → confirmation) ═══
-// Ported from iOS WINRV2Claim.swift (Joe's Light variant).
+// ═══ Winner prize-claim flow (splash → 4 steps + review → confirmation) ═══
+// Ported from iOS WINRV2Claim.swift + WINRV2ClaimSteps/ (Joe's stepped
+// Figma design).
 
 /** Claim-flow header: publisher logo centered, X close only (no "?"). */
 function renderClaimHeader(logoUrl: string | null | undefined, onClose: () => void): HTMLElement {
@@ -1004,15 +1013,31 @@ export function renderWinnerSplash(
   return screen;
 }
 
-// ─── Claim form ("TELL US ABOUT YOURSELF") ───
+// ─── Stepped claim form (Joe's Figma flow: 4 steps + review) ───
+// Ported from iOS WINRV2ClaimSteps/: a persistent gold-sparkle backdrop +
+// header + animated step indicator, with the four form steps and the review
+// screen sliding horizontally beneath them (push left on advance, push right
+// on back).
 
-export function renderClaimForm(c: V2ExperienceController, logoUrl?: string | null): HTMLElement {
+/** The five screens of the stepped form (5 = review, no step indicator). */
+type ClaimFlowStep = 1 | 2 | 3 | 4 | 5;
+
+export function renderClaimSteps(
+  c: V2ExperienceController,
+  claim: PrizeClaimBlock,
+  logoUrl?: string | null
+): HTMLElement {
+  // Form + photo preview live at flow level so every step keeps its values
+  // when the user navigates back and forth.
   const form: PrizeClaimForm = c.claimFormPrefill;
-  const consents: boolean[] = CLAIM_CONSENTS.map(() => false);
+  let photoPreviewUrl: string | null = null;
+  let step: ClaimFlowStep = 1;
+  let animating = false;
 
   const screen = el('div', 'wv2-screen wv2-claim-screen');
 
-  // Gold-sparkle backdrop at the top, fading into the dark body.
+  // Gold-sparkle full-bleed backdrop fading into the dark body (406px, per
+  // the frames).
   const backdrop = el('div', 'wv2-claim-form-bg');
   const backdropImg = el('img');
   backdropImg.src = V2_IMAGES.winnerModalBg;
@@ -1021,265 +1046,597 @@ export function renderClaimForm(c: V2ExperienceController, logoUrl?: string | nu
   backdrop.appendChild(el('div', 'wv2-claim-form-bg-grad'));
   screen.appendChild(backdrop);
 
-  const scroll = el('div', 'wv2-scroll');
-  scroll.style.position = 'relative';
-  const stack = el('div', 'wv2-claim-stack');
+  const flow = el('div', 'wv2-claim-flow');
 
-  stack.appendChild(renderClaimHeader(logoUrl, () => c.requestDismiss()));
+  // Persistent header: back chevron (steps 2+ / review), logo, X close.
+  const header = el('div', 'wv2-claim-header');
+  const back = el('button', 'wv2-circle-btn wv2-claim-back');
+  const chev = icon(chevronLeftIcon, 'wv2-ic');
+  chev.style.cssText = 'width:10px;height:16px';
+  back.appendChild(chev);
+  back.setAttribute('aria-label', 'Back');
+  back.addEventListener('click', () => {
+    if (step > 1) go((step - 1) as ClaimFlowStep);
+  });
+  header.appendChild(back);
+  const logo = el('div', 'wv2-header-logo');
+  if (logoUrl) {
+    const img = el('img');
+    img.src = logoUrl;
+    img.alt = '';
+    logo.appendChild(img);
+  } else {
+    logo.appendChild(el('span', 'wv2-header-logo-fallback', 'WINR'));
+  }
+  header.appendChild(logo);
+  const close = el('button', 'wv2-circle-btn wv2-claim-close');
+  const x = icon(closeIcon, 'wv2-ic');
+  x.style.cssText = 'width:12px;height:12px';
+  close.appendChild(x);
+  close.setAttribute('aria-label', 'Close');
+  close.addEventListener('click', () => c.requestDismiss());
+  header.appendChild(close);
+  flow.appendChild(header);
 
-  stack.appendChild(el('div', 'wv2-claim-form-pill', 'PRIZE CLAIM FORM'));
-  stack.appendChild(el('div', 'wv2-claim-form-title', 'TELL US ABOUT YOURSELF'));
-  stack.appendChild(
-    el(
-      'div',
-      'wv2-claim-form-sub',
-      'We’ll use this information to verify your prize and personalize your winner announcement.'
-    )
-  );
+  // "STEP N OF 4" + the row of 4 dots connected by accent lines. The fill
+  // animates via CSS transitions; hidden on the review screen.
+  const indicator = el('div', 'wv2-step-indicator');
+  const stepLabel = el('div', 'wv2-step-label');
+  indicator.appendChild(stepLabel);
+  const dotsRow = el('div', 'wv2-step-dots');
+  const dots: HTMLElement[] = [];
+  for (let i = 1; i <= 4; i++) {
+    const dot = el('div', 'wv2-step-dot');
+    dots.push(dot);
+    dotsRow.appendChild(dot);
+    if (i < 4) dotsRow.appendChild(el('div', 'wv2-step-line'));
+  }
+  indicator.appendChild(dotsRow);
+  flow.appendChild(indicator);
 
-  const fields = el('div', 'wv2-claim-fields');
+  // Pages viewport: steps slide horizontally beneath the fixed chrome.
+  const pages = el('div', 'wv2-claim-pages');
+  flow.appendChild(pages);
+  screen.appendChild(flow);
 
-  /** A labeled dark rounded text field (claim form). */
-  const field = (options: {
+  const syncChrome = (): void => {
+    back.style.visibility = step === 1 ? 'hidden' : 'visible';
+    if (step === 5) {
+      indicator.classList.add('wv2-step-indicator-hidden');
+    } else {
+      indicator.classList.remove('wv2-step-indicator-hidden');
+      stepLabel.textContent = `STEP ${step} OF 4`;
+      indicator.setAttribute('aria-label', `Step ${step} of 4`);
+      dots.forEach((dot, i) => dot.classList.toggle('wv2-filled', i + 1 <= step));
+    }
+  };
+
+  /** Steps push left when advancing and right when going back (300ms). */
+  const go = (next: ClaimFlowStep): void => {
+    if (animating || next === step) return;
+    const advancing = next > step;
+    const oldPage = pages.firstElementChild as HTMLElement | null;
+    step = next;
+    syncChrome();
+    const newPage = renderPage(step);
+    newPage.classList.add(advancing ? 'wv2-page-in-right' : 'wv2-page-in-left');
+    pages.appendChild(newPage);
+    if (oldPage) {
+      animating = true;
+      oldPage.classList.add(advancing ? 'wv2-page-out-left' : 'wv2-page-out-right');
+    }
+    setTimeout(() => {
+      oldPage?.remove();
+      // Drop the slide-in class once the animation window passes so a
+      // throttled/paused animation (hidden tab) can never leave the page
+      // stuck off-screen at the first keyframe.
+      newPage.classList.remove('wv2-page-in-right', 'wv2-page-in-left');
+      animating = false;
+    }, 320);
+  };
+
+  // ── Page scaffold: title / subtitle / content / CTA pill / footer ──
+
+  interface PageOptions {
+    title: string;
+    subtitle?: string;
+    ctaTitle?: string;
+    ctaEnabled?: () => boolean;
+    onCTA: (cta: HTMLButtonElement) => void;
+    footer?: HTMLElement;
+  }
+
+  const buildPage = (
+    options: PageOptions,
+    content: HTMLElement
+  ): { page: HTMLElement; cta: HTMLButtonElement; refresh: () => void } => {
+    const pageEl = el('div', 'wv2-claim-page');
+    const stack = el('div', 'wv2-step-stack');
+
+    const title = el('div', 'wv2-step-title');
+    // Support the frame's forced line break in step 2's title.
+    options.title.split('\n').forEach((line, i) => {
+      if (i > 0) title.appendChild(el('br'));
+      title.appendChild(document.createTextNode(line));
+    });
+    stack.appendChild(title);
+    if (options.subtitle) {
+      const sub = el('div', 'wv2-step-subtitle');
+      options.subtitle.split('\n').forEach((line, i) => {
+        if (i > 0) sub.appendChild(el('br'));
+        sub.appendChild(document.createTextNode(line));
+      });
+      stack.appendChild(sub);
+    }
+
+    stack.appendChild(content);
+
+    const enabled = options.ctaEnabled ?? ((): boolean => true);
+    const ctaWrap = el('div', 'wv2-step-cta');
+    const cta = renderPill(options.ctaTitle ?? 'CONTINUE', () => options.onCTA(cta), {
+      disabled: !enabled(),
+    });
+    ctaWrap.appendChild(cta);
+    stack.appendChild(ctaWrap);
+
+    if (options.footer) stack.appendChild(options.footer);
+
+    pageEl.appendChild(stack);
+    const refresh = (): void => {
+      cta.disabled = !enabled();
+      cta.classList.toggle('wv2-pill-dim', !enabled());
+    };
+    return { page: pageEl, cta, refresh };
+  };
+
+  // ── Field builders (claim-step frame styling) ──
+
+  type TextKey = 'firstName' | 'lastName' | 'phone' | 'street' | 'apt' | 'city' | 'zip';
+
+  const stepField = (options: {
     label: string;
-    key?: keyof Pick<PrizeClaimForm, 'firstName' | 'lastName' | 'phone' | 'street' | 'apt' | 'city' | 'zip'>;
-    value?: string;
-    disabled?: boolean;
+    key: TextKey;
+    refresh: () => void;
     type?: string;
     autocomplete?: string;
     inputmode?: string;
-  }): { wrap: HTMLElement; input: HTMLInputElement } => {
-    const wrap = el('div', 'wv2-claim-field');
-    wrap.appendChild(el('label', 'wv2-claim-label', options.label));
-    const input = el('input', 'wv2-claim-input');
+    zipMode?: boolean;
+  }): HTMLElement => {
+    const wrap = el('div', 'wv2-sf');
+    wrap.appendChild(el('label', 'wv2-sf-label', options.label));
+    const input = el('input', 'wv2-sf-input');
     input.type = options.type ?? 'text';
     if (options.autocomplete) input.setAttribute('autocomplete', options.autocomplete);
     if (options.inputmode) input.setAttribute('inputmode', options.inputmode);
     input.setAttribute('autocorrect', 'off');
-    if (options.disabled) {
-      input.value = options.value ?? '';
-      input.disabled = true;
-      input.classList.add('wv2-claim-input-locked');
-    } else if (options.key) {
-      input.value = form[options.key];
-      input.addEventListener('input', () => {
-        form[options.key!] = input.value;
-        refresh();
-      });
-    }
+    input.value = form[options.key];
+    if (options.zipMode) input.maxLength = 5;
+    input.addEventListener('input', () => {
+      if (options.zipMode) {
+        const digits = input.value.replace(/\D/g, '').slice(0, 5);
+        if (digits !== input.value) input.value = digits;
+      }
+      form[options.key] = input.value;
+      options.refresh();
+    });
     wrap.appendChild(input);
-    return { wrap, input };
+    return wrap;
   };
 
-  fields.appendChild(
-    field({ label: 'First Name', key: 'firstName', autocomplete: 'given-name' }).wrap
-  );
-  fields.appendChild(
-    field({
-      label: 'Last Name (we will only show your last initial)',
-      key: 'lastName',
-      autocomplete: 'family-name',
-    }).wrap
-  );
-  // The winning email lives server-side (the SDK never stores raw email) and
-  // the claim is keyed to the account — shown locked, no value editable.
-  fields.appendChild(
-    field({
-      label: 'Winning Email Address (cannot be changed)',
-      value: 'On file with your winning entry',
-      disabled: true,
-    }).wrap
-  );
-  fields.appendChild(
-    field({
-      label: 'Phone Number (optional)',
-      key: 'phone',
-      type: 'tel',
-      autocomplete: 'tel',
-      inputmode: 'tel',
-    }).wrap
-  );
-  fields.appendChild(
-    field({ label: 'Street Address', key: 'street', autocomplete: 'address-line1' }).wrap
-  );
-  fields.appendChild(
-    field({
-      label: 'Apartment, Suite, etc. (optional)',
-      key: 'apt',
-      autocomplete: 'address-line2',
-    }).wrap
-  );
-  fields.appendChild(
-    field({ label: 'City', key: 'city', autocomplete: 'address-level2' }).wrap
-  );
+  /** A locked (non-editable) field — winning email and Country rows. */
+  const lockedField = (options: {
+    label: string;
+    value: string;
+    dimmed?: boolean;
+    showsChevron?: boolean;
+  }): HTMLElement => {
+    const wrap = el('div', 'wv2-sf');
+    wrap.appendChild(el('label', 'wv2-sf-label', options.label));
+    const box = el('div', 'wv2-sf-locked');
+    const value = el('span', 'wv2-sf-locked-value', options.value);
+    if (options.dimmed !== false) value.classList.add('wv2-sf-dim');
+    box.appendChild(value);
+    if (options.showsChevron) box.appendChild(icon(arrowDownIcon, 'wv2-sf-chevron'));
+    wrap.appendChild(box);
+    return wrap;
+  };
 
-  // State picker + zip, side by side.
-  const row = el('div', 'wv2-claim-row');
-  const stateWrap = el('div', 'wv2-claim-field wv2-claim-state');
-  stateWrap.appendChild(el('label', 'wv2-claim-label', 'State'));
-  const selectWrap = el('div', 'wv2-claim-select-wrap');
-  const select = el('select', 'wv2-claim-select');
-  const placeholder = el('option', undefined, 'Select');
-  placeholder.value = '';
-  placeholder.disabled = true;
-  placeholder.selected = true;
-  select.appendChild(placeholder);
-  for (const state of US_STATES) {
-    const option = el('option', undefined, state);
-    option.value = state;
-    select.appendChild(option);
-  }
-  select.addEventListener('change', () => {
-    form.state = select.value;
-    select.classList.toggle('wv2-placeholder', select.value === '');
-    refresh();
-  });
-  select.classList.add('wv2-placeholder');
-  selectWrap.appendChild(select);
-  selectWrap.appendChild(icon(arrowDownIcon, 'wv2-claim-select-chevron'));
-  stateWrap.appendChild(selectWrap);
-  row.appendChild(stateWrap);
+  // ── Step 1: TELL US ABOUT YOURSELF ──
 
-  const zip = field({ label: 'Zip Code', key: 'zip', inputmode: 'numeric' });
-  zip.wrap.classList.add('wv2-claim-zip');
-  zip.input.maxLength = 5;
-  zip.input.addEventListener('input', () => {
-    const digits = zip.input.value.replace(/\D/g, '').slice(0, 5);
-    if (digits !== zip.input.value) zip.input.value = digits;
-    form.zip = digits;
-    refresh();
-  });
-  row.appendChild(zip.wrap);
-  fields.appendChild(row);
+  const renderStep1 = (): HTMLElement => {
+    const fields = el('div', 'wv2-step-fields');
+    const { page, refresh } = buildPage(
+      {
+        title: 'TELL US ABOUT YOURSELF',
+        subtitle:
+          "We'll use this information to verify your prize and personalize your winner announcement.",
+        ctaEnabled: () => isStep1Valid(form),
+        onCTA: () => go(2),
+      },
+      fields
+    );
+    fields.appendChild(
+      stepField({ label: 'First Name', key: 'firstName', refresh, autocomplete: 'given-name' })
+    );
+    fields.appendChild(
+      stepField({
+        label: 'Last Name (we will only show your last initial)',
+        key: 'lastName',
+        refresh,
+        autocomplete: 'family-name',
+      })
+    );
+    // The winning email lives server-side (the SDK never stores the raw
+    // address) and the claim is keyed to the account — shown locked, masked
+    // by the backend for recognition.
+    fields.appendChild(
+      lockedField({
+        label: 'Winning Email Address (cannot be changed)',
+        value: claim.maskedEmail || 'On file with your winning entry',
+      })
+    );
+    fields.appendChild(
+      stepField({
+        label: 'Phone Number (optional)',
+        key: 'phone',
+        refresh,
+        type: 'tel',
+        autocomplete: 'tel',
+        inputmode: 'tel',
+      })
+    );
+    return page;
+  };
 
-  fields.appendChild(field({ label: 'Country', value: CLAIM_COUNTRY, disabled: true }).wrap);
+  // ── Step 2: WHERE SHOULD WE SEND YOUR PRIZE? ──
 
-  // Optional photo: file input with client-side downscale (≤1200px long edge
-  // → JPEG base64 ≤5MB) before it ever leaves the browser.
-  const photoSection = el('div', 'wv2-claim-photo');
-  const fileInput = el('input');
-  fileInput.type = 'file';
-  fileInput.accept = 'image/png,image/jpeg,image/webp';
-  fileInput.style.display = 'none';
-  photoSection.appendChild(fileInput);
+  const renderStep2 = (): HTMLElement => {
+    const fields = el('div', 'wv2-step-fields wv2-step-fields-address');
+    const { page, refresh } = buildPage(
+      {
+        title: 'WHERE SHOULD WE\nSEND YOUR PRIZE?',
+        ctaEnabled: () => isStep2Valid(form),
+        onCTA: () => go(3),
+      },
+      fields
+    );
+    fields.appendChild(
+      stepField({ label: 'Street Address', key: 'street', refresh, autocomplete: 'address-line1' })
+    );
+    fields.appendChild(
+      stepField({
+        label: 'Apartment, Suite, etc. (optional)',
+        key: 'apt',
+        refresh,
+        autocomplete: 'address-line2',
+      })
+    );
+    fields.appendChild(
+      stepField({ label: 'City', key: 'city', refresh, autocomplete: 'address-level2' })
+    );
 
-  const attachBtn = el('button', 'wv2-claim-attach');
-  attachBtn.type = 'button';
-  const clip = icon(paperclipIcon, 'wv2-claim-clip');
-  attachBtn.appendChild(clip);
-  attachBtn.appendChild(el('span', undefined, 'ATTACH A PHOTO'));
-  attachBtn.addEventListener('click', () => fileInput.click());
-  photoSection.appendChild(attachBtn);
-
-  const attachedRow = el('div', 'wv2-claim-attached');
-  attachedRow.style.display = 'none';
-  const thumb = el('img', 'wv2-claim-thumb');
-  thumb.alt = '';
-  attachedRow.appendChild(thumb);
-  attachedRow.appendChild(el('div', 'wv2-claim-attached-label', 'Photo attached'));
-  const removeBtn = el('button', 'wv2-claim-remove');
-  removeBtn.type = 'button';
-  const removeX = icon(closeIcon, 'wv2-ic');
-  removeX.style.cssText = 'width:11px;height:11px';
-  removeBtn.appendChild(removeX);
-  removeBtn.setAttribute('aria-label', 'Remove photo');
-  removeBtn.addEventListener('click', () => {
-    delete form.photoBase64;
-    fileInput.value = '';
-    thumb.removeAttribute('src');
-    attachedRow.style.display = 'none';
-    attachBtn.style.display = '';
-  });
-  attachedRow.appendChild(removeBtn);
-  photoSection.appendChild(attachedRow);
-
-  fileInput.addEventListener('change', () => {
-    const file = fileInput.files?.[0];
-    if (!file) return;
-    delete form.photoBase64;
-    attachBtn.style.display = 'none';
-    attachedRow.style.display = '';
-    void claimPhotoBase64Jpeg(file).then((encoded) => {
-      if (encoded) {
-        form.photoBase64 = encoded;
-        thumb.src = `data:image/jpeg;base64,${encoded}`;
-      }
-    });
-  });
-  fields.appendChild(photoSection);
-
-  // Required consent confirmations.
-  const consentsWrap = el('div', 'wv2-claim-consents');
-  CLAIM_CONSENTS.forEach((text, index) => {
-    const rowBtn = el('button', 'wv2-claim-consent');
-    rowBtn.type = 'button';
-    const box = icon(squareIcon, 'wv2-ic');
-    rowBtn.appendChild(box);
-    rowBtn.appendChild(el('span', undefined, text));
-    rowBtn.addEventListener('click', () => {
-      consents[index] = !consents[index];
-      box.innerHTML = consents[index] ? checkSquareIcon : squareIcon;
+    // State picker + zip, side by side.
+    const row = el('div', 'wv2-sf-row');
+    const stateWrap = el('div', 'wv2-sf wv2-sf-state');
+    stateWrap.appendChild(el('label', 'wv2-sf-label', 'State'));
+    const selectWrap = el('div', 'wv2-sf-select-wrap');
+    const select = el('select', 'wv2-sf-select');
+    const placeholder = el('option', undefined, 'Select');
+    placeholder.value = '';
+    placeholder.disabled = true;
+    select.appendChild(placeholder);
+    for (const state of US_STATES) {
+      const option = el('option', undefined, state);
+      option.value = state;
+      select.appendChild(option);
+    }
+    select.value = form.state;
+    select.classList.toggle('wv2-placeholder', form.state === '');
+    select.addEventListener('change', () => {
+      form.state = select.value;
+      select.classList.toggle('wv2-placeholder', select.value === '');
       refresh();
     });
-    consentsWrap.appendChild(rowBtn);
-  });
-  fields.appendChild(consentsWrap);
+    selectWrap.appendChild(select);
+    selectWrap.appendChild(icon(arrowDownIcon, 'wv2-sf-chevron'));
+    stateWrap.appendChild(selectWrap);
+    row.appendChild(stateWrap);
+    const zip = stepField({ label: 'Zip Code', key: 'zip', refresh, inputmode: 'numeric', zipMode: true });
+    zip.classList.add('wv2-sf-zip');
+    row.appendChild(zip);
+    fields.appendChild(row);
 
-  stack.appendChild(fields);
-
-  const errorEl = el('div', 'wv2-claim-error');
-  errorEl.style.display = 'none';
-  stack.appendChild(errorEl);
-
-  const canSubmit = (): boolean => isClaimFormValid(form) && consents.every(Boolean);
-
-  const submitWrap = el('div', 'wv2-claim-submit');
-  const submit = renderPill('SUBMIT PRIZE CLAIM', () => void onSubmit(), {
-    disabled: !canSubmit(),
-  });
-  submitWrap.appendChild(submit);
-  stack.appendChild(submitWrap);
-
-  // Lock note under the submit pill.
-  const lockNote = el('div', 'wv2-claim-lock-note');
-  lockNote.appendChild(icon(lockIcon, 'wv2-claim-lock-ic'));
-  lockNote.appendChild(
-    el('span', undefined, 'Your information is encrypted and only used to process your prize.')
-  );
-  stack.appendChild(lockNote);
-
-  const refresh = (): void => {
-    if (c.isSubmittingClaim) return;
-    submit.disabled = !canSubmit();
-    submit.classList.toggle('wv2-pill-dim', !canSubmit());
+    // US-only sweepstakes — the country row renders like the frame's dropdown
+    // but is fixed.
+    fields.appendChild(
+      lockedField({ label: 'Country', value: CLAIM_COUNTRY, dimmed: false, showsChevron: true })
+    );
+    return page;
   };
 
-  const onSubmit = async (): Promise<void> => {
-    if (!canSubmit() || c.isSubmittingClaim) return;
-    errorEl.style.display = 'none';
-    submit.textContent = '';
-    submit.appendChild(el('span', 'wv2-spinner'));
-    submit.disabled = true;
+  // ── Step 3: SHOW OFF YOUR WIN! ──
 
-    await c.submitPrizeClaim(form);
+  // Hidden file inputs at flow level so a picked photo survives navigation.
+  // UPLOAD opens the file picker; TAKE requests the camera on devices that
+  // have one (`capture` is ignored on desktop → plain picker fallback).
+  const libraryInput = el('input');
+  libraryInput.type = 'file';
+  libraryInput.accept = 'image/png,image/jpeg,image/webp';
+  libraryInput.style.display = 'none';
+  const cameraInput = el('input');
+  cameraInput.type = 'file';
+  cameraInput.accept = 'image/*';
+  cameraInput.setAttribute('capture', 'environment');
+  cameraInput.style.display = 'none';
+  screen.appendChild(libraryInput);
+  screen.appendChild(cameraInput);
 
-    // Success and "not the winner" fall-back both re-render the whole state;
-    // only a transport failure leaves us on the form — surface it inline.
-    if (c.state.kind === 'winnerClaim' && c.winnerClaimStep.kind === 'form') {
-      submit.textContent = 'SUBMIT PRIZE CLAIM';
-      submit.disabled = !canSubmit();
-      submit.classList.toggle('wv2-pill-dim', !canSubmit());
-      if (c.claimSubmitError) {
-        errorEl.textContent = c.claimSubmitError;
-        errorEl.style.display = '';
+  const renderStep3 = (): HTMLElement => {
+    const content = el('div', 'wv2-step3');
+
+    // 242px circular preview with the accent ring and the camera badge
+    // breaking the bottom-right edge (tappable — same as TAKE PHOTO).
+    const avatar = el('div', 'wv2-claim-avatar');
+    const avatarImg = el('img', 'wv2-claim-avatar-img');
+    avatarImg.alt = '';
+    const person = icon(personIcon, 'wv2-claim-avatar-person');
+    const syncAvatar = (): void => {
+      if (photoPreviewUrl) {
+        avatarImg.src = photoPreviewUrl;
+        avatarImg.style.display = '';
+        person.style.display = 'none';
+      } else {
+        avatarImg.style.display = 'none';
+        person.style.display = '';
       }
+    };
+    avatar.appendChild(avatarImg);
+    avatar.appendChild(person);
+    const badge = el('button', 'wv2-claim-avatar-badge');
+    badge.type = 'button';
+    badge.appendChild(icon(cameraIcon, 'wv2-claim-badge-camera'));
+    badge.setAttribute('aria-label', 'Take photo');
+    badge.addEventListener('click', () => cameraInput.click());
+    avatar.appendChild(badge);
+    content.appendChild(avatar);
+    syncAvatar();
+
+    const attach = (file: File | undefined): void => {
+      if (!file) return;
+      if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl);
+      photoPreviewUrl = URL.createObjectURL(file);
+      syncAvatar();
+      // Encode the upload payload in the background (same downscale/base64
+      // pipeline as before); the preview shows immediately.
+      delete form.photoBase64;
+      void claimPhotoBase64Jpeg(file).then((encoded) => {
+        if (encoded) form.photoBase64 = encoded;
+      });
+    };
+    libraryInput.onchange = (): void => attach(libraryInput.files?.[0]);
+    cameraInput.onchange = (): void => attach(cameraInput.files?.[0]);
+
+    const buttons = el('div', 'wv2-photo-btns');
+    const photoButton = (iconSvg: string, title: string, onClick: () => void): HTMLElement => {
+      const btn = el('button', 'wv2-photo-btn');
+      btn.type = 'button';
+      btn.appendChild(icon(iconSvg, 'wv2-photo-btn-ic'));
+      btn.appendChild(el('span', undefined, title));
+      btn.addEventListener('click', onClick);
+      return btn;
+    };
+    buttons.appendChild(photoButton(uploadIcon, 'UPLOAD PHOTO', () => libraryInput.click()));
+    buttons.appendChild(photoButton(cameraIcon, 'TAKE PHOTO', () => cameraInput.click()));
+    content.appendChild(buttons);
+
+    const note = el('div', 'wv2-photo-note');
+    note.appendChild(
+      document.createTextNode('Your photo may appear in our Winner Gallery,')
+    );
+    note.appendChild(el('br'));
+    note.appendChild(document.createTextNode('social media, and promotional materials.'));
+    content.appendChild(note);
+
+    const { page } = buildPage(
+      {
+        title: 'SHOW OFF YOUR WIN!',
+        subtitle: "Upload a photo we'd be proud to\nfeature as one of our winners.",
+        onCTA: () => go(4),
+      },
+      content
+    );
+    return page;
+  };
+
+  // ── Step 4: PLEASE SHARE A LITTLE ──
+
+  /** Generic share line for the social buttons. */
+  const shareLine = (): string => {
+    const prize = stripHeadline(claim.prizeDescription, Math.round(claim.prizeValue));
+    const site = document.title.trim();
+    return site ? `I just won ${prize} on ${site}!` : `I just won ${prize}!`;
+  };
+
+  /** Best-effort share: the native share sheet where available, otherwise
+      copy the line to the clipboard. */
+  const share = (): void => {
+    const text = shareLine();
+    const nav = navigator as Navigator & { share?: (data: { text: string }) => Promise<void> };
+    if (typeof nav.share === 'function') {
+      nav.share({ text }).catch(() => undefined);
+    } else if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).catch(() => undefined);
     }
   };
 
-  scroll.appendChild(stack);
-  screen.appendChild(scroll);
+  const renderStep4 = (): HTMLElement => {
+    const content = el('div', 'wv2-step4');
+
+    const storyWrap = el('div', 'wv2-story');
+    const story = el('textarea', 'wv2-story-input');
+    story.placeholder =
+      'Please share anything. What you’re going to do with the prize, why you love our app, your favorite food, etc.';
+    story.value = form.story;
+    story.addEventListener('input', () => {
+      form.story = story.value;
+    });
+    storyWrap.appendChild(story);
+    content.appendChild(storyWrap);
+
+    const social = el('div', 'wv2-social');
+    social.appendChild(el('div', 'wv2-social-title', 'Share on Social Media:'));
+    const socialRow = el('div', 'wv2-social-row');
+    const glyphs: Array<[string, string]> = [
+      [socialInstagramIcon, 'Instagram'],
+      [socialFacebookIcon, 'Facebook'],
+      [socialXIcon, 'X'],
+      [socialSnapchatIcon, 'Snapchat'],
+      [socialTiktokIcon, 'TikTok'],
+    ];
+    for (const [glyph, name] of glyphs) {
+      const btn = el('button', 'wv2-social-btn');
+      btn.type = 'button';
+      btn.appendChild(icon(glyph, 'wv2-social-glyph'));
+      btn.setAttribute('aria-label', `Share on ${name}`);
+      btn.addEventListener('click', share);
+      socialRow.appendChild(btn);
+    }
+    social.appendChild(socialRow);
+    content.appendChild(social);
+
+    const { page } = buildPage(
+      {
+        title: 'PLEASE SHARE A LITTLE',
+        subtitle: 'This helps us show real people like you win!',
+        onCTA: () => go(5),
+      },
+      content
+    );
+    return page;
+  };
+
+  // ── Review: ALMOST DONE! ──
+
+  const renderReview = (): HTMLElement => {
+    const content = el('div', 'wv2-review');
+
+    const consents = el('div', 'wv2-consents');
+    type ConsentKey = 'confirmsAccuracy' | 'authorizesLikeness' | 'agreesToRules';
+    const consentRow = (key: ConsentKey, label: HTMLElement): HTMLElement => {
+      const btnRow = el('button', 'wv2-consent-row');
+      btnRow.type = 'button';
+      const box = el('span', 'wv2-consent-box');
+      box.innerHTML = checkIconSvg;
+      btnRow.appendChild(box);
+      btnRow.appendChild(label);
+      const sync = (): void => {
+        box.classList.toggle('wv2-consent-on', form[key]);
+        btnRow.setAttribute('aria-pressed', String(form[key]));
+      };
+      btnRow.addEventListener('click', () => {
+        form[key] = !form[key];
+        sync();
+        refresh();
+      });
+      sync();
+      return btnRow;
+    };
+    consents.appendChild(
+      consentRow(
+        'confirmsAccuracy',
+        el('span', 'wv2-consent-text', 'I confirm my information is accurate.')
+      )
+    );
+    consents.appendChild(
+      consentRow(
+        'authorizesLikeness',
+        el(
+          'span',
+          'wv2-consent-text',
+          "I authorize this app's publisher and its promotional partners to use my name, city, profile photo, and likeness for winner announcements and promotional purposes."
+        )
+      )
+    );
+    const rulesText = el('span', 'wv2-consent-text');
+    rulesText.appendChild(document.createTextNode('I agree to the '));
+    rulesText.appendChild(el('span', 'wv2-consent-em', 'Official Rules'));
+    rulesText.appendChild(document.createTextNode(' and '));
+    rulesText.appendChild(el('span', 'wv2-consent-em', 'Privacy Policy'));
+    rulesText.appendChild(document.createTextNode('.'));
+    consents.appendChild(consentRow('agreesToRules', rulesText));
+    content.appendChild(consents);
+
+    const errorEl = el('div', 'wv2-claim-error');
+    errorEl.style.display = 'none';
+    content.appendChild(errorEl);
+
+    // Gunmetal "secure and encrypted" lock note under the CTA.
+    const lockNote = el('div', 'wv2-review-lock');
+    lockNote.appendChild(icon(lockIcon, 'wv2-review-lock-ic'));
+    lockNote.appendChild(
+      el('span', undefined, 'Your information is secure and encrypted.')
+    );
+
+    const onSubmit = async (cta: HTMLButtonElement): Promise<void> => {
+      if (!isClaimFormValid(form) || c.isSubmittingClaim) return;
+      errorEl.style.display = 'none';
+      cta.textContent = '';
+      cta.appendChild(el('span', 'wv2-spinner'));
+      cta.disabled = true;
+
+      await c.submitPrizeClaim(form);
+
+      // Success and the "not the winner" fall-back both re-render the whole
+      // state; only a transport failure leaves us here — surface it inline.
+      if (c.state.kind === 'winnerClaim' && c.winnerClaimStep.kind === 'form') {
+        cta.textContent = 'SUBMIT PRIZE CLAIM';
+        cta.disabled = !isClaimFormValid(form);
+        cta.classList.toggle('wv2-pill-dim', cta.disabled);
+        if (c.claimSubmitError) {
+          errorEl.textContent = c.claimSubmitError;
+          errorEl.style.display = '';
+        }
+      }
+    };
+
+    const { page, refresh } = buildPage(
+      {
+        title: 'ALMOST DONE!',
+        subtitle: 'Please review and agree to claim your prize.',
+        ctaTitle: 'SUBMIT PRIZE CLAIM',
+        ctaEnabled: () => isClaimFormValid(form),
+        onCTA: (cta) => void onSubmit(cta),
+        footer: lockNote,
+      },
+      content
+    );
+    return page;
+  };
+
+  const renderPage = (s: ClaimFlowStep): HTMLElement => {
+    switch (s) {
+      case 1:
+        return renderStep1();
+      case 2:
+        return renderStep2();
+      case 3:
+        return renderStep3();
+      case 4:
+        return renderStep4();
+      case 5:
+        return renderReview();
+    }
+  };
+
+  syncChrome();
+  pages.appendChild(renderPage(step));
   return screen;
 }
+
+/** Bare checkmark stroke for the review consent boxes. */
+const checkIconSvg =
+  '<svg viewBox="0 0 14 11" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block;width:13px;height:10px">' +
+  '<path d="M1.5 5.5L5.2 9.2L12.5 1.5" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
 // ─── Confirmation ("YOUR PRIZE CLAIM HAS BEEN SUBMITTED") ───
 

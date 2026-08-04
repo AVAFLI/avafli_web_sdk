@@ -9,7 +9,7 @@ import {
   WINRError,
   WINR_CONSTANTS,
 } from '../../types';
-import { CLAIM_COUNTRY, PrizeClaimForm, isClaimFormValid } from './claim';
+import { CLAIM_COUNTRY, PrizeClaimForm, emptyClaimForm, isClaimFormValid } from './claim';
 import { WINRAPI } from '../../network/api';
 import { LocalStorageProvider } from '../../storage/local-storage';
 import { logger } from '../../services/logger';
@@ -132,14 +132,10 @@ export class V2ExperienceController {
   /** Prefill for the claim form (host-app-provided identity). */
   public get claimFormPrefill(): PrizeClaimForm {
     return {
+      ...emptyClaimForm(),
       firstName: this.deps.userPrefill?.firstName ?? '',
       lastName: this.deps.userPrefill?.lastName ?? '',
       phone: this.deps.userPrefill?.phone ?? '',
-      street: '',
-      apt: '',
-      city: '',
-      state: '',
-      zip: '',
     };
   }
 
@@ -488,6 +484,7 @@ export class V2ExperienceController {
         zip: form.zip.trim(),
         country: CLAIM_COUNTRY,
         ...(form.photoBase64 ? { photoBase64: form.photoBase64 } : {}),
+        ...(form.story.trim() ? { story: form.story.trim() } : {}),
       });
       this.isSubmittingClaim = false;
       this.submittedClaimForm = form;

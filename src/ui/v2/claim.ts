@@ -1,12 +1,13 @@
 /**
  * Winner prize-claim flow helpers — ported from iOS WINRV2Claim.swift
- * (form model + validation, photo downscale, "MONTH, YYYY" date display).
- * Kept free of DOM rendering so validation is unit-testable.
+ * (form model + per-step validation for Joe's stepped Figma flow, photo
+ * downscale, "MONTH, YYYY" date display). Kept free of DOM rendering so
+ * validation is unit-testable.
  */
 
 // ─── Form model + validation ───
 
-/** The claim form's field values. */
+/** The claim form's field values (steps 1-4 + the review consents). */
 export interface PrizeClaimForm {
   firstName: string;
   lastName: string;
@@ -18,6 +19,16 @@ export interface PrizeClaimForm {
   zip: string;
   /** JPEG base64 of the optional attached photo (already downscaled/capped). */
   photoBase64?: string;
+  /** Optional "please share a little" story (step 4). Sent trimmed; omitted when empty. */
+  story: string;
+  /**
+   * Explicit consents (Joe's "review and agree" checkboxes). All three are
+   * REQUIRED — the likeness release in particular must be an affirmative
+   * user action for the publicity authorization to hold up.
+   */
+  confirmsAccuracy: boolean;
+  authorizesLikeness: boolean;
+  agreesToRules: boolean;
 }
 
 /** Fixed — US-only sweepstakes. */
@@ -33,6 +44,10 @@ export function emptyClaimForm(): PrizeClaimForm {
     city: '',
     state: '',
     zip: '',
+    story: '',
+    confirmsAccuracy: false,
+    authorizesLikeness: false,
+    agreesToRules: false,
   };
 }
 
@@ -51,21 +66,47 @@ export function isValidClaimPhone(phone: string): boolean {
   return /^1?\d{10}$/.test(digits);
 }
 
+// Per-step validity (stepped flow)
+
 /**
- * SUBMIT enables when every required field is present, the zip is a 5-digit US
- * code, and the (optional) phone is empty or a valid US number. Apartment and
- * photo are optional.
+ * Step 1 "TELL US ABOUT YOURSELF": first + last name (email is server-side);
+ * the optional phone must be empty or a valid US number.
  */
-export function isClaimFormValid(form: PrizeClaimForm): boolean {
+export function isStep1Valid(form: PrizeClaimForm): boolean {
   return (
     form.firstName.trim() !== '' &&
     form.lastName.trim() !== '' &&
+    isValidClaimPhone(form.phone)
+  );
+}
+
+/** Step 2 "WHERE SHOULD WE SEND YOUR PRIZE?": full US shipping address. */
+export function isStep2Valid(form: PrizeClaimForm): boolean {
+  return (
     form.street.trim() !== '' &&
     form.city.trim() !== '' &&
     form.state.trim() !== '' &&
-    isValidZip(form.zip) &&
-    isValidClaimPhone(form.phone)
+    isValidZip(form.zip)
   );
+}
+
+// Steps 3 (photo) and 4 (story) are fully optional — always advanceable.
+
+/**
+ * All three review-screen consents affirmed. The likeness release must be an
+ * affirmative user action for the publicity authorization to hold up.
+ */
+export function hasAllConsents(form: PrizeClaimForm): boolean {
+  return form.confirmsAccuracy && form.authorizesLikeness && form.agreesToRules;
+}
+
+/**
+ * SUBMIT enables when every required field across the steps is present, the
+ * zip is a 5-digit US code, and all three consents are affirmed. Phone,
+ * apartment, photo, and story are optional.
+ */
+export function isClaimFormValid(form: PrizeClaimForm): boolean {
+  return isStep1Valid(form) && isStep2Valid(form) && hasAllConsents(form);
 }
 
 /** "First L." — the public display name on the winner card. */
@@ -86,17 +127,6 @@ export const US_STATES = [
   'Ohio', 'Oklahoma', 'Oregon', 'Pennsylvania', 'Rhode Island',
   'South Carolina', 'South Dakota', 'Tennessee', 'Texas', 'Utah', 'Vermont',
   'Virginia', 'Washington', 'West Virginia', 'Wisconsin', 'Wyoming',
-] as const;
-
-/**
- * The three required consent confirmations on the claim form. The backend
- * stores consent as implied-on-submit (consentTextVersion "prize-claim-v1");
- * the form requires each box to be checked before SUBMIT enables.
- */
-export const CLAIM_CONSENTS = [
-  'I confirm the information provided is accurate and that I am the entrant associated with the winning entry.',
-  'I confirm I am a resident of the United States and at least 18 years of age.',
-  'I agree that my first name, last initial, city, and state (and photo, if provided) may be used to announce me as a winner, per the Official Rules & Privacy Policy.',
 ] as const;
 
 // ─── Date helper ───

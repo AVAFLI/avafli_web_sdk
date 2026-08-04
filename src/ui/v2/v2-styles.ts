@@ -591,105 +591,180 @@ img { display: block; }
 
 .wv2-claim-cta { padding: 20px 30px 30px; }
 
-/* Form: gold-sparkle backdrop at the top, fading into the dark body. */
-.wv2-claim-form-bg { position: absolute; top: 0; left: 0; right: 0; height: 430px; overflow: hidden; }
+/* Stepped form (WINRV2ClaimSteps): gold-sparkle full-bleed backdrop (406px)
+   fading into the dark body, per the frames. */
+.wv2-claim-form-bg { position: absolute; top: 0; left: 0; right: 0; height: 406px; overflow: hidden; }
 .wv2-claim-form-bg img { width: 100%; height: 100%; object-fit: cover; }
 .wv2-claim-form-bg-grad {
   position: absolute; inset: 0;
   background: linear-gradient(to bottom,
-    rgba(24, 28, 38, 0.15) 0,
-    rgba(24, 28, 38, 0.55) 55%,
+    rgba(11, 13, 18, 0.1) 5%,
+    rgba(11, 13, 18, 0.6) 60%,
     ${c.deepCharcoal} 100%);
 }
 
-.wv2-claim-form-pill {
-  align-self: center; margin-top: 10px;
-  height: 40px; padding: 0 26px; border-radius: 999px; background: #fff;
-  display: flex; align-items: center;
-  font-size: 15px; font-weight: 900; letter-spacing: -0.3px; color: ${c.gunmetal};
-}
-.wv2-claim-form-title {
-  font-size: 24px; font-weight: 900; letter-spacing: -0.7px; color: #fff;
-  text-align: center; margin-top: 18px; padding: 0 20px;
-}
-.wv2-claim-form-sub { font-size: 15px; color: #fff; text-align: center; padding: 4px 34px 0; }
+.wv2-claim-flow { position: relative; height: 100%; display: flex; flex-direction: column; padding-top: 18px; }
+.wv2-claim-back { position: absolute; left: 20px; top: 50%; transform: translateY(-50%); background: rgba(11, 13, 18, 0.85); }
 
-.wv2-claim-fields { display: flex; flex-direction: column; gap: 16px; padding: 22px 22px 0; }
-.wv2-claim-field { display: flex; flex-direction: column; gap: 6px; }
-.wv2-claim-label { font-size: 12px; color: #fff; }
-.wv2-claim-input {
-  height: 50px; padding: 0 14px; border-radius: 8px;
-  background: rgba(255,255,255,0.07);
-  border: 1px solid rgba(255,255,255,0.25);
-  font-family: ${V2_INTER}; font-size: 16px; color: #fff;
+/* "STEP N OF 4" + the row of 4 dots connected by accent lines: filled up to
+   the current step, outlined after it. Removed on the review screen. */
+.wv2-step-indicator { display: flex; flex-direction: column; align-items: center; gap: 12px; padding-top: 8px; flex: none; }
+.wv2-step-indicator.wv2-step-indicator-hidden { display: none; }
+.wv2-step-label { font-size: 17px; font-weight: 600; letter-spacing: -0.85px; color: #fff; }
+.wv2-step-dots { display: flex; align-items: center; }
+.wv2-step-dot {
+  width: 14px; height: 14px; border-radius: 50%;
+  border: 1.5px solid var(--wv2-accent);
+  background: rgba(11, 13, 18, 0.6);
+  transition: background 0.3s ease;
+}
+.wv2-step-dot.wv2-filled { background: var(--wv2-accent); }
+.wv2-step-line { width: 29px; height: 1.5px; background: var(--wv2-accent); }
+
+/* Pages viewport: steps slide horizontally beneath the fixed chrome (push
+   left on advance, push right on back). */
+.wv2-claim-pages { position: relative; flex: 1; overflow: hidden; }
+.wv2-claim-page {
+  position: absolute; inset: 0;
+  overflow-y: auto; overflow-x: hidden;
+  scrollbar-width: none; -ms-overflow-style: none;
+  overscroll-behavior: contain;
+}
+.wv2-claim-page::-webkit-scrollbar { display: none; }
+.wv2-page-in-right { animation: wv2-slide-in-right 0.3s ease-in-out; }
+.wv2-page-in-left { animation: wv2-slide-in-left 0.3s ease-in-out; }
+.wv2-page-out-left { animation: wv2-slide-out-left 0.3s ease-in-out forwards; pointer-events: none; }
+.wv2-page-out-right { animation: wv2-slide-out-right 0.3s ease-in-out forwards; pointer-events: none; }
+@keyframes wv2-slide-in-right { from { transform: translateX(100%); } to { transform: translateX(0); } }
+@keyframes wv2-slide-in-left { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+@keyframes wv2-slide-out-left { from { transform: translateX(0); } to { transform: translateX(-100%); } }
+@keyframes wv2-slide-out-right { from { transform: translateX(0); } to { transform: translateX(100%); } }
+
+/* Step page scaffold: Inter-Black 27 title, Inter-Medium 18 subtitle,
+   content, accent CTA pill (50% while the step is invalid). */
+.wv2-step-stack { display: flex; flex-direction: column; padding: 0 28px 34px; }
+.wv2-step-title {
+  font-size: 27px; font-weight: 900; letter-spacing: -0.81px; color: #fff;
+  text-align: center; padding-top: 24px;
+}
+.wv2-step-subtitle { font-size: 18px; font-weight: 500; letter-spacing: -0.54px; color: #fff; text-align: center; padding-top: 7px; }
+.wv2-step-cta { padding: 21px 12px 0; }
+
+/* Claim-step fields per the frames: #212832 fill, #3D424B 1px border, r10,
+   59px box, 20px input text, 12px label. */
+.wv2-step-fields { display: flex; flex-direction: column; gap: 21px; padding: 34px 12px 0; }
+.wv2-step-fields-address { padding-top: 28px; }
+.wv2-sf { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.wv2-sf-label { font-size: 12px; color: #fff; padding-left: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wv2-sf-input {
+  height: 59px; padding: 0 25px; border-radius: 10px;
+  background: #212832; border: 1px solid #3d424b;
+  font-family: ${V2_INTER}; font-size: 20px; color: #fff;
   outline: none; width: 100%;
 }
-.wv2-claim-input:focus { border-color: rgba(255,255,255,0.5); }
-.wv2-claim-input-locked, .wv2-claim-input:disabled { color: rgba(255,255,255,0.4); opacity: 0.6; }
-
-.wv2-claim-row { display: flex; align-items: flex-start; gap: 12px; }
-.wv2-claim-state { flex: 1; min-width: 0; }
-.wv2-claim-zip { width: 110px; flex: none; }
-.wv2-claim-select-wrap { position: relative; }
-.wv2-claim-select {
+.wv2-sf-input:focus { border-color: rgba(255,255,255,0.45); }
+.wv2-sf-locked {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  height: 59px; padding: 0 25px; border-radius: 10px;
+  background: #212832; border: 1px solid #3d424b;
+}
+.wv2-sf-locked-value { font-size: 20px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wv2-sf-dim { color: rgba(255,255,255,0.3); }
+.wv2-sf-row { display: flex; align-items: flex-start; gap: 13px; }
+.wv2-sf-state { flex: 1; }
+.wv2-sf-zip { width: 101px; flex: none; }
+.wv2-sf-select-wrap { position: relative; }
+.wv2-sf-select {
   appearance: none; -webkit-appearance: none;
-  height: 50px; width: 100%; padding: 0 34px 0 14px; border-radius: 8px;
-  background: rgba(255,255,255,0.07);
-  border: 1px solid rgba(255,255,255,0.25);
-  font-family: ${V2_INTER}; font-size: 16px; color: #fff;
+  height: 59px; width: 100%; padding: 0 44px 0 25px; border-radius: 10px;
+  background: #212832; border: 1px solid #3d424b;
+  font-family: ${V2_INTER}; font-size: 20px; color: #fff;
   outline: none; cursor: pointer;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.wv2-claim-select.wv2-placeholder { color: rgba(255,255,255,0.4); }
+.wv2-sf-select.wv2-placeholder { color: rgba(255,255,255,0.3); }
 /* The dropdown list renders natively (light) — keep its options legible. */
-.wv2-claim-select option { color: ${c.gunmetal}; background: #fff; }
-.wv2-claim-select-chevron {
-  position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
-  width: 12px; height: 8px; color: rgba(255,255,255,0.7); pointer-events: none;
-}
-.wv2-claim-select-chevron svg { display: block; width: 100%; height: 100%; }
+.wv2-sf-select option { color: ${c.gunmetal}; background: #fff; }
+.wv2-sf-chevron { width: 13px; height: 9px; color: rgba(255,255,255,0.7); flex: none; }
+.wv2-sf-select-wrap .wv2-sf-chevron { position: absolute; right: 25px; top: 50%; transform: translateY(-50%); pointer-events: none; }
 
-/* Optional photo: outlined ATTACH button / attached row with thumb + remove. */
-.wv2-claim-attach {
-  display: flex; align-items: center; justify-content: center; gap: 10px;
-  height: 52px; width: 100%; border-radius: 8px;
-  border: 1.5px solid rgba(255,255,255,0.7); color: #fff;
-  font-size: 17px; font-weight: 800; letter-spacing: -0.3px;
+/* Step 3: 242px circular preview with accent ring + camera badge breaking
+   the bottom-right edge, UPLOAD/TAKE PHOTO outline buttons. */
+.wv2-step3 { display: flex; flex-direction: column; align-items: center; padding-top: 26px; }
+.wv2-claim-avatar {
+  position: relative; width: 242px; height: 242px; border-radius: 50%;
+  background: ${c.gunmetal};
+  border: 2px solid var(--wv2-accent);
+  margin-bottom: 19px;
 }
-.wv2-claim-clip { width: 15px; height: 17px; flex: none; }
-.wv2-claim-clip svg { display: block; width: 100%; height: 100%; }
-.wv2-claim-attached {
-  display: flex; align-items: center; gap: 12px;
-  height: 70px; padding: 0 12px; border-radius: 8px;
-  background: rgba(255,255,255,0.07);
-  border: 1px solid rgba(255,255,255,0.25);
+.wv2-claim-avatar-img { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+.wv2-claim-avatar-person {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: 110px; height: 110px; color: rgba(255,255,255,0.18);
 }
-.wv2-claim-thumb { width: 54px; height: 54px; border-radius: 8px; object-fit: cover; flex: none; background: rgba(255,255,255,0.1); }
-.wv2-claim-attached-label { flex: 1; font-size: 15px; font-weight: 600; color: #fff; text-align: left; }
-.wv2-claim-remove {
-  width: 32px; height: 32px; border-radius: 50%; flex: none;
-  background: rgba(255,255,255,0.12); color: #fff;
+.wv2-claim-avatar-badge {
+  position: absolute; right: -6px; bottom: -2px;
+  width: 80px; height: 80px; border-radius: 50%;
+  background: ${c.deepCharcoal};
+  border: 2.2px solid var(--wv2-accent);
   display: flex; align-items: center; justify-content: center;
 }
+.wv2-claim-badge-camera { width: 40px; height: 32px; color: #fff; }
+.wv2-photo-btns { display: flex; flex-direction: column; gap: 12px; width: 277px; max-width: 100%; }
+.wv2-photo-btn {
+  display: flex; align-items: center; gap: 20px;
+  height: 47px; padding-left: 30px; border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.6); color: #fff;
+  font-size: 22px; font-weight: 600; letter-spacing: -0.66px;
+  text-align: left; white-space: nowrap;
+}
+.wv2-photo-btn-ic { width: 22px; height: 24px; flex: none; }
+.wv2-photo-note { font-size: 12px; color: #fff; text-align: center; padding-top: 9px; line-height: 1.5; }
 
-/* Required consent confirmations. */
-.wv2-claim-consents { display: flex; flex-direction: column; gap: 12px; margin-top: 4px; }
-.wv2-claim-consent { display: flex; align-items: flex-start; gap: 10px; text-align: left; color: #fff; }
-.wv2-claim-consent .wv2-ic { width: 20px; height: 20px; flex: none; margin-top: 1px; }
-.wv2-claim-consent span:last-child { font-size: 13px; line-height: 1.35; }
+/* Step 4: story text area + "Share on Social Media:" glyph row. */
+.wv2-step4 { display: flex; flex-direction: column; padding-top: 29px; }
+.wv2-story-input {
+  width: 100%; height: 215px; padding: 16px 25px; border-radius: 10px;
+  background: #212832; border: 1px solid #3d424b;
+  font-family: ${V2_INTER}; font-size: 20px; color: #fff; line-height: 1.35;
+  outline: none; resize: none; display: block;
+}
+.wv2-story-input::placeholder { color: rgba(255,255,255,0.6); }
+.wv2-story-input:focus { border-color: rgba(255,255,255,0.45); }
+.wv2-social { display: flex; flex-direction: column; align-items: center; gap: 15px; padding: 38px 0 17px; }
+.wv2-social-title { font-size: 18px; font-weight: 500; letter-spacing: -0.54px; color: #fff; }
+.wv2-social-row { display: flex; justify-content: center; gap: clamp(12px, 4vw, 26px); }
+.wv2-social-btn { width: 48px; height: 48px; color: #fff; flex: none; }
+.wv2-social-glyph { display: block; width: 100%; height: 100%; }
 
+/* Review ("ALMOST DONE!"): the three required consents, inline error, and
+   the gunmetal "secure and encrypted" lock note under the CTA. */
+.wv2-review { display: flex; flex-direction: column; padding: 44px 12px 12px; }
+.wv2-consents { display: flex; flex-direction: column; gap: 32px; }
+.wv2-consent-row { display: flex; align-items: flex-start; gap: 12px; text-align: left; }
+.wv2-consent-box {
+  width: 24px; height: 24px; border-radius: 5px; flex: none;
+  background: rgba(255,255,255,0.07);
+  border: 1.5px solid rgba(255,255,255,0.4);
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.wv2-consent-box svg { opacity: 0; transition: opacity 0.15s ease; }
+.wv2-consent-box.wv2-consent-on { background: var(--wv2-accent); border-color: var(--wv2-accent); }
+.wv2-consent-box.wv2-consent-on svg { opacity: 1; }
+.wv2-consent-text { font-size: 16px; color: #fff; line-height: 1.35; }
+.wv2-consent-em { text-decoration: underline; font-weight: 700; }
 .wv2-claim-error {
   font-size: 13px; font-weight: 600; color: #ff7366;
-  text-align: center; padding: 14px 30px 0;
+  text-align: center; padding: 14px 12px 0;
 }
-.wv2-claim-submit { padding: 20px 22px 0; }
-.wv2-claim-lock-note {
-  display: flex; align-items: center; justify-content: center; gap: 7px;
-  padding: 12px 30px 34px; color: rgba(255,255,255,0.6); font-size: 12px;
-  text-align: center;
+.wv2-review-lock {
+  display: flex; align-items: center; gap: 20px;
+  margin: 30px 12px 0; padding: 16px 25px;
+  border-radius: 10px; background: ${c.gunmetal};
+  font-size: 14px; color: #fff; text-align: left;
 }
-.wv2-claim-lock-ic { width: 12px; height: 15px; flex: none; }
-.wv2-claim-lock-ic svg { display: block; width: 100%; height: 100%; }
+.wv2-review-lock-ic { width: 20px; height: 26px; color: var(--wv2-accent); flex: none; }
 
 /* Confirmation. */
 .wv2-claim-done-title {

@@ -78,6 +78,57 @@ export const paperclipIcon = svg(
     'stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>'
 );
 
+/** Share-out arrow (UPLOAD PHOTO) — SF "square.and.arrow.up". */
+export const uploadIcon = svg(
+  '0 0 20 24',
+  '<path d="M6 8H3.5V22.5H16.5V8H14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>' +
+    '<path d="M10 1.5V14.5M10 1.5L5.8 5.7M10 1.5L14.2 5.7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>'
+);
+
+/** Filled camera (TAKE PHOTO + the step-3 avatar badge) — SF "camera.fill".
+    The lens is punched out (evenodd) so the surface color shows through. */
+export const cameraIcon = svg(
+  '0 0 24 19',
+  '<path fill-rule="evenodd" clip-rule="evenodd" d="M8.2 0.8A1.6 1.6 0 0 1 9.5 0h5a1.6 1.6 0 0 1 1.3 0.8L17 2.6h4.4A2.6 2.6 0 0 1 24 5.2v11.2a2.6 2.6 0 0 1-2.6 2.6H2.6A2.6 2.6 0 0 1 0 16.4V5.2a2.6 2.6 0 0 1 2.6-2.6H7L8.2 0.8ZM12 15A4.4 4.4 0 1 0 12 6.2A4.4 4.4 0 0 0 12 15Z" fill="currentColor"/>'
+);
+
+/** Head-and-shoulders placeholder (empty step-3 avatar) — SF "person.fill". */
+export const personIcon = svg(
+  '0 0 24 24',
+  '<circle cx="12" cy="7.2" r="5.2" fill="currentColor"/>' +
+    '<path d="M2 22.5C2 17.5 6.4 14.3 12 14.3C17.6 14.3 22 17.5 22 22.5H2Z" fill="currentColor"/>'
+);
+
+// ─── Step-4 social glyphs (simple white marks, no third-party brand assets) ───
+
+export const socialInstagramIcon = svg(
+  '0 0 48 48',
+  '<rect x="6" y="6" width="36" height="36" rx="11" stroke="currentColor" stroke-width="3.2" fill="none"/>' +
+    '<circle cx="24" cy="24" r="8.4" stroke="currentColor" stroke-width="3.2" fill="none"/>' +
+    '<circle cx="34.6" cy="13.4" r="2.4" fill="currentColor"/>'
+);
+
+export const socialFacebookIcon = svg(
+  '0 0 48 48',
+  '<path d="M24 2A22 22 0 1 0 24 46A22 22 0 1 0 24 2ZM30.6 15.5H27.8C26.6 15.5 26.2 16.2 26.2 17.4V20.3H30.4L29.8 24.9H26.2V38H21.2V24.9H17.6V20.3H21.2V16.6C21.2 13 23.3 10.9 26.9 10.9C28.6 10.9 30 11 30.6 11.1V15.5Z" fill="currentColor"/>'
+);
+
+export const socialXIcon = svg(
+  '0 0 48 48',
+  '<path d="M28.6 20.5L44 3H40.3L27 18.2L16.4 3H4L20.2 26.2L4 44.6H7.7L21.8 28.5L33.1 44.6H45.5L28.6 20.5ZM23.7 26.4L22 24.1L9 5.7H14.6L25.2 20.7L26.8 23L40.4 42.1H34.8L23.7 26.4Z" fill="currentColor"/>'
+);
+
+export const socialSnapchatIcon = svg(
+  '0 0 48 48',
+  '<path d="M8.6 20.2C8.6 11.5 15.4 5.6 24 5.6C32.6 5.6 39.4 11.5 39.4 20.2V26.2C41 29.4 43.9 30.6 46 31.1C46 33 42.6 34.5 39.6 34.9C39.3 36 38.9 37.3 38.3 37.3C37.2 37.3 35.9 36.8 34 37.3C32.1 37.8 30.2 40.4 24 40.4C17.8 40.4 15.9 37.8 14 37.3C12.1 36.8 10.8 37.3 9.7 37.3C9.1 37.3 8.7 36 8.4 34.9C5.4 34.5 2 33 2 31.1C4.1 30.6 7 29.4 8.6 26.2V20.2Z" ' +
+    'stroke="currentColor" stroke-width="3" stroke-linejoin="round" fill="none"/>'
+);
+
+export const socialTiktokIcon = svg(
+  '0 0 48 48',
+  '<path d="M31.8 4H25V32.2A5.9 5.9 0 1 1 19.1 26.3C19.7 26.3 20.3 26.4 20.9 26.6V19.6C20.3 19.5 19.7 19.5 19.1 19.5A12.8 12.8 0 1 0 31.9 32.3V16.3A16.2 16.2 0 0 0 41 19.1V12.2A9.3 9.3 0 0 1 31.8 4Z" fill="currentColor"/>'
+);
+
 /** Empty / checked checkbox squares (18+ consent). */
 export const squareIcon = svg(
   '0 0 20 20',

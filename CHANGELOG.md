@@ -2,19 +2,31 @@
 
 ## [2.3.0] - 2026-08-04
 
-- **Winner prize-claim flow** — when the backend marks the user as the drawn
-  winner (`prizeClaim.status == "pending"` on `getActiveGiveaway`), the
-  experience opens on the winner splash instead of the dashboard:
-  CONGRATULATIONS! + prize strip → single-page claim form (name, address,
-  50-state + DC picker, optional phone/photo with client-side downscale to
-  ≤1200px JPEG ≤5MB, three required consent confirmations; the winning email
-  stays locked to the account) → `submitPrizeClaim` → confirmation with the
-  gold OFFICIAL WINNER card and RETURN TO APP. Appears automatically — no
-  integration work — and takes precedence over the email gate; a pending claim
-  even outlives its giveaway. The daily auto-claim still fires silently while
-  the flow is up. An already-submitted claim shows the normal dashboard, and a
-  stale "Not the winner"/"Already submitted" rejection falls back to the
-  dashboard silently instead of trapping the user in the form.
+- **Winner prize-claim flow (Joe's stepped design)** — when the backend marks
+  the user as the drawn winner (`prizeClaim.status == "pending"` on
+  `getActiveGiveaway`), the experience opens on the winner splash instead of
+  the dashboard: CONGRATULATIONS! + prize strip → a 4-step form with a
+  persistent header, "STEP N OF 4" label, and four connected accent progress
+  dots (steps slide horizontally; back chevron from step 2 on):
+  1. TELL US ABOUT YOURSELF — first/last name, the locked masked winning
+     email (`prizeClaim.maskedEmail`, generic copy fallback), optional phone;
+  2. WHERE SHOULD WE SEND YOUR PRIZE? — street/apt/city, 50-state + DC
+     picker + 5-digit zip, Country locked US;
+  3. SHOW OFF YOUR WIN! — optional photo via a circular preview with camera
+     badge, UPLOAD PHOTO / TAKE PHOTO (camera capture on devices that have
+     one), client-side downscale to ≤1200px JPEG ≤5MB;
+  4. PLEASE SHARE A LITTLE — optional story (sent as `story`, trimmed) and a
+     Share-on-Social-Media glyph row (native share sheet where available);
+  then the ALMOST DONE! review screen — three required consent checkboxes
+  (accuracy, likeness release, Official Rules/Privacy Policy), SUBMIT PRIZE
+  CLAIM, and the secure-and-encrypted lock note — → `submitPrizeClaim` →
+  confirmation with the gold OFFICIAL WINNER card and RETURN TO APP.
+  Appears automatically — no integration work — and takes precedence over the
+  email gate; a pending claim even outlives its giveaway. The daily
+  auto-claim still fires silently while the flow is up. An already-submitted
+  claim shows the normal dashboard, and a stale "Not the winner"/"Already
+  submitted" rejection falls back to the dashboard silently instead of
+  trapping the user in the form.
 - **Post-reveal come-back bar** now celebrates
   "{N} ENTRIES ADDED / You're on a roll!" (animated swap on the CLAIM reveal
   and in any claimed-today dashboard state); pre-reveal/unclaimed states keep

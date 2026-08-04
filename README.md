@@ -130,7 +130,7 @@ Entries are claimed silently the moment the experience opens. On day 1 the "You'
 
 ## Winner Experience
 
-When one of your users is drawn as a giveaway winner, the experience automatically opens on a winner splash instead of the dashboard, then walks them through a prize-claim form (name, shipping address, optional photo, required consents) and a confirmation with their claim number on a keepsake OFFICIAL WINNER card. This requires no integration work — the flow appears only for the drawn winner and disappears once their claim is submitted. The winning email is never re-entered; the claim is keyed to the account server-side.
+When one of your users is drawn as a giveaway winner, the experience automatically opens on a winner splash instead of the dashboard, then walks them through a 4-step prize-claim form with progress dots (name, shipping address, optional photo and story) plus a review-and-agree screen, ending in a confirmation with their claim number on a keepsake OFFICIAL WINNER card. This requires no integration work — the flow appears only for the drawn winner and disappears once their claim is submitted. The winning email is never re-entered; a backend-masked address is displayed for recognition and the claim is keyed to the account server-side.
 
 ## Push Notifications
 

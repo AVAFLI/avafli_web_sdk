@@ -382,6 +382,11 @@ export interface PrizeClaimBlock {
   giveawayId: string;
   prizeDescription: string;
   prizeValue: number;
+  /**
+   * Display-only masked winning email ("d********r@winr.example.com") for
+   * the claim form's locked field. Absent from older backends.
+   */
+  maskedEmail?: string;
   /** Present when submitted. */
   claimNumber?: string;
   /** ISO date, when submitted. */
