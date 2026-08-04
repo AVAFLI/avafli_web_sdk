@@ -689,6 +689,28 @@ export class WINR {
   }
 
   /**
+   * Right-To-Delete opt-out: tombstones the person on the backend
+   * (identity-wide, PII anonymized, email suppressed) and permanently
+   * silences the experience in this browser. Wire this to the opt-out
+   * action in your privacy-policy flow. Parity with the mobile SDKs'
+   * `WINR.optOut()`.
+   */
+  public static async optOut(): Promise<void> {
+    if (!WINR.ensureConfigured()) return;
+
+    try {
+      await WINR.instance!.client.post<{ success?: boolean }>('/optOut', {});
+    } catch (error) {
+      // The local silence must stick even if the network call fails —
+      // the backend flag will catch up on the next registration.
+      logger.error(`optOut backend call failed: ${String(error)}`);
+    }
+    WINR.instance!.markOptedOut();
+    analyticsAdapter.track('winr_opted_out');
+    logger.info('User opted out — experience permanently suppressed');
+  }
+
+  /**
    * Delete all user data (GDPR compliance)
    */
   public static async deleteUserData(): Promise<void> {
