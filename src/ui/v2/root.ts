@@ -69,6 +69,8 @@ export class WINRV2Experience {
   public dismiss(): void {
     if (!this.host || !this.overlay) return;
     logger.debug('Dismissing WINR V2 experience');
+    // A pending Day 2+ auto-reveal must not fire against a torn-down DOM.
+    this.controller.cancelAutoReveal();
     this.overlay.classList.remove('wv2-open');
     this.overlay.classList.add('wv2-closing');
     if (this.escapeHandler) {

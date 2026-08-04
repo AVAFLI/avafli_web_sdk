@@ -21,8 +21,9 @@ import { ladderEntries } from './v2-theme';
  *
  * Flow: loading → (emailCapture | dashboard) → auto-claim on open →
  * Day 1: celebration modal (its GOT IT closes the experience) /
- * Day 2+: dashboard pinned to yesterday's numbers behind a "CLAIM N ENTRIES"
- * pill — the click is the reveal (tile check + confetti + totals advance) /
+ * Day 2+: dashboard mounts pinned to yesterday's numbers, then the in-place
+ * celebration (tile check + confetti + totals advance) fires ON ITS OWN a
+ * beat after the claim lands — no claim click, the pill only ever closes /
  * silent claimed-state on "Already claimed" (with a ONE-SHOT re-sync so
  * cached totals catch up when another device claimed between the status
  * fetch and our claim).
@@ -93,21 +94,65 @@ export class V2ExperienceController {
 
   // ─── Day 2+ reveal flow (ported from iOS WINRExperienceViewModel) ───
   //
-  // The auto-claim on open grants entries server-side immediately, but the UI
-  // holds the previous day's numbers until the user clicks "CLAIM N ENTRIES".
-  // That click flips `claimRevealed` — the day tile checks off with confetti,
-  // the streak label and totals advance, and the pill becomes "GOT IT".
+  // The auto-claim on open grants entries server-side immediately, and the
+  // celebration plays ON ITS OWN moments after the claim lands (Joe's Slice
+  // Day 2+ prototype): the dashboard mounts pinned to the previous day's
+  // numbers, then the day tile checks off with confetti, the streak label
+  // and totals advance, and the bar flips to "N ENTRIES ADDED". The pill
+  // reads "GOT IT" the whole time — there is no claim click.
 
-  /** The grant held back for the reveal (null when nothing is pending). */
+  /** The grant staged for the auto-reveal (null when nothing is pending). */
   public pendingRevealGrant: { baseEntries: number; bonusEntries: number } | null = null;
-  /** Whether the user has clicked CLAIM and seen the in-place celebration. */
+  /** Whether the in-place celebration has played. */
   public claimRevealed = false;
-  /** Total entries as of before today's claim, for pre-reveal display. */
+  /** Total entries as of before today's claim, for the pre-reveal frame. */
   public preClaimTotalEntries: number | null = null;
+
+  /**
+   * Delay between the claim response being staged and the celebration firing —
+   * long enough for the drawer to settle so the state flip reads as its own
+   * beat, short enough to feel immediate (mirrors iOS autoRevealDelay).
+   */
+  public static readonly AUTO_REVEAL_DELAY_MS = 800;
+
+  /**
+   * In-place celebration hook, registered by the dashboard render — the
+   * reveal must mutate the already-visible dashboard (draw-on check, rAF
+   * count-up), not re-render it. Falls back to a bare revealClaim() when no
+   * dashboard has registered (e.g. headless usage).
+   */
+  public onAutoReveal?: () => void;
+
+  private autoRevealTimer: ReturnType<typeof setTimeout> | null = null;
 
   public revealClaim(): void {
     if (!this.pendingRevealGrant || this.claimRevealed) return;
     this.claimRevealed = true;
+  }
+
+  /**
+   * Arms the automatic celebration from the claim SUCCESS path (the dashboard
+   * render can't arm it — the claim response is what stages the grant).
+   * Re-arming resets the timer; the guards here and in revealClaim() make a
+   * double-fire harmless.
+   */
+  public scheduleAutoReveal(): void {
+    if (!this.pendingRevealGrant || this.claimRevealed) return;
+    this.cancelAutoReveal();
+    this.autoRevealTimer = setTimeout(() => {
+      this.autoRevealTimer = null;
+      if (!this.pendingRevealGrant || this.claimRevealed) return;
+      if (this.onAutoReveal) this.onAutoReveal();
+      else this.revealClaim();
+    }, V2ExperienceController.AUTO_REVEAL_DELAY_MS);
+  }
+
+  /** Disarms a pending auto-reveal (dismissal before it fires must no-op). */
+  public cancelAutoReveal(): void {
+    if (this.autoRevealTimer !== null) {
+      clearTimeout(this.autoRevealTimer);
+      this.autoRevealTimer = null;
+    }
   }
 
   // ─── Winner prize claim (ported from iOS WINRExperienceViewModel) ───
@@ -354,12 +399,12 @@ export class V2ExperienceController {
         ...(response.milestone ? { milestone: response.milestone } : {}),
       });
 
-      // V2 auto-claim routing (mirrors iOS commit e7fae27):
+      // V2 auto-claim routing (mirrors iOS commit 50cd438):
       // - Day 1 (brand-new or restarted streak, typically right after email
       //   capture): the "You're in!" celebration modal is the reveal.
-      // - Day 2+: no modal. Land on the dashboard pinned to yesterday's
-      //   numbers with a "CLAIM N ENTRIES" pill; the click reveals the
-      //   celebration in place (Joe's Slice Day 2+ flow).
+      // - Day 2+: no modal, no claim click. Land on the dashboard pinned to
+      //   yesterday's numbers; the in-place celebration fires on its own a
+      //   beat later (Joe's Slice Day 2+ flow).
       if (response.streakDay <= 1) {
         this.transition({
           kind: 'celebration',
@@ -372,6 +417,9 @@ export class V2ExperienceController {
         this.claimRevealed = false;
         this.preClaimTotalEntries = response.totalEntries - (response.entries + bonus);
         this.transition({ kind: 'dashboard' });
+        // Armed HERE (not in the render): the claim response is what stages
+        // the grant, and the dashboard may already have been on screen.
+        this.scheduleAutoReveal();
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

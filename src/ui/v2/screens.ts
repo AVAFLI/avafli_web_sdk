@@ -317,14 +317,12 @@ export function renderDashboard(
   logoUrl: string | null | undefined,
   onWinnerTap: () => void
 ): HTMLElement {
-  // Day 2+ reveal flow (mirrors iOS e7fae27): the claim already succeeded
-  // server-side, but the UI holds yesterday's numbers until the user clicks
-  // "CLAIM N ENTRIES" — that click is the celebration (tile check + confetti +
-  // totals update), no modal.
+  // Day 2+ reveal flow (mirrors iOS 50cd438): the claim already succeeded
+  // server-side; the UI mounts pinned to yesterday's numbers and the
+  // celebration (tile check + confetti + totals update, bar → "N ENTRIES
+  // ADDED") fires on its own a beat later — Joe's Slice prototype has no
+  // claim click and no modal. The pill reads GOT IT the whole time.
   const preReveal = c.pendingRevealGrant !== null && !c.claimRevealed;
-  const pendingEntries = c.pendingRevealGrant
-    ? c.pendingRevealGrant.baseEntries + c.pendingRevealGrant.bonusEntries
-    : 0;
 
   const screen = el('div', 'wv2-screen');
 
@@ -358,12 +356,15 @@ export function renderDashboard(
   const preClaimTotal = c.preClaimTotalEntries ?? c.totalEntries;
 
   /**
-   * The reveal, animated in place (no re-render, so the draw-on check and the
-   * count-up run against the already-visible dashboard):
+   * The auto-reveal celebration, animated in place (no re-render, so the
+   * draw-on check and the count-up run against the already-visible
+   * dashboard). Fired by the controller's scheduleAutoReveal() timer:
    *  - today's tile flips ready → active (draw-on check + confetti specks)
    *  - the streak label advances N-1 → N
    *  - the total animates up to the post-claim value
-   *  - the pill becomes "GOT IT" (which closes the experience)
+   *  - the come-back bar swaps to "N ENTRIES ADDED / You're on a roll!"
+   * The pill is untouched — it reads GOT IT throughout and only dismisses.
+   * Guarded + one-shot, so a re-arm or re-render can't double-mutate.
    */
   const doReveal = (): void => {
     if (!c.pendingRevealGrant || c.claimRevealed) return;
@@ -404,17 +405,16 @@ export function renderDashboard(
       }
       comeback.classList.add('wv2-claimed', 'wv2-cb-animate');
     }
-
-    pill.textContent = 'GOT IT';
   };
 
-  const pill = renderPill(
-    preReveal ? `CLAIM ${formatInt(pendingEntries)} ENTRIES` : 'GOT IT',
-    () => {
-      if (c.pendingRevealGrant && !c.claimRevealed) doReveal();
-      else c.requestDismiss();
-    }
-  );
+  // Register the in-place celebration with the controller's auto-reveal
+  // timer (armed from the claim SUCCESS path). Latest render wins, so the
+  // mutation always targets the DOM currently on screen.
+  c.onAutoReveal = doReveal;
+
+  // Always GOT IT (Slice prototype) — the celebration plays on its own; the
+  // pill only ever closes.
+  const pill = renderPill('GOT IT', () => c.requestDismiss());
   pillWrap.appendChild(pill);
   footer.appendChild(pillWrap);
   footer.appendChild(renderLegalLinks(c.rulesUrl));
@@ -455,7 +455,7 @@ function renderPrizeCard(c: V2ExperienceController, preReveal = false): HTMLElem
   const noun = c.visitMode ? 'VISIT' : 'DAY';
 
   // Pre-reveal, the card is pinned to YESTERDAY's numbers: streak label N-1
-  // and the pre-claim total. The CLAIM click advances both (see doReveal).
+  // and the pre-claim total. The auto-reveal advances both (see doReveal).
   const displayStreakDay = preReveal ? Math.max(c.streakDay - 1, 1) : c.streakDay;
   const displayTotal = preReveal ? (c.preClaimTotalEntries ?? c.totalEntries) : c.totalEntries;
 
@@ -585,9 +585,9 @@ function renderStreakRail(c: V2ExperienceController, preReveal = false): HTMLEle
 }
 
 /**
- * `ready` = today's tile before the user clicks CLAIM (claim already granted
- * server-side, reveal withheld): glows like `active` but shows a white flame
- * instead of the checkmark, and no confetti specks.
+ * `ready` = today's tile before the auto-reveal fires (claim already granted
+ * server-side, celebration pending): glows like `active` but shows a white
+ * flame instead of the checkmark, and no confetti specks.
  */
 type TileState = 'completed' | 'active' | 'ready' | 'locked';
 
@@ -616,8 +616,8 @@ function renderStreakTile(
   } else if (state === 'active') {
     iconWrap.appendChild(createAnimatedCheck(12)); // 2.5pt at 20px ≈ 12/100 viewBox units
   } else if (state === 'ready') {
-    // Pre-reveal: glow draws the eye to CLAIM, but the confetti and checkmark
-    // are saved for the reveal moment.
+    // Pre-reveal: the glow marks today, but the confetti and checkmark are
+    // saved for the auto-reveal moment.
     iconWrap.appendChild(icon(flameIcon, 'wv2-ic-flame'));
   } else {
     iconWrap.appendChild(icon(lockIcon, 'wv2-ic-lock'));
@@ -698,8 +698,10 @@ function renderComeBackBar(c: V2ExperienceController): HTMLElement {
   const preReveal = c.pendingRevealGrant !== null && !c.claimRevealed;
   // Delta A: once today's claim is revealed (or the user reopens in a claimed
   // state) the bar celebrates the entries that were just added instead of
-  // pitching tomorrow. Pre-reveal keeps the come-back copy. The reveal click
-  // swaps the contents with an animated pop (see doReveal).
+  // pitching tomorrow. Pre-reveal keeps the come-back copy. The auto-reveal
+  // swaps the contents with an animated pop (see doReveal) — and any
+  // re-render after the reveal lands directly in this claimed state, so the
+  // swap is idempotent.
   const claimed = c.claimedToday && !preReveal;
   const claimedEntries = c.pendingRevealGrant
     ? c.pendingRevealGrant.baseEntries + c.pendingRevealGrant.bonusEntries
