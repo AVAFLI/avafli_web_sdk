@@ -393,8 +393,18 @@ export function renderDashboard(
     const streakNum = screen.querySelector('.wv2-stat-streak');
     if (streakNum) streakNum.textContent = `${c.streakDay} ${noun} STREAK`;
 
+    // Total Entries counts up (~0.7s ease-out) and pops a small one-shot
+    // star burst as it lands on the final number.
     const totalNum = screen.querySelector('.wv2-stat-total');
-    if (totalNum) animateCount(totalNum as HTMLElement, preClaimTotal, c.totalEntries, 700);
+    if (totalNum) {
+      animateCount(totalNum as HTMLElement, preClaimTotal, c.totalEntries, 700, () => {
+        if (!totalNum.isConnected) return;
+        const starBurst = createConfetti({ style: 'celebration', count: 8, speed: 1.4 });
+        starBurst.classList.add('wv2-count-burst');
+        totalNum.appendChild(starBurst);
+        window.setTimeout(() => starBurst.remove(), 900);
+      });
+    }
 
     // Joe's Slice sequence: "{N} ENTRIES ADDED / You're on a roll!" SLIDES
     // into the come-back bar, holds ~2.6s, then SLIDES back out to the
@@ -407,11 +417,15 @@ export function renderDashboard(
         cbCheck.innerHTML = '';
         cbCheck.appendChild(createAnimatedCheck(9));
       }
+      comeback.classList.remove('wv2-untoasting');
       comeback.classList.add('wv2-toasting');
       window.setTimeout(() => {
         // Teardown-safe: no-op if the dashboard was dismissed mid-hold.
         if (!comeback.isConnected) return;
+        // Return leg of the carousel: the toast exits LEFT while the pitch
+        // re-enters from the right — same forward direction, no rewind.
         comeback.classList.remove('wv2-toasting');
+        comeback.classList.add('wv2-untoasting');
       }, COMEBACK_TOAST_HOLD_MS);
     }
   };
@@ -435,7 +449,13 @@ export function renderDashboard(
 }
 
 /** rAF count-up for the total-entries stat during the reveal. */
-function animateCount(node: HTMLElement, from: number, to: number, durationMs: number): void {
+function animateCount(
+  node: HTMLElement,
+  from: number,
+  to: number,
+  durationMs: number,
+  onLand?: () => void
+): void {
   if (typeof requestAnimationFrame !== 'function' || from === to) {
     node.textContent = formatInt(to);
     return;
@@ -445,7 +465,11 @@ function animateCount(node: HTMLElement, from: number, to: number, durationMs: n
     const t = Math.min(1, (now - start) / durationMs);
     const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
     node.textContent = formatInt(from + (to - from) * eased);
-    if (t < 1) requestAnimationFrame(step);
+    if (t < 1) {
+      requestAnimationFrame(step);
+    } else {
+      onLand?.();
+    }
   };
   requestAnimationFrame(step);
 }

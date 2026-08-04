@@ -216,7 +216,15 @@ img { display: block; }
 .wv2-stat .wv2-ic-flame { width: 18px; height: 22px; color: var(--wv2-accent); flex: none; }
 .wv2-stat .wv2-ic-ticket { width: 22px; height: 15px; color: var(--wv2-accent); transform: rotate(-25deg); flex: none; }
 .wv2-stat-col { display: flex; flex-direction: column; align-items: flex-start; }
-.wv2-stat-num { font-size: 15px; font-weight: 900; letter-spacing: -0.3px; color: var(--wv2-accent); line-height: 1.2; }
+.wv2-stat-num { font-size: 15px; font-weight: 900; letter-spacing: -0.3px; color: var(--wv2-accent); line-height: 1.2; position: relative; }
+/* One-shot star burst popped over the total as the count-up lands. */
+.wv2-count-burst {
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 54px; height: 40px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
 .wv2-stat-label { font-size: 12px; font-weight: 500; color: #fff; line-height: 1.2; }
 
 .wv2-prize-headline {
@@ -278,15 +286,21 @@ img { display: block; }
 .wv2-tile.wv2-completed .wv2-tile-num { color: var(--wv2-accent); }
 .wv2-tile.wv2-locked .wv2-tile-num,
 .wv2-tile.wv2-locked .wv2-tile-entries { color: ${c.foregroundSecondary}; }
-/* "ready" (pre-reveal) shares the active tile's radial accent bg + breathing
-   glow, but shows a white flame instead of the checkmark and no confetti. */
 .wv2-tile.wv2-active,
 .wv2-tile.wv2-ready {
   background: radial-gradient(150px at 50% 0,
     var(--wv2-accent) 0,
     var(--wv2-accent-45) 45%,
     ${c.gunmetal} 100%);
+}
+.wv2-tile.wv2-active {
   animation: wv2-pulse-glow 1.1s ease-in-out infinite alternate;
+}
+/* "ready" (pre-reveal) is CALM — the active tile's radial accent bg with a
+   STATIC glow (no pulse, no icon, no confetti). Every moving element waits
+   for the single reveal beat. */
+.wv2-tile.wv2-ready {
+  box-shadow: 0 0 10px 0 var(--wv2-accent-75);
 }
 /* Joe's active-tile motion: the accent glow breathes. */
 @keyframes wv2-pulse-glow {
@@ -328,17 +342,34 @@ img { display: block; }
 .wv2-cb-come, .wv2-cb-claimed {
   position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center;
-  transition:
-    transform 0.5s cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 0.5s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .wv2-cb-come { gap: 14px; }
 .wv2-cb-claimed { gap: 16px; padding: 0 16px; transform: translateX(100%); opacity: 0; }
-/* Hold window: the ADDED toast slides in at the trailing edge while the
-   pitch slides out the leading edge; when the class reverts the pitch
-   slides back — the pitch is the bar's resting state. */
-.wv2-comeback.wv2-toasting .wv2-cb-come { transform: translateX(-100%); opacity: 0; }
-.wv2-comeback.wv2-toasting .wv2-cb-claimed { transform: translateX(0); opacity: 1; }
+/* Carousel: every state slides IN from the right and OUT to the left — one
+   continuous forward direction, never a rewind.
+   .wv2-toasting = the hold window (toast in, pitch out);
+   .wv2-untoasting = the return leg (toast out left, pitch back in from the
+   right) — the pitch is the bar's resting state. */
+.wv2-comeback.wv2-toasting .wv2-cb-come {
+  animation: wv2-cb-out-left 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.wv2-comeback.wv2-toasting .wv2-cb-claimed {
+  animation: wv2-cb-in-right 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.wv2-comeback.wv2-untoasting .wv2-cb-claimed {
+  animation: wv2-cb-out-left 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.wv2-comeback.wv2-untoasting .wv2-cb-come {
+  animation: wv2-cb-in-right 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+@keyframes wv2-cb-in-right {
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0); opacity: 1; }
+}
+@keyframes wv2-cb-out-left {
+  from { transform: translateX(0); opacity: 1; }
+  to   { transform: translateX(-100%); opacity: 0; }
+}
 .wv2-comeback .wv2-ic-cal { width: 26px; height: 28px; color: var(--wv2-accent); flex: none; }
 .wv2-comeback-col { display: flex; flex-direction: column; gap: 1px; text-align: center; color: #fff; }
 .wv2-comeback-line { font-size: 12px; white-space: pre-line; }

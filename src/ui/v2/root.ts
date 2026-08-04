@@ -157,6 +157,7 @@ export class WINRV2Experience {
     const accent = resolveAccent(this.controller.sdkConfig?.branding?.primaryColor);
     overlay.style.setProperty('--wv2-accent', accent);
     overlay.style.setProperty('--wv2-accent-95', accentAlpha(accent, 0.95));
+    overlay.style.setProperty('--wv2-accent-75', accentAlpha(accent, 0.75));
     overlay.style.setProperty('--wv2-accent-55', accentAlpha(accent, 0.55));
     overlay.style.setProperty('--wv2-accent-45', accentAlpha(accent, 0.45));
     overlay.style.setProperty('--wv2-accent-35', accentAlpha(accent, 0.35));
