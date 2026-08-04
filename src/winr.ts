@@ -7,7 +7,6 @@ import {
   RegisterDeviceRequest,
   RegisterDeviceResponse,
   GetActiveGiveawayResponse,
-  ClaimDailyEntriesResponse,
   SubmitEmailRequest,
   SubmitEmailResponse,
   SubmitUserProfileRequest,
@@ -19,7 +18,8 @@ import {
 } from './types';
 import { NetworkClient } from './network/client';
 import { WINRAPI, createWINRAPI } from './network/api';
-import { WINRModal } from './ui/winr-modal';
+import { WINRV2Experience } from './ui/v2/root';
+import { V2ExperienceController, emailSubmittedStorageKey } from './ui/v2/controller';
 import { StreakEngine } from './domain/streak-engine';
 import { LocalStorageProvider } from './storage/local-storage';
 import { SessionStorageProvider } from './storage/session-storage';
@@ -104,8 +104,14 @@ export class WINR {
    */
   private secureStorage: SessionStorageProvider;
   private deviceFingerprint: string | null = null;
-  private currentModal: WINRModal | null = null;
+  private currentExperience: WINRV2Experience | null = null;
   private serverSDKConfig: SDKConfig | null = null;
+  /**
+   * RTD opt-out — from the backend or the persisted local flag. Once true the
+   * experience is never auto-presented and present() refuses.
+   */
+  private currentOptedOut = false;
+  private autoOpenListenersAttached = false;
   /**
    * Cached "publisher suspended / service unavailable" state. Set when device
    * registration fails because the publisher's API key has been suspended or
@@ -322,6 +328,15 @@ export class WINR {
 
       logger.debug('User set from configuration:', { userId: user.id });
 
+      // V2 auto-open: the experience opens automatically on the first visit of
+      // each calendar day (ALWAYS on; the only kill switch is the server-driven
+      // sdkConfig.experience.autoOpenEnabled). Also re-checks when the tab
+      // becomes visible again, covering the "tab stayed open overnight" case.
+      if (typeof document !== 'undefined') {
+        WINR.instance.attachAutoOpenListeners();
+        void WINR.autoPresentIfEligible();
+      }
+
     } catch (error) {
       WINR.instance = null;
       WINR.isConfigured = false;
@@ -377,43 +392,38 @@ export class WINR {
 
     if (!WINR.ensureConfigured()) return;
 
+    // RTD: an opted-out person never sees the experience again — not even via
+    // a manual present() from the host page.
+    if (WINR.instance!.isOptedOut()) {
+      logger.info('present() suppressed: user opted out (RTD)');
+      return;
+    }
+
+    // Don't stack on top of an already-presented experience.
+    if (WINR.instance!.currentExperience) {
+      logger.debug('present() skipped: experience already on screen');
+      return;
+    }
+
     try {
-      // Single round-trip: getActiveGiveaway returns the giveaway, the user's claim
-      // state, AND the sdkConfig (branding/copy). refreshConfig() hit the same
-      // endpoint a second time — dropped to halve open latency.
-      await WINR.instance!.refreshGiveawayData();
-      
-      // Get current streak state
-      const streakState = WINR.instance!.getStreakState();
-      
-      // Create and present modal
-      WINR.instance!.currentModal = new WINRModal(
-        WINR.instance!.currentGiveaway,
-        streakState,
-        WINR.instance!.getCurrentSDKConfig(),
-        options,
-        WINR.instance!.currentClaimedToday, // claimedToday (backend truth)
-        WINR.instance!.currentEmailConsentStatus, // hasEmail (backend truth)
-        WINR.instance!.config.user.id
-      );
-      
-      // Track modal presentation
+      // Track presentation (the controller fetches fresh giveaway/claim state
+      // itself in a single getActiveGiveaway round-trip after mount).
       analyticsAdapter.track('winr_modal_presented', {
         giveawayId: WINR.instance!.currentGiveaway?.id,
-        streakDay: streakState?.currentDay || 0,
       });
-      
-      await WINR.instance!.currentModal.present();
-      
+
+      const experience = WINR.instance!.createExperience(options);
+      await experience.present();
+
     } catch (error) {
-      const winrError = error instanceof WINRError 
-        ? error 
+      const winrError = error instanceof WINRError
+        ? error
         : new WINRError(
             WINRErrorCode.InvalidState,
             'Failed to present WINR modal',
             error instanceof Error ? error : undefined
           );
-      
+
       logger.error('Failed to present modal:', winrError);
       options?.onError?.(winrError);
       throw winrError;
@@ -437,36 +447,34 @@ export class WINR {
 
     if (!WINR.ensureConfigured()) return;
 
+    if (WINR.instance!.isOptedOut()) {
+      logger.info('presentInline() suppressed: user opted out (RTD)');
+      return;
+    }
+
+    if (WINR.instance!.currentExperience) {
+      logger.debug('presentInline() skipped: experience already on screen');
+      return;
+    }
+
     try {
-      // Refresh SDK config to ensure latest branding/settings
-      await WINR.instance!.refreshConfig();
+      const container = document.getElementById(containerId);
+      if (!container) {
+        throw new WINRError(
+          WINRErrorCode.InvalidState,
+          `Container element with ID "${containerId}" not found`
+        );
+      }
 
-      // Refresh giveaway data
-      await WINR.instance!.refreshGiveawayData();
-
-      // Get current streak state
-      const streakState = WINR.instance!.getStreakState();
-
-      // Create and present inline modal
-      WINR.instance!.currentModal = new WINRModal(
-        WINR.instance!.currentGiveaway,
-        streakState,
-        WINR.instance!.getCurrentSDKConfig(),
-        options,
-        WINR.instance!.currentClaimedToday, // claimedToday (backend truth)
-        WINR.instance!.currentEmailConsentStatus, // hasEmail (backend truth)
-        WINR.instance!.config.user.id
-      );
-      
       // Track inline presentation
       analyticsAdapter.track('winr_inline_presented', {
         giveawayId: WINR.instance!.currentGiveaway?.id,
-        streakDay: streakState?.currentDay || 0,
         containerId,
       });
-      
-      await WINR.instance!.currentModal.presentInline(containerId);
-      
+
+      const experience = WINR.instance!.createExperience(options);
+      await experience.present(container);
+
     } catch (error) {
       const winrError = error instanceof WINRError 
         ? error 
@@ -487,14 +495,174 @@ export class WINR {
    */
   public static dismiss(): void {
     if (!WINR.ensureConfigured()) return;
-    
-    if (WINR.instance!.currentModal) {
-      WINR.instance!.currentModal.dismiss();
-      WINR.instance!.currentModal = null;
-      
+
+    if (WINR.instance!.currentExperience) {
+      WINR.instance!.currentExperience.dismiss();
+      WINR.instance!.currentExperience = null;
+
       analyticsAdapter.track('winr_modal_dismissed');
       logger.debug('Modal dismissed');
     }
+  }
+
+  // ─── V2 experience wiring ───
+
+  /**
+   * Builds the V2 experience (state-machine controller + shadow-DOM root).
+   * The controller re-fetches getActiveGiveaway on mount, auto-claims when
+   * eligible, and keeps this instance's caches in sync via the refresh hook.
+   */
+  private createExperience(options?: PresentationOptions): WINRV2Experience {
+    const controller = new V2ExperienceController({
+      api: this.api,
+      storage: this.storage,
+      bundleId: this.config.bundleId,
+      submitEmailAndAdopt: (request) =>
+        WINR.submitEmailAndAdopt({ ...request, publisherUserId: this.config.user.id }),
+      hasRegisteredUuid: () =>
+        this.secureStorage.getItem(WINR_CONSTANTS.STORAGE_KEYS.UUID) !== null,
+      cachedGiveaway: this.currentGiveaway,
+      cachedSdkConfig: this.getCurrentSDKConfig(),
+      onGiveawayRefreshed: (response) => this.onGiveawayResponse(response),
+      resolveSdkConfig: () => this.getCurrentSDKConfig(),
+    });
+
+    const wrappedOptions: PresentationOptions = {
+      ...(options ?? {}),
+      onClose: () => {
+        this.currentExperience = null;
+        options?.onClose?.();
+      },
+    };
+
+    const experience = new WINRV2Experience(controller, wrappedOptions);
+    this.currentExperience = experience;
+    return experience;
+  }
+
+  /** Keeps instance caches in sync with each getActiveGiveaway response. */
+  private onGiveawayResponse(response: GetActiveGiveawayResponse): void {
+    if (response.giveaway === null) {
+      this.currentGiveaway = null;
+      this.storage.removeItem(WINR_CONSTANTS.STORAGE_KEYS.CACHED_GIVEAWAY);
+    } else {
+      this.currentGiveaway = response.giveaway;
+      this.storage.setItem(
+        WINR_CONSTANTS.STORAGE_KEYS.CACHED_GIVEAWAY,
+        JSON.stringify(response.giveaway)
+      );
+    }
+
+    this.currentClaimedToday = response.claimedToday === true;
+    this.currentEmailConsentStatus = response.emailConsentStatus === true;
+    if (response.optedOut === true) this.markOptedOut();
+    if (response.sdkConfig) this.serverSDKConfig = response.sdkConfig;
+
+    // Backend is the source of truth for the streak — seed the local state so
+    // it follows the person across sessions and devices.
+    if (typeof response.streakDay === 'number') {
+      const existing = this.getStreakState();
+      this.setStreakState({
+        currentDay: response.streakDay,
+        lastClaimedDate: response.claimedToday ? new Date() : existing?.lastClaimedDate,
+        totalEntriesEarned: response.totalEntries ?? existing?.totalEntriesEarned ?? 0,
+        weeklyCurrent: response.weeklyCurrent ?? existing?.weeklyCurrent ?? 0,
+        monthlyCurrent: response.monthlyCurrent ?? existing?.monthlyCurrent ?? 0,
+      } as StreakState);
+    }
+  }
+
+  // ─── Auto-present (V2 experience: open once per day) ───
+
+  private get lastAutoPresentKey(): string {
+    return `${WINR_CONSTANTS.STORAGE_KEYS.LAST_AUTO_PRESENT}_${this.config.bundleId}`;
+  }
+
+  private get unregisteredImpressionsKey(): string {
+    return `${WINR_CONSTANTS.STORAGE_KEYS.UNREGISTERED_IMPRESSIONS}_${this.config.bundleId}`;
+  }
+
+  private get optedOutKey(): string {
+    return `${WINR_CONSTANTS.STORAGE_KEYS.OPTED_OUT}_${this.config.bundleId}`;
+  }
+
+  private isOptedOut(): boolean {
+    return this.currentOptedOut || this.storage.getItem(this.optedOutKey) === 'true';
+  }
+
+  /** Persist the RTD flag so the suppression holds on future loads, offline too. */
+  private markOptedOut(): void {
+    this.currentOptedOut = true;
+    this.storage.setItem(this.optedOutKey, 'true');
+  }
+
+  private static dayString(date: Date): string {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  /** Auto-open re-checks on tab visibility/focus (day-rollover while open). */
+  private attachAutoOpenListeners(): void {
+    if (this.autoOpenListenersAttached || typeof document === 'undefined') return;
+    this.autoOpenListenersAttached = true;
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') void WINR.autoPresentIfEligible();
+    });
+    window.addEventListener('focus', () => void WINR.autoPresentIfEligible());
+  }
+
+  /**
+   * Presents the experience automatically, at most once per calendar day, when
+   * all conditions allow. Runs after configure() completes and on each tab
+   * foreground. All short-circuits are silent by design. Mirrors iOS:
+   *  - server kill switch: sdkConfig.experience.autoOpenEnabled
+   *  - unregistered (no confirmed email) users are capped at
+   *    experience.unregisteredImpressionCap auto-opens (default 3)
+   *  - RTD opted-out users never see it
+   */
+  private static async autoPresentIfEligible(): Promise<void> {
+    if (!WINR.isConfigured || !WINR.instance) return;
+    if (typeof document === 'undefined') return;
+    const instance = WINR.instance;
+
+    if (WINR.serviceUnavailable || instance.serviceUnavailableError) return;
+    if (instance.isOptedOut()) return;
+
+    const experience = instance.serverSDKConfig?.experience;
+    if (experience?.autoOpenEnabled === false) return; // server kill switch
+    if (!instance.currentGiveaway) return;
+
+    // Once per calendar day.
+    const today = WINR.dayString(new Date());
+    if (instance.storage.getItem(instance.lastAutoPresentKey) === today) return;
+
+    // Unregistered users (no confirmed email) see the auto-open at most N
+    // times, then the SDK goes quiet until they register or the publisher
+    // opens it manually.
+    const emailConsent =
+      instance.currentEmailConsentStatus ||
+      instance.storage.getItem(emailSubmittedStorageKey(instance.config.bundleId)) === 'true';
+    if (!emailConsent) {
+      const cap = experience?.unregisteredImpressionCap ?? 3;
+      const seen = parseInt(
+        instance.storage.getItem(instance.unregisteredImpressionsKey) ?? '0',
+        10
+      );
+      if (seen >= cap) {
+        logger.debug(`Auto-present skipped: unregistered impression cap (${cap}) reached`);
+        return;
+      }
+      instance.storage.setItem(instance.unregisteredImpressionsKey, String(seen + 1));
+    }
+
+    // Don't stack on top of an already-presented experience.
+    if (instance.currentExperience) return;
+
+    instance.storage.setItem(instance.lastAutoPresentKey, today);
+    logger.info('Auto-presenting WINR experience (first visit of the day)');
+    await WINR.present().catch(() => undefined);
   }
 
   /**
@@ -730,6 +898,15 @@ export class WINR {
         this.serverSDKConfig = response.sdkConfig;
       }
 
+      // Per-user backend truth used by the auto-open engine (impression cap,
+      // RTD suppression) before the first getActiveGiveaway round-trip.
+      this.currentClaimedToday = response.claimedToday === true;
+      if (response.emailConsentStatus === true) {
+        this.currentEmailConsentStatus = true;
+        this.storage.setItem(emailSubmittedStorageKey(this.config.bundleId), 'true');
+      }
+      if (response.optedOut === true) this.markOptedOut();
+
       // Initialize streak state if needed
       if (!response.isReturningUser) {
         const initialState: StreakState = {
@@ -820,60 +997,6 @@ export class WINR {
     }
   }
 
-  private async refreshGiveawayData(): Promise<void> {
-    try {
-      const response = await this.client.get<GetActiveGiveawayResponse>('/getActiveGiveaway');
-      
-      if (response.giveaway === null) {
-        // Clear cached giveaway data when no active giveaway
-        this.currentGiveaway = null;
-        this.storage.removeItem(WINR_CONSTANTS.STORAGE_KEYS.CACHED_GIVEAWAY);
-        logger.debug('No active giveaway - cleared cached data');
-      } else {
-        // Store and cache the active giveaway
-        this.currentGiveaway = response.giveaway;
-        this.storage.setItem(WINR_CONSTANTS.STORAGE_KEYS.CACHED_GIVEAWAY, JSON.stringify(response.giveaway));
-        logger.debug('Giveaway data refreshed');
-      }
-
-      // Capture the backend's authoritative per-user state. The modal reads these
-      // (instead of hardcoded false) so a returning user is recognized and can't
-      // re-claim. Backend is the source of truth, so seed the local streak from it
-      // too — this is what makes the streak follow the person across sessions and
-      // devices (it previously only ever read local storage).
-      this.currentClaimedToday = response.claimedToday === true;
-      this.currentEmailConsentStatus = response.emailConsentStatus === true;
-      if (typeof response.streakDay === 'number') {
-        const existing = this.getStreakState();
-        this.setStreakState({
-          currentDay: response.streakDay,
-          lastClaimedDate: response.claimedToday ? new Date() : existing?.lastClaimedDate,
-          totalEntriesEarned: response.totalEntries ?? existing?.totalEntriesEarned ?? 0,
-          weeklyCurrent: response.weeklyCurrent ?? existing?.weeklyCurrent ?? 0,
-          monthlyCurrent: response.monthlyCurrent ?? existing?.monthlyCurrent ?? 0,
-        } as StreakState);
-      }
-
-      if (response.sdkConfig) {
-        this.serverSDKConfig = response.sdkConfig;
-      }
-
-    } catch (error) {
-      logger.warn('Failed to refresh giveaway data:', error);
-      // Try to load cached giveaway data if network fails
-      const cachedGiveaway = this.storage.getItem(WINR_CONSTANTS.STORAGE_KEYS.CACHED_GIVEAWAY);
-      if (cachedGiveaway && !this.currentGiveaway) {
-        try {
-          this.currentGiveaway = JSON.parse(cachedGiveaway);
-          logger.debug('Using cached giveaway data');
-        } catch (parseError) {
-          logger.warn('Failed to parse cached giveaway data:', parseError);
-          this.storage.removeItem(WINR_CONSTANTS.STORAGE_KEYS.CACHED_GIVEAWAY);
-        }
-      }
-    }
-  }
-
   private getStreakState(): StreakState | null {
     const stored = this.storage.getItem(WINR_CONSTANTS.STORAGE_KEYS.STREAK_STATE);
     if (!stored) return null;
@@ -900,6 +1023,8 @@ export class WINR {
     const clientBranding = this.config.branding;
 
     return {
+      // V2 uses ONLY logoUrl + primaryColor from branding — the design is
+      // hardcoded otherwise. Other fields survive for API compatibility.
       branding: {
         primaryColor: serverBranding?.primaryColor || clientBranding?.primaryColor,
         secondaryColor: serverBranding?.secondaryColor || clientBranding?.secondaryColor,
@@ -908,13 +1033,11 @@ export class WINR {
         fontFamily: serverBranding?.fontFamily || clientBranding?.fontFamily,
       },
       copy: this.serverSDKConfig?.copy || {},
-      // Pass the configured media through — without this the SDK never receives the
-      // per-screen Lottie/image URLs and every screen falls back to the logo.
-      media: this.serverSDKConfig?.media,
       bonusEntriesEnabled: this.serverSDKConfig?.bonusEntriesEnabled,
       rulesUrl: this.serverSDKConfig?.rulesUrl,
       ageGateEnabled: this.serverSDKConfig?.ageGateEnabled ?? this.config.options?.enableAgeGate ?? true,
       ageGateMinAge: this.serverSDKConfig?.ageGateMinAge ?? this.config.options?.ageGateMinAge ?? 18,
+      experience: this.serverSDKConfig?.experience,
     };
   }
 }

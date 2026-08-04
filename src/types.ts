@@ -17,8 +17,6 @@ export interface WINROptions {
   enableAgeGate?: boolean;
   /** Custom analytics adapter */
   analyticsAdapter?: AnalyticsAdapter;
-  /** Custom rewarded video provider */
-  rewardedVideoProvider?: RewardedVideoProvider;
   /** Custom device fingerprint function */
   deviceFingerprintProvider?: () => Promise<string>;
 }
@@ -139,6 +137,32 @@ export interface Giveaway {
   milestones: MilestoneConfig[];
   /** Ad provider configuration */
   adConfig?: AdConfig;
+  /**
+   * Publisher-configurable prize art for the V2 prize card. Absent → the SDK
+   * renders the bundled default cash hero with "WIN $X" overlay.
+   */
+  prizeImageUrl?: string;
+  /**
+   * "daily" (default) = consecutive-day streak that resets on a miss.
+   * "visit" = visit-count streak for low-frequency sites; never resets
+   * ("VISIT N" + "Come back again" copy).
+   */
+  streakMode?: 'daily' | 'visit';
+  /**
+   * Most recent drawn winner for this giveaway chain — drives the
+   * "WE HAVE A WINNER!" banner + winners dialog. Absent → no banner.
+   */
+  latestWinner?: GiveawayWinner;
+}
+
+export interface GiveawayWinner {
+  /** Display name, e.g. "Catherine C." */
+  name: string;
+  /** e.g. "Brooklyn, New York" */
+  location?: string;
+  avatarUrl?: string;
+  /** "yyyy-MM-dd" */
+  awardedAt?: string;
 }
 
 export interface AdConfig {
@@ -195,6 +219,10 @@ export interface RegisterDeviceResponse {
   streakDay: number;
   /** Total entries */
   totalEntries: number;
+  /** Whether this user has confirmed an email + consent */
+  emailConsentStatus?: boolean;
+  /** True when this person has opted out (RTD) — never show the experience. */
+  optedOut?: boolean;
   /** SDK configuration */
   sdkConfig?: SDKConfig | null;
 }
@@ -284,35 +312,37 @@ export interface SDKCopy {
   rulesLinkText?: string;
 }
 
-export interface ScreenMedia {
-  imageUrl?: string;
-  lottieUrl?: string;
-}
-
-export interface SDKMedia {
-  emailCapture?: ScreenMedia;
-  streakDashboard?: ScreenMedia;
-  bonusEntries?: ScreenMedia;
-  milestone?: ScreenMedia;
-  completed?: ScreenMedia;
-  howItWorks?: ScreenMedia;
+/** Server-driven experience behavior flags (V2 auto-open flow). */
+export interface ExperienceConfig {
+  /** Auto-present the experience on the first visit of the day (default true). */
+  autoOpenEnabled?: boolean;
+  /**
+   * How many times an unregistered (no-email) user sees the auto-presented
+   * experience before it goes quiet (default 3 — MVP decision).
+   */
+  unregisteredImpressionCap?: number;
+  /** Dismissal requires an explicit click; never auto-fade (default true). */
+  requireDismissClick?: boolean;
 }
 
 export interface SDKConfig {
-  /** Branding overrides */
+  /** Branding overrides (V2 uses ONLY logoUrl + primaryColor) */
   branding?: WINRBranding;
-  /** Copy/text overrides */
+  /**
+   * Copy/text overrides. NOTE: the V2 experience hardcodes its copy to the
+   * design; this survives on the payload for backward compatibility only.
+   */
   copy?: SDKCopy;
-  /** Media/asset overrides */
-  media?: SDKMedia;
   /** Rules URL override */
   rulesUrl?: string;
   /** Age gate enabled */
   ageGateEnabled?: boolean;
   /** Minimum age for age gate */
   ageGateMinAge?: number;
-  /** Feature flag: show bonus entries (watch video) screen in SDK flow */
+  /** Feature flag: bonus entries (parked for Phase 1 — unused by V2) */
   bonusEntriesEnabled?: boolean;
+  /** Experience behavior (V2 auto-open flow). Absent → SDK defaults apply. */
+  experience?: ExperienceConfig;
 }
 
 export interface RefreshTokenRequest {
@@ -341,6 +371,10 @@ export interface GetActiveGiveawayResponse {
   /** Whether this user has confirmed an email + consent. Drives the email-capture
    * gate so a recognized user isn't asked to re-enter their email on reopen. */
   emailConsentStatus?: boolean;
+  /** Lifetime claim count */
+  lifetimeCount?: number;
+  /** True when this person has opted out (RTD) — never show the experience. */
+  optedOut?: boolean;
   /** SDK configuration */
   sdkConfig?: SDKConfig | null;
 }
@@ -358,6 +392,12 @@ export interface ClaimDailyEntriesResponse {
   monthlyBonusEntries?: number;
   /** Milestone if achieved */
   milestone?: MilestoneAward;
+  /** Monthly milestone if achieved */
+  monthlyMilestone?: MilestoneAward;
+  /** Weekly / monthly bonus progress + lifetime count after this claim */
+  weeklyCurrent?: number;
+  monthlyCurrent?: number;
+  lifetimeCount?: number;
 }
 
 export interface ClaimBonusEntriesResponse {
@@ -451,15 +491,6 @@ export interface AnalyticsAdapter {
   track(event: string, properties?: Record<string, unknown>): void;
   /** Identify user */
   identify(userId: string, traits?: Record<string, unknown>): void;
-}
-
-export interface RewardedVideoProvider {
-  /** Check if rewarded video is available */
-  isAvailable(): Promise<boolean>;
-  /** Show rewarded video */
-  show(): Promise<{ success: boolean; reward?: { type: string; amount: number } }>;
-  /** Load rewarded video */
-  load(): Promise<void>;
 }
 
 export interface Logger {
@@ -564,6 +595,11 @@ export const WINR_CONSTANTS = {
     LAST_CLAIM_DATE: 'winr_last_claim_date',
     DEVICE_FINGERPRINT: 'winr_device_fingerprint',
     CACHED_GIVEAWAY: 'winr_cached_giveaway',
+    // Auto-present persistence (suffixed with the bundleId at the call site so
+    // multiple publisher integrations on one origin don't cross-contaminate).
+    LAST_AUTO_PRESENT: 'winr_last_auto_present',
+    UNREGISTERED_IMPRESSIONS: 'winr_unregistered_impressions',
+    OPTED_OUT: 'winr_opted_out',
   },
   DEFAULT_MILESTONES: [
     { day: 5, bonusEntries: 10 },

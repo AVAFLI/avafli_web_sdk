@@ -20,11 +20,12 @@ export type {
   Giveaway,
   AdConfig,
   DailyEntryGrant,
+  GiveawayWinner,
+  ExperienceConfig,
   PresentationOptions,
   Theme,
   StorageProvider,
   AnalyticsAdapter,
-  RewardedVideoProvider,
   Logger,
   SDKConfig,
 } from './types';
@@ -37,7 +38,6 @@ export { StreakEngine } from './domain/streak-engine';
 
 // Service adapters (for custom implementations)
 export { AnalyticsAdapter as AnalyticsAdapterInterface } from './types';
-export { RewardedVideoProvider as RewardedVideoProviderInterface } from './types';
 
 // Constants
 export { WINR_CONSTANTS } from './types';
