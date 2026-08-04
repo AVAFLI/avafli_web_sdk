@@ -75,7 +75,7 @@ export function ensureV2Fonts(): void {
   const css = V2_FONT_FACES.map(
     (f) =>
       `@font-face{font-family:'${f.family}';font-style:normal;font-weight:${f.weight};` +
-      `font-display:swap;src:url(${f.dataUri}) format('truetype')}`
+      `font-display:swap;src:url(${f.dataUri}) format('woff2')}`
   ).join('\n');
 
   const style = document.createElement('style');

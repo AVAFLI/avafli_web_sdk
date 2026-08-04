@@ -11,11 +11,18 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import wawoff2 from 'wawoff2';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 const dataUri = (relPath, mime) =>
   `data:${mime};base64,${readFileSync(join(root, relPath)).toString('base64')}`;
+
+/** TTF → WOFF2 (pure-JS wawoff2), emitted as a data URI. Roughly halves font payload. */
+const woff2DataUri = async (relPath) => {
+  const woff2 = await wawoff2.compress(readFileSync(join(root, relPath)));
+  return `data:font/woff2;base64,${Buffer.from(woff2).toString('base64')}`;
+};
 
 const fonts = [
   { family: 'WINR Inter', weight: 400, file: 'assets/fonts/inter-v20-latin-regular.ttf' },
@@ -43,13 +50,15 @@ let out = `/**
  * GENERATED FILE — do not edit by hand.
  * Run \`node scripts/generate-assets.mjs\` to regenerate from /assets.
  *
- * Bundled Inter/Oswald faces + Figma imagery for the V2 experience, embedded
- * as data URIs so the SDK stays a single self-contained file (no CDN fetches).
+ * Bundled Inter/Oswald faces (WOFF2) + Figma imagery for the V2 experience,
+ * embedded as data URIs so the SDK stays a single self-contained file (no CDN
+ * fetches).
  */
 
 export interface V2FontFace {
   family: string;
   weight: number;
+  /** WOFF2 data URI — pair with format('woff2') in the @font-face src. */
   dataUri: string;
 }
 
@@ -57,7 +66,7 @@ export const V2_FONT_FACES: V2FontFace[] = [
 `;
 
 for (const f of fonts) {
-  out += `  { family: '${f.family}', weight: ${f.weight}, dataUri: '${dataUri(f.file, 'font/ttf')}' },\n`;
+  out += `  { family: '${f.family}', weight: ${f.weight}, dataUri: '${await woff2DataUri(f.file)}' },\n`;
 }
 out += `];\n\nexport const V2_IMAGES = {\n`;
 for (const [name, [file, mime]] of Object.entries(images)) {
