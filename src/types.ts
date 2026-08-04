@@ -573,7 +573,7 @@ export interface PresentationOptions {
 // ─── Constants ───
 
 export const WINR_CONSTANTS = {
-  SDK_VERSION: '1.0.0',
+  SDK_VERSION: '2.0.0',
   PLATFORM_OS: 'Web',
   getApiBaseUrl: (environment: 'production' | 'staging' | 'qa' = 'production'): string => {
     switch (environment) {
