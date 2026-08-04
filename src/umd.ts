@@ -3,8 +3,8 @@
  *
  * The ESM build (src/index.ts) uses named exports for bundler/TS consumers. For the
  * browser <script> build we want the global `WINR` to BE the class, so the documented
- * `WINR.configure(...)` / `WINR.present()` work verbatim. The other runtime exports are
- * attached as properties (e.g. `WINR.WINRError`, `WINR.StreakEngine`), and `WINR.WINR`
+ * `WINR.configure(...)` works verbatim. The other runtime exports are attached as
+ * properties (e.g. `WINR.WINRError`, `WINR.StreakEngine`), and `WINR.WINR`
  * self-references the class for backward compatibility.
  */
 import { WINR } from './winr';

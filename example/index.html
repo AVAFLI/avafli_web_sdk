@@ -49,10 +49,10 @@
 
   <div class="card">
     <h2>Actions</h2>
-    <button id="presentBtn">Present now</button>
+    <button id="replayBtn">Replay auto-open (same day)</button>
     <button id="nextDayBtn" class="secondary">Simulate next day &amp; reload (auto-open again)</button>
     <button id="resetBtn" class="danger">Reset user (fresh install) &amp; reload</button>
-    <p class="hint">"Simulate next day" clears today's auto-open mark and the mock claim, so the SDK auto-opens and auto-claims the next streak day. "Reset user" clears everything (email consent, streak, impression cap).</p>
+    <p class="hint">The experience is exclusively auto-opened by the SDK — there is no manual launch API. "Replay auto-open" clears today's once-per-day mark and reloads so the auto-open engine fires again (same streak day). "Simulate next day" also clears the mock claim, so the SDK auto-opens and auto-claims the next streak day. "Reset user" clears everything (email consent, streak, impression cap).</p>
   </div>
 
   <div class="card">
@@ -212,12 +212,11 @@ WINR.configure({
 }).then(() => log('SDK configured — auto-open will fire on the first visit of the day'))
   .catch((e) => log('configure failed:', e.message));
 
-document.getElementById('presentBtn').addEventListener('click', () => {
-  WINR.present({
-    onComplete: (grant) => log('onComplete:', grant),
-    onClose: () => log('experience closed'),
-    onError: (e) => log('onError:', e.message),
-  }).then((r) => log('present() resolved')).catch(() => {});
+// Replay = clear the SDK's once-per-day auto-open mark, then reload. On load,
+// WINR.configure() re-runs the internal auto-open check, which fires again.
+document.getElementById('replayBtn').addEventListener('click', () => {
+  localStorage.removeItem('winr_last_auto_present_' + BUNDLE_ID);
+  location.reload();
 });
 
 document.getElementById('applyBtn').addEventListener('click', () => {

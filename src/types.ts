@@ -542,6 +542,10 @@ export interface Theme {
   };
 }
 
+/**
+ * Options for the SDK-internal presentation flow (auto-open). Not part of the
+ * public API — the experience cannot be launched manually.
+ */
 export interface PresentationOptions {
   /** Container element ID for inline presentation */
   containerId?: string;
@@ -556,7 +560,7 @@ export interface PresentationOptions {
 // ─── Constants ───
 
 export const WINR_CONSTANTS = {
-  SDK_VERSION: '2.0.0',
+  SDK_VERSION: '2.1.0',
   PLATFORM_OS: 'Web',
   getApiBaseUrl: (_environment: 'production' = 'production'): string => {
     return 'https://us-central1-winr-9c11f.cloudfunctions.net';

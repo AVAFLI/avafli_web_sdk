@@ -21,7 +21,6 @@ export type {
   DailyEntryGrant,
   GiveawayWinner,
   ExperienceConfig,
-  PresentationOptions,
   Theme,
   StorageProvider,
   AnalyticsAdapter,

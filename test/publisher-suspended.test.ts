@@ -7,8 +7,13 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
  * "suspended"/"revoked" (publisher billing lapse), the SDK must:
  *  - surface a WINRError with code `service_unavailable`,
  *  - report WINR.isAvailable === false and expose WINR.unavailableReason,
- *  - never render the modal from present()/presentInline() (reject + onError),
- *  - cache the state so repeat calls short-circuit.
+ *  - never render the modal from the internal presentation path (the
+ *    experience is exclusively auto-opened; there is no public present()),
+ *  - cache the state so repeat presentation attempts short-circuit.
+ *
+ * The internal presentation entry point (WINR['presentExperience']) is
+ * TypeScript-private; tests reach it via an unknown-cast to exercise the
+ * same code path the auto-open engine uses.
  *
  * The SDK relies on browser globals (navigator/screen/Intl/atob/fetch). We stub
  * the minimum needed and mock fetch per test. Modules are reset between tests so
@@ -27,6 +32,18 @@ function defineGlobal(name: string, value: unknown): void {
     writable: true,
     configurable: true,
   });
+}
+
+/** Reach the SDK-internal (TS-private) presentation entry point. */
+function internalPresent(
+  WINR: unknown,
+  options?: { onError?: (e: unknown) => void }
+): Promise<void> {
+  return (
+    WINR as unknown as {
+      presentExperience(opts?: { onError?: (e: unknown) => void }): Promise<void>;
+    }
+  ).presentExperience(options);
 }
 
 function installBrowserGlobals(): void {
@@ -106,7 +123,7 @@ describe('publisher suspended handling', () => {
     expect(WINR.unavailableReason?.code).toBe(WINRErrorCode.ServiceUnavailable);
   });
 
-  it('present() does not render the modal and rejects + calls onError when suspended', async () => {
+  it('the internal presentation path does not render the modal and rejects + calls onError when suspended', async () => {
     (globalThis as unknown as Record<string, unknown>).fetch = suspendedFetch(
       'API key suspended or revoked'
     );
@@ -119,7 +136,7 @@ describe('publisher suspended handling', () => {
     }).catch(() => undefined);
 
     const onError = vi.fn();
-    await expect(WINR.present({ onError })).rejects.toMatchObject({
+    await expect(internalPresent(WINR, { onError })).rejects.toMatchObject({
       code: WINRErrorCode.ServiceUnavailable,
     });
     expect(onError).toHaveBeenCalledTimes(1);
@@ -131,26 +148,15 @@ describe('publisher suspended handling', () => {
     }
   });
 
-  it('presentInline() short-circuits when suspended', async () => {
-    (globalThis as unknown as Record<string, unknown>).fetch = suspendedFetch(
-      'Publisher account suspended'
-    );
-    const { WINR, WINRErrorCode } = await import('../src/index');
-
-    await WINR.configure({
-      apiKey: 'k',
-      bundleId: 'com.test',
-      user: { ...VALID_USER },
-    }).catch(() => undefined);
-
-    const onError = vi.fn();
-    await expect(
-      WINR.presentInline('container', { onError })
-    ).rejects.toMatchObject({ code: WINRErrorCode.ServiceUnavailable });
-    expect(onError).toHaveBeenCalledTimes(1);
+  it('the manual-present public API surface is gone (present/presentInline removed)', async () => {
+    const { WINR } = await import('../src/index');
+    expect((WINR as unknown as Record<string, unknown>).present).toBeUndefined();
+    expect(
+      (WINR as unknown as Record<string, unknown>).presentInline
+    ).toBeUndefined();
   });
 
-  it('caches the suspended state — a second present() does not re-hit the network', async () => {
+  it('caches the suspended state — repeat presentation attempts do not re-hit the network', async () => {
     const fetchMock = suspendedFetch('API key suspended or revoked');
     (globalThis as unknown as Record<string, unknown>).fetch = fetchMock;
     const { WINR } = await import('../src/index');
@@ -163,10 +169,10 @@ describe('publisher suspended handling', () => {
 
     const callsAfterConfigure = fetchMock.mock.calls.length;
 
-    await WINR.present().catch(() => undefined);
-    await WINR.present().catch(() => undefined);
+    await internalPresent(WINR).catch(() => undefined);
+    await internalPresent(WINR).catch(() => undefined);
 
-    // Short-circuited: no additional network calls were made by present().
+    // Short-circuited: no additional network calls were made.
     expect(fetchMock.mock.calls.length).toBe(callsAfterConfigure);
   });
 
@@ -188,7 +194,7 @@ describe('publisher suspended handling', () => {
 
     expect(WINR.unavailableReason).toBeNull();
     // A 500 must not masquerade as service_unavailable.
-    const err = await WINR.present().catch((e) => e);
+    const err = await internalPresent(WINR).catch((e) => e);
     expect(err?.code).not.toBe(WINRErrorCode.ServiceUnavailable);
   });
 });

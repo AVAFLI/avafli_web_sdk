@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.1.0] - 2026-08-04
+
+- **Removed (BREAKING)** — manual `WINR.present()` and `WINR.presentInline()`
+  (and the `PresentationOptions` export): the experience is exclusively
+  auto-opened by the SDK, at most once per calendar day (server kill switch,
+  unregistered impression cap, and RTD opt-out respected). Integration is
+  `WINR.configure()` only.
+- README corrections (auto-open-only integration; demo replay reworked to
+  clear the once-per-day mark and re-run the auto-open engine)
+
 ## 2.0.0 (2026-08-03)
 
 - **V2 experience** — full port of the iOS V2 design (Joe's Figma): gunmetal drawer,

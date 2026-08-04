@@ -37,9 +37,8 @@ await WINR.configure({
   },
 });
 
-// 2. That's it — the experience auto-opens on the first visit of each day.
-//    You can also open it manually at any time:
-await WINR.present();
+// 2. That's it — the experience presents itself on the first visit of
+//    each day. There is no manual launch API.
 ```
 
 > **Auto-open:** After `configure()`, the SDK presents the experience automatically once per calendar day (and re-checks when the tab regains focus). It can be disabled remotely via the dashboard's `experience.autoOpenEnabled` kill switch; unregistered users see at most 3 auto-opens until they submit an email.
@@ -122,41 +121,9 @@ await WINR.configure({
 
 > **Email:** The SDK captures email through its own opt-in UI. Do not pass email via `WINRUser`.
 
-## Present the Experience
+## The Experience Presents Itself
 
-### Full-screen Modal
-
-Launch the full-screen WINR experience as a modal overlay:
-
-```typescript
-await WINR.present({
-  onComplete: (result: DailyEntryGrant) => {
-    console.log(`Streak day ${result.streakDay}: ${result.entries} entries`);
-  },
-  onClose: () => {
-    console.log('User closed the experience');
-  },
-  onError: (error: WINRError) => {
-    console.error('WINR error:', error);
-  },
-});
-```
-
-### Inline Embed
-
-Embed the experience inside an existing DOM element:
-
-```html
-<div id="winr-container" style="width: 100%; max-width: 480px;"></div>
-
-<script type="module">
-  await WINR.presentInline('winr-container', {
-    onComplete: (result) => {
-      console.log(`You earned ${result.entries} entries!`);
-    },
-  });
-</script>
-```
+There is no manual launch API — the WINR experience is exclusively SDK-driven. After `WINR.configure()`, the experience opens automatically at most once per calendar day (first visit of the day, re-checked when the tab regains focus). Auto-open respects the server-side kill switch (`sdkConfig.experience.autoOpenEnabled`), an unregistered-impression cap (default 3 impressions until the user submits an email), and the RTD opt-out — an opted-out user never sees the experience again.
 
 ## Push Notifications
 
@@ -199,8 +166,7 @@ await WINR.configure({
 
 **Events emitted by the SDK:**
 - `winr_device_registered` — Device registered with WINR
-- `winr_modal_presented` — The WINR experience opened as a modal (auto-open or manual)
-- `winr_inline_presented` — The WINR experience embedded inline
+- `winr_modal_presented` — The WINR experience auto-opened
 - `winr_email_captured` — User completed the email/consent capture
 - `winr_daily_entry_claimed` — Daily entries awarded (auto-claimed on open)
 - `winr_modal_dismissed` — User closed the WINR experience
@@ -223,28 +189,12 @@ This permanently removes all user data, entries, preferences, and consent record
 
 | Method | Returns | Description |
 | ------ | ------- | ----------- |
-| `WINR.configure(config)` | `Promise<void>` | Initialize the SDK with user and settings |
-| `WINR.present(options?)` | `Promise<void>` | Launch the full-screen WINR experience |
-| `WINR.presentInline(containerId, options?)` | `Promise<void>` | Embed the experience in a container |
-| `WINR.dismiss()` | `void` | Programmatically close the experience |
-| `WINR.isAvailable` | `boolean` | Whether the experience can currently be presented |
+| `WINR.configure(config)` | `Promise<void>` | Initialize the SDK with user and settings (the experience then auto-opens once per day) |
+| `WINR.dismiss()` | `void` | Programmatically close the auto-opened experience |
+| `WINR.isAvailable` | `boolean` | Whether the experience is currently available (eligible to auto-open) |
 | `WINR.refreshConfig()` | `Promise<void>` | Re-fetch the giveaway/SDK config from the backend |
 | `WINR.registerForPushNotifications()` | `Promise<void>` | Request browser notification permission |
 | `WINR.deleteUserData()` | `Promise<void>` | Permanently delete all user data |
-
-### Callback Types
-
-#### DailyEntryGrant
-
-```typescript
-interface DailyEntryGrant {
-  entries: number;                  // Base entries granted
-  streakDay: number;                // Current streak day (1–6)
-  totalEntries: number;             // Lifetime total entries
-  weeklyBonusEntries?: number;      // Weekly bonus (if awarded)
-  monthlyBonusEntries?: number;     // Monthly bonus (if awarded)
-}
-```
 
 For detailed API documentation, see the [WINR Docs](https://avafli-website.web.app/sdk/web).
 
@@ -259,7 +209,7 @@ npm run demo        # serves the repo at http://localhost:8787
 # open http://localhost:8787/example/
 ```
 
-Use the on-page controls to simulate the next day (auto-open fires again), switch prize types/streak modes, or reset to a fresh install.
+Use the on-page controls to replay the auto-open (clears the once-per-day mark and reloads), simulate the next day, switch prize types/streak modes, or reset to a fresh install.
 
 ## Links
 

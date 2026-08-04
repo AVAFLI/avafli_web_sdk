@@ -108,14 +108,14 @@ export class WINR {
   private serverSDKConfig: SDKConfig | null = null;
   /**
    * RTD opt-out — from the backend or the persisted local flag. Once true the
-   * experience is never auto-presented and present() refuses.
+   * experience is never auto-presented.
    */
   private currentOptedOut = false;
   private autoOpenListenersAttached = false;
   /**
    * Cached "publisher suspended / service unavailable" state. Set when device
    * registration fails because the publisher's API key has been suspended or
-   * revoked (billing lapse). Once set, present/presentInline short-circuit
+   * revoked (billing lapse). Once set, the auto-open engine short-circuits
    * without rendering the modal, and {@link WINR.isAvailable} reports false.
    */
   private serviceUnavailableError: WINRError | null = null;
@@ -179,9 +179,9 @@ export class WINR {
    *
    * Returns false when the SDK has not been configured, or when device
    * registration determined the publisher's account/API key is suspended or
-   * revoked. Publishers embedding their own (custom) UI can poll this to decide
-   * whether to render the WINR entry point or show their own "no longer
-   * available" message instead of calling {@link WINR.present}.
+   * revoked. Publishers can poll this to know whether the once-a-day
+   * auto-open can occur, or to show their own "no longer available" message
+   * elsewhere on the page.
    */
   public static get isAvailable(): boolean {
     if (WINR.serviceUnavailable) return false;
@@ -376,32 +376,34 @@ export class WINR {
   }
 
   /**
-   * Present the WINR experience as a modal
+   * Present the WINR experience as a modal.
+   *
+   * Internal-only: the experience is exclusively SDK-driven. It is opened by
+   * the once-a-day auto-open engine ({@link WINR.autoPresentIfEligible}) and
+   * cannot be launched manually by the host page.
    */
-  public static async present(options?: PresentationOptions): Promise<void> {
-    // If the publisher has been suspended, do NOT render the modal. Surface the
-    // cached service-unavailable error via the onError callback + rejection so a
-    // half-rendered modal is never left on screen. Checked before
-    // ensureConfigured() because a suspended configure() tears down the instance.
+  private static async presentExperience(options?: PresentationOptions): Promise<void> {
+    // If the publisher has been suspended, do NOT render the modal. Checked
+    // before ensureConfigured() because a suspended configure() tears down the
+    // instance.
     const unavailable = WINR.unavailableReason;
     if (unavailable) {
-      logger.warn('present() called while WINR is unavailable — not rendering modal');
+      logger.warn('presentExperience() called while WINR is unavailable — not rendering modal');
       options?.onError?.(unavailable);
       throw unavailable;
     }
 
     if (!WINR.ensureConfigured()) return;
 
-    // RTD: an opted-out person never sees the experience again — not even via
-    // a manual present() from the host page.
+    // RTD: an opted-out person never sees the experience again.
     if (WINR.instance!.isOptedOut()) {
-      logger.info('present() suppressed: user opted out (RTD)');
+      logger.info('presentExperience() suppressed: user opted out (RTD)');
       return;
     }
 
     // Don't stack on top of an already-presented experience.
     if (WINR.instance!.currentExperience) {
-      logger.debug('present() skipped: experience already on screen');
+      logger.debug('presentExperience() skipped: experience already on screen');
       return;
     }
 
@@ -425,66 +427,6 @@ export class WINR {
           );
 
       logger.error('Failed to present modal:', winrError);
-      options?.onError?.(winrError);
-      throw winrError;
-    }
-  }
-
-  /**
-   * Present the WINR experience inline in a container
-   */
-  public static async presentInline(
-    containerId: string, 
-    options?: PresentationOptions
-  ): Promise<void> {
-    // If the publisher has been suspended, do NOT render the inline experience.
-    const unavailable = WINR.unavailableReason;
-    if (unavailable) {
-      logger.warn('presentInline() called while WINR is unavailable — not rendering modal');
-      options?.onError?.(unavailable);
-      throw unavailable;
-    }
-
-    if (!WINR.ensureConfigured()) return;
-
-    if (WINR.instance!.isOptedOut()) {
-      logger.info('presentInline() suppressed: user opted out (RTD)');
-      return;
-    }
-
-    if (WINR.instance!.currentExperience) {
-      logger.debug('presentInline() skipped: experience already on screen');
-      return;
-    }
-
-    try {
-      const container = document.getElementById(containerId);
-      if (!container) {
-        throw new WINRError(
-          WINRErrorCode.InvalidState,
-          `Container element with ID "${containerId}" not found`
-        );
-      }
-
-      // Track inline presentation
-      analyticsAdapter.track('winr_inline_presented', {
-        giveawayId: WINR.instance!.currentGiveaway?.id,
-        containerId,
-      });
-
-      const experience = WINR.instance!.createExperience(options);
-      await experience.present(container);
-
-    } catch (error) {
-      const winrError = error instanceof WINRError 
-        ? error 
-        : new WINRError(
-            WINRErrorCode.InvalidState,
-            'Failed to present WINR inline',
-            error instanceof Error ? error : undefined
-          );
-      
-      logger.error('Failed to present inline:', winrError);
       options?.onError?.(winrError);
       throw winrError;
     }
@@ -662,7 +604,7 @@ export class WINR {
 
     instance.storage.setItem(instance.lastAutoPresentKey, today);
     logger.info('Auto-presenting WINR experience (first visit of the day)');
-    await WINR.present().catch(() => undefined);
+    await WINR.presentExperience().catch(() => undefined);
   }
 
   /**
