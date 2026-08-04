@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { V2ExperienceController, V2ControllerDeps } from '../src/ui/v2/controller';
 import { COMEBACK_TOAST_HOLD_MS, renderDashboard } from '../src/ui/v2/screens';
-import { TILE_BURST_DURATION_MS } from '../src/ui/v2/effects';
+import { CONFETTI_BURST_DURATION_MS } from '../src/ui/v2/effects';
 import { V2_IMAGES } from '../src/ui/v2/assets.generated';
 import {
   ClaimDailyEntriesResponse,
@@ -13,17 +13,18 @@ import { WINRAPI } from '../src/network/api';
 import { LocalStorageProvider } from '../src/storage/local-storage';
 
 /**
- * Day 2+ reveal flow (parity with iOS commit 50cd438 — Joe's Slice prototype).
+ * Day 2+ reveal flow: the celebration is the dashboard's FIRST VISIBLE FRAME.
  *
- * The auto-claim on open grants entries server-side immediately, but:
- *  - streakDay <= 1 → the "You're in!" celebration modal is the reveal.
- *  - streakDay >= 2 → NO modal and NO claim click. The controller lands on
- *    the dashboard with a pending reveal grant (UI pins yesterday's numbers:
- *    streak label N-1, pre-claim total), then the celebration fires ON ITS
- *    OWN ~800ms after the claim response is staged. The pill reads GOT IT
- *    the whole time and only dismisses.
- *  - "Already claimed" (cross-device) and silent auto-claim failures are
- *    unchanged: plain dashboard, no pending reveal, no timer.
+ *  - Pre-claim streakDay 0 (day 1) → the awaited auto-claim's "You're in!"
+ *    celebration modal is the reveal.
+ *  - Pre-claim streakDay >= 1 (day 2+) → NO modal and NO claim click. A
+ *    PREDICTED grant (ladder value for the streak day being claimed today)
+ *    is staged from the pre-claim status response BEFORE entering the
+ *    dashboard; the celebration fires on first mount (~0.15s) and the real
+ *    claim runs in the background, reconciling totals/streak silently (no
+ *    second celebration). The pill reads GOT IT the whole time.
+ *  - "Already claimed" (cross-device) re-syncs once; other claim failures
+ *    settle back to the pre-claim server truth quietly.
  */
 
 const GIVEAWAY: Giveaway = {
@@ -56,7 +57,14 @@ function makeController(options: {
   giveawayResponse?: Partial<GetActiveGiveawayResponse>;
   claim?: Partial<ClaimDailyEntriesResponse>;
   claimError?: Error;
-}): { controller: V2ExperienceController; api: { getActiveGiveaway: ReturnType<typeof vi.fn> } } {
+  /** Hold the claim response until releaseClaim() — pins the predicted frame. */
+  holdClaim?: boolean;
+}): {
+  controller: V2ExperienceController;
+  api: { getActiveGiveaway: ReturnType<typeof vi.fn> };
+  releaseClaim: () => Promise<void>;
+  settle: () => Promise<void>;
+} {
   const giveawayResponse: GetActiveGiveawayResponse = {
     giveaway: GIVEAWAY,
     claimedToday: false,
@@ -65,9 +73,16 @@ function makeController(options: {
     emailConsentStatus: true,
     ...options.giveawayResponse,
   };
+  let release: (() => void) | null = null;
+  const gate = options.holdClaim
+    ? new Promise<void>((resolve) => {
+        release = resolve;
+      })
+    : null;
   const api = {
     getActiveGiveaway: vi.fn(async () => giveawayResponse),
     claimDailyEntries: vi.fn(async () => {
+      if (gate) await gate;
       if (options.claimError) throw options.claimError;
       return {
         entries: 10,
@@ -84,7 +99,15 @@ function makeController(options: {
     submitEmailAndAdopt: async () => ({ success: true }),
     hasRegisteredUuid: () => true,
   };
-  return { controller: new V2ExperienceController(deps), api };
+  /** Flushes the background reconcile's microtasks without advancing time. */
+  const settle = async (): Promise<void> => {
+    await vi.advanceTimersByTimeAsync(0);
+  };
+  const releaseClaim = async (): Promise<void> => {
+    release?.();
+    await settle();
+  };
+  return { controller: new V2ExperienceController(deps), api, releaseClaim, settle };
 }
 
 describe('V2 Day 2+ reveal flow', () => {
@@ -110,28 +133,36 @@ describe('V2 Day 2+ reveal flow', () => {
     expect(controller.claimRevealed).toBe(false);
   });
 
-  it('day 2+ auto-claim shows NO celebration modal — dashboard pinned with a pending reveal', async () => {
-    const { controller } = makeController({
+  it('day 2+ stages a PREDICTED grant from the pre-claim response — no waiting on the claim', async () => {
+    const { controller, releaseClaim } = makeController({
       giveawayResponse: { streakDay: 4, totalEntries: 340 },
       claim: { entries: 130, streakDay: 5, totalEntries: 470 },
+      holdClaim: true,
     });
     await controller.load();
 
-    // Silent claim happened…
+    // The claim round-trip is STILL IN FLIGHT, yet the celebration is fully
+    // staged: predicted grant = ladder(day 5) = 240, predicted totals.
+    expect(controller.state.kind).toBe('dashboard');
+    expect(controller.pendingRevealGrant).toEqual({ baseEntries: 240, bonusEntries: 0 });
+    expect(controller.streakDay).toBe(5);
+    expect(controller.totalEntries).toBe(580); // 340 + predicted 240
+    expect(controller.preClaimTotalEntries).toBe(340);
+    expect(controller.claimRevealed).toBe(false);
+    expect(controller.claimedToday).toBe(false);
+
+    // The background claim lands → totals/streak reconcile silently to
+    // server truth (no second celebration, claimRevealed untouched).
+    await releaseClaim();
     expect(controller.claimedToday).toBe(true);
     expect(controller.streakDay).toBe(5);
     expect(controller.totalEntries).toBe(470);
-
-    // …but the UI is told to hold yesterday's numbers until the auto-reveal.
-    expect(controller.state.kind).toBe('dashboard');
     expect(controller.pendingRevealGrant).toEqual({ baseEntries: 130, bonusEntries: 0 });
-    expect(controller.claimRevealed).toBe(false);
-    // Pre-claim total = post-claim minus the full grant.
     expect(controller.preClaimTotalEntries).toBe(340);
   });
 
-  it('bonus entries roll into the pending grant and the pre-claim total', async () => {
-    const { controller } = makeController({
+  it('milestone bonuses reconcile into the grant when the real claim lands', async () => {
+    const { controller, releaseClaim } = makeController({
       giveawayResponse: { streakDay: 6, totalEntries: 770 },
       claim: {
         entries: 300,
@@ -139,26 +170,34 @@ describe('V2 Day 2+ reveal flow', () => {
         totalEntries: 1095,
         milestone: { day: 7, bonusEntries: 25 },
       },
+      holdClaim: true,
     });
     await controller.load();
 
+    // Prediction is pure ladder math (ladder tops out at 300 for day 7).
+    expect(controller.pendingRevealGrant).toEqual({ baseEntries: 300, bonusEntries: 0 });
+    expect(controller.preClaimTotalEntries).toBe(770);
+
+    await releaseClaim();
     expect(controller.pendingRevealGrant).toEqual({ baseEntries: 300, bonusEntries: 25 });
     expect(controller.preClaimTotalEntries).toBe(770);
+    expect(controller.totalEntries).toBe(1095);
   });
 
-  it('the celebration fires ON ITS OWN ~800ms after the claim lands — no click needed', async () => {
+  it('the celebration fires ON ITS OWN ~150ms after first mount — no click, no network wait', async () => {
     const { controller } = makeController({
       giveawayResponse: { streakDay: 2, totalEntries: 40 },
       claim: { entries: 60, streakDay: 3, totalEntries: 100 },
+      holdClaim: true, // the claim NEVER lands in this test — reveal anyway
     });
     await controller.load();
 
-    // Pinned right up until the delay elapses…
+    // Pinned right up until the first-mount beat elapses…
     expect(controller.claimRevealed).toBe(false);
     vi.advanceTimersByTime(DELAY - 1);
     expect(controller.claimRevealed).toBe(false);
 
-    // …then it plays by itself.
+    // …then it plays by itself, network still in flight.
     vi.advanceTimersByTime(1);
     expect(controller.claimRevealed).toBe(true);
   });
@@ -215,99 +254,109 @@ describe('V2 Day 2+ reveal flow', () => {
     expect(controller.nextEntries).toBe(130);
   });
 
-  it('the pill reads GOT IT throughout and the celebration mutates the dashboard in place', async () => {
-    const { controller } = makeController({
+  it('the pill reads GOT IT, the toast is the FIRST visible bar state, and the celebration mutates in place', async () => {
+    const { controller, settle } = makeController({
       giveawayResponse: { streakDay: 4, totalEntries: 340 },
       claim: { entries: 130, streakDay: 5, totalEntries: 470 },
     });
     await controller.load();
+    await settle(); // background claim reconciled before the dashboard mounts
 
     const dash = renderDashboard(controller, null, () => {});
     // Attach so the toast hold timer's teardown guard sees a live DOM.
     document.body.appendChild(dash);
 
-    // Pinned pre-reveal frame: GOT IT pill (no CLAIM), yesterday's streak
-    // label, today's tile "ready", come-back pitch (no toast).
+    // First visible frame: GOT IT pill (no CLAIM), yesterday's streak label
+    // for the one pre-reveal beat, today's tile "ready" — and the toast
+    // ALREADY showing (toast-first, never the pitch first).
     const pill = dash.querySelector('.wv2-pill');
     expect(pill?.textContent).toBe('GOT IT');
     expect(dash.querySelector('.wv2-stat-streak')?.textContent).toBe('4 DAY STREAK');
     expect(dash.querySelector('.wv2-tile.wv2-ready')).not.toBeNull();
     expect(dash.querySelector('.wv2-tile.wv2-active')).toBeNull();
-    expect(dash.querySelector('.wv2-comeback')?.classList.contains('wv2-toasting')).toBe(false);
+    const comeback = dash.querySelector('.wv2-comeback');
+    expect(comeback?.classList.contains('wv2-toast-start')).toBe(true);
+    expect(comeback?.classList.contains('wv2-untoasting')).toBe(false);
+    expect(comeback?.querySelector('.wv2-cb-added')?.textContent).toBe('YOU’RE ON A ROLL!');
+    expect(comeback?.querySelector('.wv2-cb-roll')?.textContent).toBe(
+      'Your 130 entries have been added automatically.'
+    );
 
-    // The celebration fires on its own: "N ENTRIES ADDED" slides into the
-    // bar and holds (.wv2-toasting = the hold window).
+    // The celebration fires on its own at the first-mount beat.
     vi.advanceTimersByTime(DELAY);
 
     expect(controller.claimRevealed).toBe(true);
     expect(dash.querySelector('.wv2-tile.wv2-ready')).toBeNull();
     expect(dash.querySelector('.wv2-tile.wv2-active')).not.toBeNull();
     expect(dash.querySelector('.wv2-stat-streak')?.textContent).toBe('5 DAY STREAK');
-    const comeback = dash.querySelector('.wv2-comeback');
-    expect(comeback?.classList.contains('wv2-toasting')).toBe(true);
-    expect(comeback?.querySelector('.wv2-cb-added')?.textContent).toBe('130 ENTRIES ADDED');
-    // Still GOT IT — the pill never changed and only dismisses.
+    // The toast is still holding; the pill never changed and only dismisses.
+    expect(comeback?.classList.contains('wv2-toast-start')).toBe(true);
     expect(pill?.textContent).toBe('GOT IT');
 
-    // After the ~2.6s hold the toast slides back out: the bar's FINAL
-    // resting state is the come-back pitch, not the ADDED toast.
+    // After the ~2.5s hold the toast slides ONCE to the come-back pitch —
+    // the bar's FINAL resting state.
     vi.advanceTimersByTime(COMEBACK_TOAST_HOLD_MS);
-    expect(comeback?.classList.contains('wv2-toasting')).toBe(false);
+    expect(comeback?.classList.contains('wv2-toast-start')).toBe(false);
+    expect(comeback?.classList.contains('wv2-untoasting')).toBe(true);
     dash.remove();
   });
 
-  it("the reveal mounts Joe's tile-burst GIF once; it removes itself and rests on the static check", async () => {
-    const { controller } = makeController({
+  it('the reveal restores the drawn check + confetti field and pops the one-shot confetti-burst GIF', async () => {
+    const { controller, settle } = makeController({
       giveawayResponse: { streakDay: 4, totalEntries: 340 },
       claim: { entries: 130, streakDay: 5, totalEntries: 470 },
     });
     await controller.load();
+    await settle();
 
     const dash = renderDashboard(controller, null, () => {});
     document.body.appendChild(dash);
 
-    // Pre-reveal: no burst overlay anywhere, ready tile's icon slot empty.
+    // Pre-reveal beat: the ready tile is calm — no burst, no confetti field.
     expect(dash.querySelector('.wv2-tile-burst')).toBeNull();
+    expect(dash.querySelector('.wv2-tile-confetti')).toBeNull();
 
-    // The reveal beat flips the tile AND mounts the GIF in the same pass.
+    // The reveal flips the tile AND mounts the whole lockup in one pass:
+    // drawn check in the icon slot, falling-confetti field, burst GIF.
     vi.advanceTimersByTime(DELAY);
     const tile = dash.querySelector('.wv2-tile.wv2-active');
     expect(tile).not.toBeNull();
+    expect(tile?.querySelector('.wv2-tile-icon .wv2-animated-check')).not.toBeNull();
+    expect(dash.querySelector('.wv2-tile-confetti')).not.toBeNull();
     const burst = dash.querySelector('.wv2-tile-burst') as HTMLImageElement;
     expect(burst).not.toBeNull();
     // Fresh <img> with the embedded GIF — mounting starts playback at frame 0.
-    expect(burst.src).toBe(V2_IMAGES.tileBurst);
-    // During the burst the icon slot is an empty spacer (the GIF paints the
-    // check) — layout matches the other states.
-    expect(tile?.querySelector('.wv2-tile-icon')?.childElementCount).toBe(0);
+    expect(burst.src).toBe(V2_IMAGES.confettiBurst);
 
-    // After the GIF's full one-shot run the overlay is removed and the tile
-    // rests on the SAME small static check as completed tiles.
-    vi.advanceTimersByTime(TILE_BURST_DURATION_MS);
+    // After the GIF's full one-shot run only the burst overlay is removed —
+    // the drawn check and confetti field ARE the active tile's resting state.
+    vi.advanceTimersByTime(CONFETTI_BURST_DURATION_MS);
     expect(dash.querySelector('.wv2-tile-burst')).toBeNull();
-    const restingCheck = tile?.querySelector('.wv2-tile-icon img') as HTMLImageElement;
-    expect(restingCheck?.src).toBe(V2_IMAGES.checkCompleted);
+    expect(tile?.querySelector('.wv2-tile-icon .wv2-animated-check')).not.toBeNull();
+    expect(dash.querySelector('.wv2-tile-confetti')).not.toBeNull();
     dash.remove();
   });
 
-  it('tile-burst teardown guard: dismissing mid-burst never touches removed DOM', async () => {
-    const { controller } = makeController({
+  it('burst teardown guard: dismissing mid-burst never touches removed DOM', async () => {
+    const { controller, settle } = makeController({
       giveawayResponse: { streakDay: 4, totalEntries: 340 },
       claim: { entries: 130, streakDay: 5, totalEntries: 470 },
     });
     await controller.load();
+    await settle();
 
     const dash = renderDashboard(controller, null, () => {});
     document.body.appendChild(dash);
     vi.advanceTimersByTime(DELAY);
-    const iconWrap = dash.querySelector('.wv2-tile.wv2-active .wv2-tile-icon');
-    expect(dash.querySelector('.wv2-tile-burst')).not.toBeNull();
+    const burst = dash.querySelector('.wv2-tile-burst') as HTMLImageElement;
+    expect(burst).not.toBeNull();
 
-    // Dashboard unmounts before the GIF finishes → the removal timer no-ops.
+    // Dashboard unmounts before the GIF finishes → the removal timer no-ops
+    // (the overlay left the document with its parent and is left untouched).
     dash.remove();
-    vi.advanceTimersByTime(TILE_BURST_DURATION_MS);
-    // The detached tile was never mutated: no resting check swapped in.
-    expect(iconWrap?.childElementCount).toBe(0);
+    vi.advanceTimersByTime(CONFETTI_BURST_DURATION_MS);
+    expect(burst.isConnected).toBe(false);
+    expect(burst.parentElement).not.toBeNull();
   });
 
   it('a dashboard that mounts already claimed rests on the come-back pitch — no toast replay', async () => {
@@ -319,41 +368,50 @@ describe('V2 Day 2+ reveal flow', () => {
 
     const dash = renderDashboard(controller, null, () => {});
     const comeback = dash.querySelector('.wv2-comeback');
-    expect(comeback?.classList.contains('wv2-toasting')).toBe(false);
+    expect(comeback?.classList.contains('wv2-toast-start')).toBe(false);
+    expect(comeback?.classList.contains('wv2-untoasting')).toBe(false);
     expect(comeback?.querySelector('.wv2-comeback-line')?.textContent).toBe(
       'Come back tomorrow to\nkeep your streak alive and receive:'
     );
     vi.advanceTimersByTime(DELAY * 2 + COMEBACK_TOAST_HOLD_MS);
-    expect(comeback?.classList.contains('wv2-toasting')).toBe(false);
+    expect(comeback?.classList.contains('wv2-toast-start')).toBe(false);
+    expect(comeback?.classList.contains('wv2-untoasting')).toBe(false);
   });
 
-  it('"Already claimed" (cross-device) keeps the plain dashboard — no pending reveal, no timer', async () => {
-    const { controller, api } = makeController({
+  it('"Already claimed" (cross-device) drops the predicted grant and re-syncs once — no celebration', async () => {
+    const { controller, api, settle } = makeController({
       giveawayResponse: { streakDay: 5, totalEntries: 470, claimedToday: false },
       claimError: new Error('Already claimed today'),
     });
     await controller.load();
+    await settle(); // let the background claim reject + re-sync
 
     expect(controller.state.kind).toBe('dashboard');
     expect(controller.pendingRevealGrant).toBeNull();
     expect(controller.claimedToday).toBe(true);
     // One-shot re-sync pulled the authoritative state again.
     expect(api.getActiveGiveaway).toHaveBeenCalledTimes(2);
+    expect(controller.streakDay).toBe(5);
+    expect(controller.totalEntries).toBe(470);
 
     vi.advanceTimersByTime(DELAY * 2);
     expect(controller.claimRevealed).toBe(false);
   });
 
-  it('silent auto-claim failure keeps the plain unclaimed dashboard — no pending reveal, no timer', async () => {
-    const { controller } = makeController({
+  it('silent claim failure settles back to the pre-claim server truth — no celebration', async () => {
+    const { controller, settle } = makeController({
       giveawayResponse: { streakDay: 5, totalEntries: 470 },
       claimError: new Error('network down'),
     });
     await controller.load();
+    await settle(); // let the background claim reject + settle
 
     expect(controller.state.kind).toBe('dashboard');
     expect(controller.pendingRevealGrant).toBeNull();
     expect(controller.claimedToday).toBe(false);
+    // Predicted streak/totals were rolled back to the pre-claim response.
+    expect(controller.streakDay).toBe(5);
+    expect(controller.totalEntries).toBe(470);
 
     vi.advanceTimersByTime(DELAY * 2);
     expect(controller.claimRevealed).toBe(false);

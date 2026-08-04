@@ -1,8 +1,7 @@
 import { Giveaway, GiveawayWinner, PrizeClaimBlock } from '../../types';
 import { V2_IMAGES } from './assets.generated';
 import {
-  COUNT_BURST_DURATION_MS,
-  TILE_BURST_DURATION_MS,
+  CONFETTI_BURST_DURATION_MS,
   createAnimatedCheck,
   createConfetti,
   mountGifBurst,
@@ -318,24 +317,22 @@ function renderPrizeStrip(giveaway: Giveaway | null): HTMLElement {
 
 // ─── Return-user dashboard (Day 2+ drawer) ───
 
-/** How long the "N ENTRIES ADDED" toast holds before sliding back to the pitch. */
-export const COMEBACK_TOAST_HOLD_MS = 2600;
+/** How long the "YOU'RE ON A ROLL!" toast holds before its single slide to the pitch. */
+export const COMEBACK_TOAST_HOLD_MS = 2500;
 
 export function renderDashboard(
   c: V2ExperienceController,
   logoUrl: string | null | undefined,
   onWinnerTap: () => void
 ): HTMLElement {
-  // Day 2+ reveal flow (mirrors iOS 50cd438): the claim already succeeded
-  // server-side; the UI mounts pinned to yesterday's numbers and the
-  // celebration (tile check + confetti + totals update, bar → "N ENTRIES
-  // ADDED") fires on its own a beat later — Joe's Slice prototype has no
-  // claim click and no modal. The pill reads GOT IT the whole time.
-  // Pinned from the FIRST frame: while today is unclaimed OR the reveal
-  // hasn't played, show yesterday's numbers. Without the claimedToday clause
-  // there's a flash of the raw post-claim server state during the network
-  // round-trip, and elements flip at different times (the current tile
-  // animated at claim-response time, ~1s before the count-up/toast beat).
+  // Day 2+ reveal flow: the celebration is the dashboard's FIRST VISIBLE
+  // FRAME — the controller staged a PREDICTED grant straight from the
+  // pre-claim status response, the toast is the bar's first visible state,
+  // and the tile/count-up celebration fires one short beat (~0.15s) after
+  // mount, with the real claim reconciling silently in the background. The
+  // pill reads GOT IT the whole time — no claim click, no modal. The tile
+  // and stat numbers hold yesterday's values for that one beat so the flip
+  // reads as motion, never as a flash of raw post-claim state.
   const preReveal = !c.claimRevealed && (c.pendingRevealGrant !== null || !c.claimedToday);
 
   const screen = el('div', 'wv2-screen');
@@ -372,11 +369,14 @@ export function renderDashboard(
   /**
    * The auto-reveal celebration, animated in place (no re-render, so the
    * draw-on check and the count-up run against the already-visible
-   * dashboard). Fired by the controller's scheduleAutoReveal() timer:
-   *  - today's tile flips ready → active (draw-on check + confetti specks)
+   * dashboard). Fired by the controller's scheduleAutoReveal() timer on
+   * first mount:
+   *  - today's tile flips ready → active (draw-on check + confetti field +
+   *    one-shot confetti-burst GIF overflowing the tile)
    *  - the streak label advances N-1 → N
-   *  - the total animates up to the post-claim value
-   *  - the come-back bar swaps to "N ENTRIES ADDED / You're on a roll!"
+   *  - the total animates up to the (predicted) post-claim value
+   *  - the toast's slide to the come-back pitch is scheduled (the toast has
+   *    been visible since mount)
    * The pill is untouched — it reads GOT IT throughout and only dismisses.
    * Guarded + one-shot, so a re-arm or re-render can't double-mutate.
    */
@@ -388,13 +388,22 @@ export function renderDashboard(
     if (tile) {
       tile.classList.remove('wv2-ready');
       tile.classList.add('wv2-active');
-      // Joe's ACTUAL Figma explosion GIF mounts on this same render pass
-      // (the icon slot stays an empty spacer during the burst; the small
-      // static check lands when the GIF finishes) — see mountTileBurst.
+      // The full active-tile lockup lands on this same render pass: the
+      // draw-on check in the icon slot, the falling-confetti field around
+      // the tile, the pulsing glow (CSS), and the one-shot confetti-burst
+      // GIF overflowing the tile (see mountTileBurst).
       const iconWrap = tile.querySelector('.wv2-tile-icon');
-      if (iconWrap) iconWrap.innerHTML = '';
+      if (iconWrap) {
+        iconWrap.innerHTML = '';
+        iconWrap.appendChild(createAnimatedCheck(12));
+      }
       const box = tile.parentElement;
-      if (box && iconWrap) mountTileBurst(box, iconWrap as HTMLElement);
+      if (box) {
+        const confetti = createConfetti({ style: 'celebration', count: 12, speed: 0.7 });
+        confetti.classList.add('wv2-tile-confetti');
+        box.insertBefore(confetti, tile);
+        mountTileBurst(box);
+      }
     }
 
     const streakNum = screen.querySelector('.wv2-stat-streak');
@@ -411,39 +420,58 @@ export function renderDashboard(
           parent: totalNum as HTMLElement,
           src: V2_IMAGES.confettiBurst,
           className: 'wv2-count-burst',
-          durationMs: COUNT_BURST_DURATION_MS,
+          durationMs: CONFETTI_BURST_DURATION_MS,
         });
       });
     }
 
-    // Joe's Slice sequence: "{N} ENTRIES ADDED / You're on a roll!" SLIDES
-    // into the come-back bar, holds ~2.6s, then SLIDES back out to the
-    // come-back pitch — the pitch is the bar's final resting state. The
-    // checkmark is recreated so its draw-on runs at the reveal moment.
+    // The "YOU'RE ON A ROLL!" toast has been the bar's FIRST visible state
+    // since mount (.wv2-toast-start — never the pitch first on a celebration
+    // open); after the ~2.5s hold it slides ONCE to the come-back pitch, the
+    // bar's final resting state.
     const comeback = screen.querySelector('.wv2-comeback');
     if (comeback) {
-      const cbCheck = comeback.querySelector('.wv2-cb-check');
-      if (cbCheck) {
-        cbCheck.innerHTML = '';
-        cbCheck.appendChild(createAnimatedCheck(9));
-      }
-      comeback.classList.remove('wv2-untoasting');
-      comeback.classList.add('wv2-toasting');
       window.setTimeout(() => {
         // Teardown-safe: no-op if the dashboard was dismissed mid-hold.
         if (!comeback.isConnected) return;
-        // Return leg of the carousel: the toast exits LEFT while the pitch
-        // re-enters from the right — same forward direction, no rewind.
-        comeback.classList.remove('wv2-toasting');
+        comeback.classList.remove('wv2-toast-start');
         comeback.classList.add('wv2-untoasting');
       }, COMEBACK_TOAST_HOLD_MS);
     }
   };
 
   // Register the in-place celebration with the controller's auto-reveal
-  // timer (armed from the claim SUCCESS path). Latest render wins, so the
-  // mutation always targets the DOM currently on screen.
+  // timer (armed when the dashboard state is entered with a predicted
+  // grant). Latest render wins, so the mutation always targets the DOM
+  // currently on screen.
   c.onAutoReveal = doReveal;
+
+  // Silent reconcile: the background claim landed (or settled after a
+  // failure) and the controller's numbers are now server truth — update the
+  // on-screen streak label + total in place, with no second celebration.
+  c.onRevealReconcile = (): void => {
+    if (!screen.isConnected || !c.claimRevealed) return;
+    const streakNum = screen.querySelector('.wv2-stat-streak');
+    if (streakNum) streakNum.textContent = `${c.streakDay} ${noun} STREAK`;
+    const totalNum = screen.querySelector('.wv2-stat-total');
+    if (totalNum) {
+      // Only the leading text node — never wipe a mounted count-burst img.
+      const setTotal = (): void => {
+        const first = totalNum.firstChild;
+        if (first && first.nodeType === Node.TEXT_NODE) {
+          first.nodeValue = formatInt(c.totalEntries);
+        } else if (totalNum.childElementCount === 0) {
+          totalNum.textContent = formatInt(c.totalEntries);
+        }
+      };
+      setTotal();
+      // The reveal's count-up may still be running toward the predicted
+      // total; settle once more after it lands (guarded against teardown).
+      window.setTimeout(() => {
+        if (totalNum.isConnected) setTotal();
+      }, 750);
+    }
+  };
 
   // Always GOT IT (Slice prototype) — the celebration plays on its own; the
   // pill only ever closes.
@@ -636,30 +664,18 @@ function renderStreakRail(c: V2ExperienceController, preReveal = false): HTMLEle
 type TileState = 'completed' | 'active' | 'ready' | 'locked';
 
 /**
- * Joe's ACTUAL Figma tile animation (iOS d464194/02c9285 parity): one GIF
- * carrying the check + confetti explosion mounts exactly when the tile flips
- * to active (the reveal beat), sized ~150% of the tile (200x200 over the
- * 106x134 card) so the explosion overflows the tile bounds, plays ONCE, and
- * is then REMOVED — the tile's icon slot rests on the same small static
- * check as completed tiles (freezing the GIF would leave a giant check
- * covering the tile). A fresh <img> per mount restarts the GIF at frame 0;
- * the removal timeout is teardown-guarded inside mountGifBurst, and the
- * check swap re-checks the live DOM here.
+ * The reveal-beat explosion on the active tile: Joe's one-shot Figma
+ * confetti-burst GIF, ~200x200 centered on the 106x134 tile so it overflows
+ * the tile bounds, layered over the drawn check + falling-confetti field +
+ * pulsing glow. A fresh <img> per mount restarts the GIF at frame 0; the
+ * removal after its full run is teardown-guarded inside mountGifBurst.
  */
-function mountTileBurst(box: HTMLElement, iconWrap: HTMLElement): void {
+function mountTileBurst(box: HTMLElement): void {
   mountGifBurst({
     parent: box,
-    src: V2_IMAGES.tileBurst,
+    src: V2_IMAGES.confettiBurst,
     className: 'wv2-tile-burst',
-    durationMs: TILE_BURST_DURATION_MS,
-    onFinished: () => {
-      if (!iconWrap.isConnected) return;
-      iconWrap.innerHTML = '';
-      const img = el('img');
-      img.src = V2_IMAGES.checkCompleted;
-      img.alt = '';
-      iconWrap.appendChild(img);
-    },
+    durationMs: CONFETTI_BURST_DURATION_MS,
   });
 }
 
@@ -686,9 +702,7 @@ function renderStreakTile(
     img.alt = '';
     iconWrap.appendChild(img);
   } else if (state === 'active') {
-    // During the burst the GIF paints the check — the slot stays an empty
-    // 20x20 spacer so the card layout matches other states; mountTileBurst
-    // swaps in the small static check once the GIF finishes.
+    iconWrap.appendChild(createAnimatedCheck(12)); // 2.5pt at 20px ≈ 12/100 viewBox units
   } else if (state === 'ready') {
     // Joe's frames: the current tile pre-check shows ONLY the glowing
     // number — no icon. The .wv2-tile-icon slot keeps its 24x24 size so the
@@ -698,11 +712,17 @@ function renderStreakTile(
   }
   tile.appendChild(iconWrap);
 
+  if (state === 'active') {
+    // Joe's active-tile motion: breathing glow (CSS) + confetti specks
+    // scattered around the tile.
+    const confetti = createConfetti({ style: 'celebration', count: 12, speed: 0.7 });
+    confetti.classList.add('wv2-tile-confetti');
+    box.appendChild(confetti);
+  }
   box.appendChild(tile);
   if (state === 'active') {
-    // Joe's active-tile motion: breathing glow (CSS) + the one-shot Figma
-    // explosion GIF overflowing the tile.
-    mountTileBurst(box, iconWrap);
+    // …plus the one-shot Figma confetti-burst GIF overflowing the tile.
+    mountTileBurst(box);
   }
   return box;
 }
@@ -767,15 +787,16 @@ function attachRailScrolling(rail: HTMLElement): void {
 // ─── Confirmation ("come back tomorrow") bar ───
 
 function renderComeBackBar(c: V2ExperienceController): HTMLElement {
-  // Joe's Slice sequence: the bar RESTS on the come-back pitch — always,
-  // including claimed-at-mount reopens (no toast replay). The auto-reveal
-  // slides the "{N} ENTRIES ADDED" toast in for a ~2.6s hold, then slides
-  // back out to the pitch (see doReveal + .wv2-toasting).
+  // On a CELEBRATION open the toast ("YOU'RE ON A ROLL!") is the bar's FIRST
+  // visible state — never the pitch first — and it slides ONCE to the pitch
+  // after the ~2.5s hold (see doReveal + .wv2-toast-start/.wv2-untoasting).
+  // Every other open rests on the come-back pitch with no toast replay.
   const claimedEntries = c.pendingRevealGrant
     ? c.pendingRevealGrant.baseEntries + c.pendingRevealGrant.bonusEntries
     : c.ladderValue(c.streakDay);
 
   const bar = el('div', 'wv2-comeback');
+  if (c.pendingRevealGrant && !c.claimRevealed) bar.classList.add('wv2-toast-start');
 
   // Come-back pitch (the resting state). "Come back tomorrow"/"Come back
   // again" is BOLD, the rest regular — per Joe's banner lockup.
@@ -794,14 +815,20 @@ function renderComeBackBar(c: V2ExperienceController): HTMLElement {
   come.appendChild(col);
   bar.appendChild(come);
 
-  // Claimed celebration ("{N} ENTRIES ADDED / You're on a roll!").
+  // Claimed celebration toast: headline + "your entries landed" subline.
   const done = el('div', 'wv2-cb-claimed');
   const check = el('div', 'wv2-cb-check');
   check.appendChild(createAnimatedCheck(9)); // 3.5pt at 38px ≈ 9/100 viewBox units
   done.appendChild(check);
   const doneCol = el('div', 'wv2-cb-claimed-col');
-  doneCol.appendChild(el('div', 'wv2-cb-added', `${formatInt(claimedEntries)} ENTRIES ADDED`));
-  doneCol.appendChild(el('div', 'wv2-cb-roll', 'You’re on a roll!'));
+  doneCol.appendChild(el('div', 'wv2-cb-added', 'YOU’RE ON A ROLL!'));
+  doneCol.appendChild(
+    el(
+      'div',
+      'wv2-cb-roll',
+      `Your ${formatInt(claimedEntries)} entries have been added automatically.`
+    )
+  );
   done.appendChild(doneCol);
   bar.appendChild(done);
 

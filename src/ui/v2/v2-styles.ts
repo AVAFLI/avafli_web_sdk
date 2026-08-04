@@ -282,6 +282,7 @@ img { display: block; }
 .wv2-tile-icon { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; }
 .wv2-tile-icon .wv2-ic-lock { width: 16px; height: 20px; color: ${c.foregroundSecondary}; }
 .wv2-tile-icon img { width: 20px; height: 20px; }
+.wv2-tile-icon .wv2-animated-check { width: 20px; height: 20px; }
 
 .wv2-tile.wv2-completed .wv2-tile-num { color: var(--wv2-accent); }
 .wv2-tile.wv2-locked .wv2-tile-num,
@@ -307,9 +308,17 @@ img { display: block; }
   from { box-shadow: 0 0 7px 0 var(--wv2-accent-55); }
   to   { box-shadow: 0 0 14px 2px var(--wv2-accent-95); }
 }
-/* Joe's one-shot tile-burst GIF (check + confetti explosion): centered on
-   the active tile at ~150% of its size so the explosion overflows the tile
-   bounds (.wv2-tile-box never clips), above the tile (z-index 1). */
+/* Confetti specks scattered around the active tile. */
+.wv2-tile-confetti {
+  position: absolute;
+  width: 152px; height: 176px;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+/* Joe's one-shot confetti-burst GIF: centered on the active tile at ~150%
+   of its size so the explosion overflows the tile bounds (.wv2-tile-box
+   never clips), above the tile (z-index 1). */
 .wv2-tile-burst {
   position: absolute;
   width: 200px; height: 200px;
@@ -333,10 +342,11 @@ img { display: block; }
 .wv2-powerup-every { font-size: 14px; font-weight: 900; margin-top: -2px; }
 .wv2-powerup-footnote { font-family: ${V2_OSWALD}; font-weight: 700; font-size: 8px; }
 
-/* Confirmation ("come back tomorrow") bar — Joe's Slice sequence: the bar
-   RESTS on the come-back pitch; the auto-reveal SLIDES the "{N} ENTRIES
-   ADDED / You're on a roll!" toast in for a ~2.6s hold (.wv2-toasting), then
-   slides back out to the pitch. */
+/* Confirmation ("come back tomorrow") bar — on a CELEBRATION open the
+   "YOU'RE ON A ROLL!" toast is the bar's FIRST visible state
+   (.wv2-toast-start, static — no slide-in), and after the ~2.5s hold it
+   slides ONCE to the come-back pitch (.wv2-untoasting), the bar's resting
+   state. Non-celebration opens rest on the pitch from the start. */
 .wv2-comeback {
   position: relative;
   height: 71px; background: #000;
@@ -348,17 +358,12 @@ img { display: block; }
 }
 .wv2-cb-come { gap: 14px; }
 .wv2-cb-claimed { gap: 16px; padding: 0 16px; transform: translateX(100%); opacity: 0; }
-/* Carousel: every state slides IN from the right and OUT to the left — one
-   continuous forward direction, never a rewind.
-   .wv2-toasting = the hold window (toast in, pitch out);
-   .wv2-untoasting = the return leg (toast out left, pitch back in from the
-   right) — the pitch is the bar's resting state. */
-.wv2-comeback.wv2-toasting .wv2-cb-come {
-  animation: wv2-cb-out-left 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-.wv2-comeback.wv2-toasting .wv2-cb-claimed {
-  animation: wv2-cb-in-right 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
+/* Toast-first: the toast sits at rest and the pitch waits off-screen left —
+   statically, so the very first painted frame is the toast. */
+.wv2-comeback.wv2-toast-start .wv2-cb-come { transform: translateX(-100%); opacity: 0; }
+.wv2-comeback.wv2-toast-start .wv2-cb-claimed { transform: translateX(0); opacity: 1; }
+/* The single slide to the pitch: the toast exits LEFT while the pitch
+   enters from the right — one continuous forward direction, no rewind. */
 .wv2-comeback.wv2-untoasting .wv2-cb-claimed {
   animation: wv2-cb-out-left 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
