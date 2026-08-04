@@ -1,0 +1,518 @@
+import { V2_COLORS, V2_INTER, V2_OSWALD } from './v2-theme';
+
+/**
+ * V2 experience stylesheet — pixel values ported 1:1 from the iOS SwiftUI
+ * implementation (WINRV2Components/Screens/Winner/Effects.swift; 1pt = 1px).
+ *
+ * Injected inside the experience's SHADOW ROOT so host-page CSS can't leak in
+ * and V2 CSS can't leak out. The publisher accent flows through the
+ * `--wv2-accent` custom property (plus pre-computed alpha variants) set on the
+ * overlay element.
+ *
+ * Responsive split:
+ *  - < 768px: bottom drawer exactly like iOS — flush to bottom/sides, top
+ *    corners rounded 30px, ~90% viewport height, dim backdrop, slide-up.
+ *  - >= 768px: the SAME content as a centered modal card (max-width 440px,
+ *    rounded 24px, vertically centered, subtle scale/fade in).
+ */
+export function v2Styles(): string {
+  const c = V2_COLORS;
+  return `
+:host { all: initial; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+button { background: none; border: none; cursor: pointer; font: inherit; color: inherit; -webkit-tap-highlight-color: transparent; }
+img { display: block; }
+
+/* ═══ Overlay + sheet (drawer < 768px, centered modal >= 768px) ═══ */
+
+.wv2-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147482998;
+  overflow: hidden;
+  font-family: ${V2_INTER};
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+.wv2-overlay.wv2-inline { position: absolute; }
+
+.wv2-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+.wv2-open .wv2-backdrop { opacity: 1; }
+
+.wv2-sheet {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 90vh;
+  height: 90dvh;
+  background: ${c.gunmetal};
+  border-radius: 30px 30px 0 0;
+  overflow: hidden;
+  transform: translateY(105%);
+  transition: transform 0.45s cubic-bezier(0.32, 0.72, 0.28, 1);
+}
+.wv2-open .wv2-sheet { transform: translateY(0); }
+.wv2-closing .wv2-sheet { transform: translateY(105%); }
+.wv2-closing .wv2-backdrop { opacity: 0; }
+
+@media (min-width: 768px) {
+  .wv2-sheet {
+    left: 50%; top: 50%; right: auto; bottom: auto;
+    width: min(440px, calc(100vw - 48px));
+    height: min(760px, calc(100vh - 64px));
+    height: min(760px, calc(100dvh - 64px));
+    border-radius: 24px;
+    transform: translate(-50%, -50%) scale(0.94);
+    opacity: 0;
+    transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.3, 1), opacity 0.3s ease;
+  }
+  .wv2-open .wv2-sheet { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  .wv2-closing .wv2-sheet { transform: translate(-50%, -50%) scale(0.94); opacity: 0; }
+  /* The grab handle is a drawer affordance — hide it on the centered modal. */
+  .wv2-grabber { visibility: hidden; height: 0; margin-top: 8px; }
+}
+
+/* ═══ Shared screen scaffolding ═══ */
+
+.wv2-screen { position: relative; height: 100%; display: flex; flex-direction: column; background: ${c.gunmetal}; }
+.wv2-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; -ms-overflow-style: none; overscroll-behavior: contain; }
+.wv2-scroll::-webkit-scrollbar { display: none; }
+
+/* The radial primary-color glow that bleeds from the top of the drawer. */
+.wv2-top-glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(440px at 50% 0,
+    var(--wv2-accent) 0,
+    var(--wv2-accent-55) 35%,
+    rgba(29, 35, 48, 0.9) 80%,
+    ${c.gunmetal} 100%);
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+/* Confetti canvases fill their positioned parent. NOTE: canvas is a replaced
+   element, so "inset: 0" alone does NOT stretch it — explicit width/height
+   are required (otherwise the draw loop would feed its own attribute size
+   back into itself). */
+.wv2-confetti {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  display: block;
+  pointer-events: none;
+}
+
+/* Grab handle (Figma "TAB"). */
+.wv2-grabber { width: 51px; height: 5px; border-radius: 999px; background: rgba(255,255,255,0.4); margin: 15px auto 0; flex: none; }
+
+/* TOP UI: "?" circle • publisher logo • "X" circle. */
+.wv2-header { display: flex; align-items: center; justify-content: space-between; padding: 0 20px; gap: 8px; flex: none; }
+.wv2-circle-btn {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: ${c.deepCharcoal};
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  flex: none;
+}
+.wv2-circle-btn .wv2-ic { display: block; }
+.wv2-circle-btn-q { font-family: ${V2_INTER}; font-size: 16px; font-weight: 400; }
+.wv2-header-logo { height: 60px; max-width: 210px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.wv2-header-logo img { max-height: 60px; max-width: 210px; object-fit: contain; }
+.wv2-header-logo-fallback { font-size: 28px; font-weight: 900; color: #fff; letter-spacing: -0.5px; }
+
+/* CTA pill. */
+.wv2-pill {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; height: 60px; border-radius: 999px;
+  background: var(--wv2-accent);
+  color: #fff;
+  font-size: 24px; font-weight: 800; letter-spacing: -0.72px;
+  white-space: nowrap; overflow: hidden;
+  transition: filter 0.15s ease, opacity 0.15s ease;
+}
+.wv2-pill:not(:disabled):hover { filter: brightness(1.07); }
+.wv2-pill:not(:disabled):active { filter: brightness(0.93); }
+.wv2-pill:disabled { cursor: default; }
+.wv2-pill.wv2-pill-dim { opacity: 0.5; }
+.wv2-spinner {
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 3px solid rgba(255,255,255,0.35); border-top-color: #fff;
+  animation: wv2-spin 0.8s linear infinite;
+}
+@keyframes wv2-spin { to { transform: rotate(360deg); } }
+
+/* Legal links. */
+.wv2-legal { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.wv2-legal-row { display: flex; align-items: center; gap: 8px; }
+.wv2-legal-row a { font-size: 12px; color: ${c.textSecondary}; text-decoration: none; }
+.wv2-legal-row a:hover { text-decoration: underline; }
+.wv2-legal-dot { width: 4px; height: 4px; border-radius: 50%; background: ${c.textSecondary}; }
+.wv2-powered { font-size: 12px; color: ${c.textTertiary}; }
+
+/* ═══ New-user capture ("VISIT. EARN. WIN.") ═══ */
+
+.wv2-capture-stack { display: flex; flex-direction: column; gap: 18px; padding-top: 18px; }
+.wv2-capture-titles { padding: 0 22px; text-align: center; color: #fff; display: flex; flex-direction: column; gap: 4px; }
+.wv2-capture-title { font-size: 40px; font-weight: 900; letter-spacing: -1.2px; white-space: nowrap; }
+.wv2-capture-sub { font-size: 15px; font-weight: 700; white-space: pre; }
+@media (max-width: 379px) { .wv2-capture-title { font-size: 34px; } }
+
+/* PRIZE-derived white strip. */
+.wv2-prize-strip { background: #fff; color: ${c.gunmetal}; text-align: center; padding: 8px 12px; }
+.wv2-prize-strip-cash { font-size: 24px; font-weight: 900; letter-spacing: -0.7px; white-space: nowrap; }
+.wv2-prize-strip-title { font-size: 23px; font-weight: 900; letter-spacing: -0.7px; white-space: nowrap; }
+.wv2-prize-strip-value { font-size: 16px; font-weight: 400; }
+@media (max-width: 379px) {
+  .wv2-prize-strip-cash, .wv2-prize-strip-title { font-size: 19px; }
+}
+
+.wv2-capture-form { display: flex; flex-direction: column; gap: 14px; padding: 0 22px; }
+.wv2-email-field {
+  display: flex; align-items: center; gap: 10px;
+  height: 54px; padding: 0 20px;
+  background: #fff; border-radius: 10px;
+  border: 2px solid rgba(255,255,255,0.75);
+}
+.wv2-email-field .wv2-ic { width: 22px; height: 18px; color: rgba(29,35,48,0.6); flex: none; }
+.wv2-email-input {
+  flex: 1; min-width: 0; border: none; outline: none; background: transparent;
+  font-family: ${V2_INTER}; font-size: 16px; color: ${c.gunmetal};
+}
+.wv2-email-input::placeholder { color: rgba(29,35,48,0.45); }
+
+.wv2-age-row { display: flex; align-items: center; gap: 10px; color: #fff; text-align: left; }
+.wv2-age-row .wv2-ic { width: 20px; height: 20px; flex: none; }
+.wv2-age-row span { font-size: 14px; }
+
+.wv2-capture-legal { display: flex; flex-direction: column; gap: 3px; padding-bottom: 24px; }
+.wv2-capture-disclaimer {
+  font-size: 12px; color: ${c.textTertiary}; text-align: center;
+  padding: 0 30px; margin-bottom: 3px;
+}
+
+/* ═══ Return-user dashboard ═══ */
+
+.wv2-dash-stack { display: flex; flex-direction: column; gap: 15px; padding-top: 15px; }
+.wv2-dash-body { display: flex; flex-direction: column; gap: 15px; }
+
+/* Prize card: white stats strip over the prize image. */
+.wv2-prize-card { margin: 0 22px; border-radius: 10px; overflow: hidden; }
+.wv2-stats-strip { display: flex; height: 46px; background: #fff; }
+.wv2-stat { flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px; }
+.wv2-stat .wv2-ic-flame { width: 18px; height: 22px; color: var(--wv2-accent); flex: none; }
+.wv2-stat .wv2-ic-ticket { width: 22px; height: 15px; color: var(--wv2-accent); transform: rotate(-25deg); flex: none; }
+.wv2-stat-col { display: flex; flex-direction: column; align-items: flex-start; }
+.wv2-stat-num { font-size: 15px; font-weight: 900; letter-spacing: -0.3px; color: var(--wv2-accent); line-height: 1.2; }
+.wv2-stat-label { font-size: 12px; font-weight: 500; color: ${c.gunmetal}; line-height: 1.2; }
+
+.wv2-promo { position: relative; height: 150px; overflow: hidden; background: ${c.gunmetal}; }
+.wv2-promo-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.wv2-promo-img.wv2-promo-cash { transform: translateY(14px); }
+.wv2-promo-fade {
+  position: absolute; inset: 0;
+  background: linear-gradient(to bottom, #fff 0, rgba(255,255,255,0.55) 30%, rgba(255,255,255,0) 62%);
+}
+.wv2-promo-cash-lockup {
+  position: absolute; top: 4px; left: 14px; right: 14px;
+  display: flex; flex-direction: column; align-items: flex-end;
+  color: ${c.gunmetal};
+}
+.wv2-promo-cash-win { font-size: 54px; font-weight: 900; letter-spacing: -2.7px; line-height: 1; white-space: nowrap; }
+.wv2-promo-cash-sub { font-size: 19px; font-weight: 900; letter-spacing: -0.57px; margin-top: -2px; }
+.wv2-promo-prize-lockup {
+  position: absolute; top: 6px; left: 12px; right: 12px;
+  text-align: center; color: ${c.gunmetal};
+}
+.wv2-promo-prize-title { font-size: 30px; font-weight: 900; letter-spacing: -1.1px; line-height: 1.05; }
+.wv2-promo-prize-value { font-size: 15px; font-weight: 700; }
+@media (max-width: 379px) { .wv2-promo-cash-win { font-size: 44px; } }
+
+/* Streak rail (horizontal scroll; internal scroll, hidden scrollbars). */
+.wv2-rail {
+  display: flex; align-items: flex-end; gap: 12px;
+  overflow-x: auto; overflow-y: hidden;
+  padding: 0 24px 12px;
+  scrollbar-width: none; -ms-overflow-style: none;
+  cursor: grab;
+}
+.wv2-rail::-webkit-scrollbar { display: none; }
+.wv2-rail.wv2-dragging { cursor: grabbing; scroll-behavior: auto; }
+.wv2-rail-item { display: flex; flex-direction: column; align-items: center; flex: none; }
+
+/* The "DAILY PROGRESS ▾" pointer rides ABOVE the current tile. */
+.wv2-pointer { display: flex; flex-direction: column; align-items: center; padding-bottom: 8px; visibility: hidden; }
+.wv2-rail-item.wv2-current .wv2-pointer { visibility: visible; }
+.wv2-pointer-label { font-family: ${V2_OSWALD}; font-weight: 500; font-size: 12px; color: #fff; white-space: nowrap; }
+.wv2-pointer .wv2-ic { width: 10px; height: 6px; color: #fff; margin-top: 2px; }
+
+/* Streak tile. */
+.wv2-tile-box { position: relative; }
+.wv2-tile {
+  position: relative;
+  z-index: 1;
+  width: 106px; height: 134px;
+  border-radius: 10px;
+  border: 2px solid var(--wv2-accent);
+  background: ${c.gunmetal};
+  display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+  padding: 8px 3px;
+}
+.wv2-tile-day {
+  font-size: 12px; font-weight: 700; color: #fff;
+  background: #000; border-radius: 999px; padding: 5px 10px;
+  white-space: nowrap;
+}
+.wv2-tile-mid { display: flex; flex-direction: column; align-items: center; }
+.wv2-tile-num { font-size: 30px; font-weight: 900; letter-spacing: -1.5px; color: #fff; line-height: 1.1; white-space: nowrap; }
+.wv2-tile-entries { font-size: 15px; font-weight: 700; color: #fff; line-height: 1.1; }
+.wv2-tile-icon { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; }
+.wv2-tile-icon .wv2-ic-lock { width: 16px; height: 20px; color: ${c.foregroundSecondary}; }
+.wv2-tile-icon img { width: 20px; height: 20px; }
+.wv2-tile-icon .wv2-animated-check { width: 20px; height: 20px; }
+
+.wv2-tile.wv2-completed .wv2-tile-num { color: var(--wv2-accent); }
+.wv2-tile.wv2-locked .wv2-tile-num,
+.wv2-tile.wv2-locked .wv2-tile-entries { color: ${c.foregroundSecondary}; }
+.wv2-tile.wv2-active {
+  background: radial-gradient(150px at 50% 0,
+    var(--wv2-accent) 0,
+    var(--wv2-accent-45) 45%,
+    ${c.gunmetal} 100%);
+  animation: wv2-pulse-glow 1.1s ease-in-out infinite alternate;
+}
+/* Joe's active-tile motion: the accent glow breathes. */
+@keyframes wv2-pulse-glow {
+  from { box-shadow: 0 0 7px 0 var(--wv2-accent-55); }
+  to   { box-shadow: 0 0 14px 2px var(--wv2-accent-95); }
+}
+/* Confetti specks scattered around the active tile. */
+.wv2-tile-confetti {
+  position: absolute;
+  width: 152px; height: 176px;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+/* The "STREAK BONUS!" accelerator tile. */
+.wv2-powerup {
+  width: 106px; height: 134px; flex: none;
+  border-radius: 10px; background: var(--wv2-accent); color: #fff;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 10px 3px; text-align: center;
+}
+.wv2-powerup .wv2-ic-flame { width: 18px; height: 24px; color: #fff; flex: none; }
+.wv2-powerup-body { display: flex; flex-direction: column; gap: 7px; margin-top: auto; align-items: center; }
+.wv2-powerup-label { font-size: 9px; font-weight: 700; line-height: 1.2; white-space: pre-line; }
+.wv2-powerup-bonus { font-size: 26px; font-weight: 900; letter-spacing: -0.8px; line-height: 1; }
+.wv2-powerup-every { font-size: 14px; font-weight: 900; margin-top: -2px; }
+.wv2-powerup-footnote { font-family: ${V2_OSWALD}; font-weight: 700; font-size: 8px; }
+
+/* Confirmation ("come back tomorrow") bar. */
+.wv2-comeback {
+  position: relative;
+  height: 71px; background: #000;
+  display: flex; align-items: center; justify-content: center; gap: 14px;
+  overflow: hidden;
+}
+.wv2-comeback .wv2-ic-cal { width: 26px; height: 28px; color: var(--wv2-accent); flex: none; }
+.wv2-comeback-col { display: flex; flex-direction: column; gap: 1px; text-align: center; color: #fff; }
+.wv2-comeback-line { font-size: 12px; white-space: pre-line; }
+.wv2-comeback-entries { font-size: 16px; font-weight: 900; color: var(--wv2-accent); }
+.wv2-comeback .wv2-confetti { position: absolute; inset: 0; }
+
+.wv2-dash-footer { display: flex; flex-direction: column; gap: 6px; padding-bottom: 24px; }
+.wv2-dash-footer .wv2-pill-wrap { padding: 0 30px; }
+
+/* ═══ Winner banner + dialog ═══ */
+
+.wv2-winner-banner {
+  display: flex; align-items: center;
+  width: 100%; height: 70px;
+  background: ${c.deepCharcoal};
+  padding: 8px 20px;
+  color: #fff;
+}
+.wv2-winner-banner-trophy { width: 41px; height: 54px; object-fit: cover; transform: scaleX(-1); flex: none; }
+.wv2-winner-banner-col { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 0 8px; }
+.wv2-winner-banner-title { font-size: 17px; font-weight: 800; letter-spacing: -0.85px; }
+.wv2-winner-banner-sub { font-size: 12px; letter-spacing: -0.6px; }
+.wv2-winner-banner-plus {
+  width: 36px; height: 36px; border-radius: 50%; background: ${c.gunmetal};
+  display: flex; align-items: center; justify-content: center; flex: none;
+}
+.wv2-winner-banner-plus .wv2-ic { width: 18px; height: 18px; color: #fff; }
+
+.wv2-modal-layer {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 10;
+}
+.wv2-modal-dim { position: absolute; inset: 0; background: rgba(0,0,0,0.55); }
+
+.wv2-winner-card {
+  position: relative;
+  width: calc(100% - 32px); max-width: 380px;
+  border-radius: 20px; overflow: hidden;
+  border: 2px solid var(--wv2-accent);
+  animation: wv2-modal-in 0.4s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+@keyframes wv2-modal-in {
+  from { transform: scale(0.9); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+.wv2-winner-bg { position: absolute; inset: 0; background: ${c.deepCharcoal}; }
+.wv2-winner-bg img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.9; }
+.wv2-winner-bg-grad {
+  position: absolute; inset: 0;
+  background: linear-gradient(to bottom right, rgba(0,0,0,0) 0%, rgba(0,0,0,0.75) 100%);
+}
+.wv2-winner-bg .wv2-confetti { position: absolute; inset: 0; }
+.wv2-winner-content { position: relative; display: flex; flex-direction: column; gap: 7px; padding: 24px 0 22px; }
+.wv2-winner-top { display: flex; align-items: center; }
+.wv2-winner-trophy-wrap { width: 129px; display: flex; justify-content: center; flex: none; }
+.wv2-winner-trophy { width: 114px; height: 153px; object-fit: contain; transform: rotate(-5.96deg); }
+.wv2-winner-heading { flex: 1; display: flex; flex-direction: column; align-items: center; }
+.wv2-winner-wehavea { font-size: 23px; font-weight: 700; letter-spacing: -1.15px; color: #fff; }
+.wv2-winner-winner { font-size: 44px; font-weight: 900; letter-spacing: -2.2px; color: var(--wv2-accent); line-height: 1; white-space: nowrap; }
+.wv2-winner-congrats { font-size: 15px; letter-spacing: -0.75px; color: #fff; text-align: center; width: 160px; margin-top: 4px; }
+.wv2-winner-bottom { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.wv2-winner-latest { font-size: 19px; font-weight: 700; color: #fff; }
+.wv2-winner-pill {
+  display: flex; align-items: center; gap: 11px;
+  height: 72px; padding: 0 20px 0 13px;
+  border-radius: 999px;
+  background: ${c.gunmetal};
+  border: 2px solid var(--wv2-accent);
+  max-width: calc(100% - 40px);
+}
+.wv2-winner-avatar { width: 51px; height: 51px; border-radius: 50%; object-fit: cover; flex: none; }
+.wv2-winner-initials {
+  width: 51px; height: 51px; border-radius: 50%; flex: none;
+  background: var(--wv2-accent-35);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px; font-weight: 700; color: #fff;
+}
+.wv2-winner-id { display: flex; flex-direction: column; gap: 2px; color: #fff; overflow: hidden; }
+.wv2-winner-name { font-size: 20px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wv2-winner-loc { font-size: 20px; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wv2-winner-meta { display: flex; flex-direction: column; gap: 3px; text-align: center; color: #fff; }
+.wv2-winner-awarded { font-size: 16px; }
+.wv2-winner-keepgoing { font-size: 16px; font-weight: 700; }
+.wv2-modal-close {
+  position: absolute; top: 12px; right: 12px;
+  width: 36px; height: 36px; border-radius: 50%;
+  background: ${c.gunmetal};
+  display: flex; align-items: center; justify-content: center;
+  z-index: 3;
+}
+.wv2-modal-close .wv2-ic { width: 11px; height: 11px; color: #fff; }
+
+/* ═══ Celebration modal ═══ */
+
+.wv2-celebration-card {
+  position: relative;
+  width: 340px; max-width: calc(100% - 32px);
+  max-height: calc(100% - 32px);
+  overflow-y: auto; scrollbar-width: none;
+  background: ${c.panel};
+  border: 1px solid ${c.panelBorder};
+  border-radius: 20px;
+  display: flex; flex-direction: column;
+  animation: wv2-modal-in 0.4s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+.wv2-celebration-card::-webkit-scrollbar { display: none; }
+.wv2-celebration-confetti {
+  position: absolute; top: 0; left: 0; right: 0; height: 330px;
+  pointer-events: none;
+  border-radius: 20px 20px 0 0;
+  overflow: hidden;
+}
+.wv2-celebration-confetti .wv2-confetti { position: absolute; inset: 0; }
+.wv2-celebration-check {
+  width: 88px; height: 110px; margin: 17px auto 0;
+  display: flex; align-items: flex-start; justify-content: center;
+  animation: wv2-check-pop 0.45s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+.wv2-celebration-check .wv2-animated-check { width: 88px; height: 88px; }
+@keyframes wv2-check-pop { from { transform: scale(0.4); } to { transform: scale(1); } }
+
+.wv2-celebration-youre-in { font-size: 14px; font-weight: 700; color: #fff; text-align: center; }
+.wv2-celebration-added {
+  font-size: 23px; font-weight: 900; color: var(--wv2-accent);
+  text-align: center; padding: 0 16px; white-space: nowrap;
+}
+.wv2-celebration-on-a { font-size: 20px; font-weight: 700; color: #fff; text-align: center; }
+.wv2-celebration-streak { font-size: 32px; font-weight: 900; letter-spacing: -0.96px; color: var(--wv2-accent); text-align: center; }
+.wv2-celebration-divider { height: 1px; background: rgba(255,255,255,0.15); margin: 14px 28px; }
+.wv2-celebration-comeback-line { font-size: 14px; font-weight: 700; color: #fff; text-align: center; white-space: pre-line; }
+.wv2-celebration-earned { font-size: 20px; font-weight: 700; color: #fff; text-align: center; }
+.wv2-bignum { display: flex; flex-direction: column; align-items: center; }
+.wv2-bignum-value {
+  font-size: 96px; font-weight: 900; letter-spacing: -4.8px;
+  color: var(--wv2-accent); line-height: 1; white-space: nowrap;
+  padding: 0 40px; max-width: 100%; overflow: hidden;
+}
+.wv2-bignum-entries { font-size: 32px; font-weight: 900; letter-spacing: -0.96px; color: #fff; margin-top: -14px; }
+.wv2-celebration-next {
+  display: flex; align-items: center; justify-content: center; gap: 14px;
+  height: 71px; border-radius: 10px; background: #000;
+  margin: 10px 20px 0;
+}
+.wv2-celebration-next .wv2-ic-cal { width: 24px; height: 26px; color: var(--wv2-accent); flex: none; }
+.wv2-celebration-next-col { display: flex; flex-direction: column; gap: 1px; text-align: center; }
+.wv2-celebration-next-line { font-size: 15px; color: #fff; }
+.wv2-celebration-next-entries { font-size: 20px; font-weight: 900; color: var(--wv2-accent); }
+.wv2-celebration-cta { padding: 20px 28px 24px; }
+
+/* Draw-on checkmark strokes. */
+.wv2-check-circle {
+  stroke-dasharray: 1; stroke-dashoffset: 1;
+  animation: wv2-draw 0.5s ease-in-out forwards;
+}
+.wv2-check-mark {
+  stroke-dasharray: 1; stroke-dashoffset: 1;
+  animation: wv2-draw 0.35s ease-out 0.4s forwards;
+}
+@keyframes wv2-draw { to { stroke-dashoffset: 0; } }
+
+/* ═══ How it works ═══ */
+
+.wv2-hiw { background: ${c.panel}; }
+.wv2-hiw-stack { display: flex; flex-direction: column; gap: 12px; padding-top: 18px; }
+.wv2-hiw-strip {
+  height: 39px; background: rgba(255,255,255,0.5);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 26px; font-weight: 900; letter-spacing: -0.78px; color: ${c.gunmetal};
+}
+.wv2-hiw-items { display: flex; flex-direction: column; gap: 14px; padding: 0 26px; }
+.wv2-hiw-item { display: flex; gap: 9px; color: #fff; }
+.wv2-hiw-item-num { font-size: 18px; font-weight: 900; flex: none; }
+.wv2-hiw-item-col { display: flex; flex-direction: column; gap: 2px; }
+.wv2-hiw-item-title { font-size: 18px; font-weight: 900; }
+.wv2-hiw-item-body { font-size: 16px; }
+.wv2-hiw-tagline {
+  font-size: 20px; font-weight: 700; letter-spacing: -0.6px; color: #fff;
+  text-align: center; padding: 22px 40px 0;
+}
+.wv2-hiw-cta { padding: 20px 28px 30px; }
+
+/* ═══ Loading / empty states ═══ */
+
+.wv2-center-state {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 12px;
+  padding: 24px; text-align: center;
+}
+.wv2-loading-text { font-size: 14px; color: ${c.textTertiary}; }
+.wv2-empty-title { font-size: 20px; font-weight: 700; color: #fff; }
+.wv2-empty-sub { font-size: 14px; color: ${c.textTertiary}; }
+.wv2-empty-cta { width: 220px; margin-top: 12px; }
+`;
+}
