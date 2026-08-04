@@ -1,6 +1,12 @@
 import { Giveaway, GiveawayWinner, PrizeClaimBlock } from '../../types';
 import { V2_IMAGES } from './assets.generated';
-import { createAnimatedCheck, createConfetti } from './effects';
+import {
+  COUNT_BURST_DURATION_MS,
+  TILE_BURST_DURATION_MS,
+  createAnimatedCheck,
+  createConfetti,
+  mountGifBurst,
+} from './effects';
 import {
   arrowDownIcon,
   calendarIcon,
@@ -382,32 +388,31 @@ export function renderDashboard(
     if (tile) {
       tile.classList.remove('wv2-ready');
       tile.classList.add('wv2-active');
+      // Joe's ACTUAL Figma explosion GIF mounts on this same render pass
+      // (the icon slot stays an empty spacer during the burst; the small
+      // static check lands when the GIF finishes) — see mountTileBurst.
       const iconWrap = tile.querySelector('.wv2-tile-icon');
-      if (iconWrap) {
-        iconWrap.innerHTML = '';
-        iconWrap.appendChild(createAnimatedCheck(12));
-      }
+      if (iconWrap) iconWrap.innerHTML = '';
       const box = tile.parentElement;
-      if (box) {
-        const confetti = createConfetti({ style: 'celebration', count: 12, speed: 0.7 });
-        confetti.classList.add('wv2-tile-confetti');
-        box.insertBefore(confetti, tile);
-      }
+      if (box && iconWrap) mountTileBurst(box, iconWrap as HTMLElement);
     }
 
     const streakNum = screen.querySelector('.wv2-stat-streak');
     if (streakNum) streakNum.textContent = `${c.streakDay} ${noun} STREAK`;
 
-    // Total Entries counts up (~0.7s ease-out) and pops a small one-shot
-    // star burst as it lands on the final number.
+    // Total Entries counts up (~0.7s ease-out) and pops Joe's one-shot
+    // Figma confetti-burst GIF as it lands on the final number; the guarded
+    // timeout inside mountGifBurst removes it after the GIF's full run.
     const totalNum = screen.querySelector('.wv2-stat-total');
     if (totalNum) {
       animateCount(totalNum as HTMLElement, preClaimTotal, c.totalEntries, 700, () => {
         if (!totalNum.isConnected) return;
-        const starBurst = createConfetti({ style: 'celebration', count: 8, speed: 1.4 });
-        starBurst.classList.add('wv2-count-burst');
-        totalNum.appendChild(starBurst);
-        window.setTimeout(() => starBurst.remove(), 900);
+        mountGifBurst({
+          parent: totalNum as HTMLElement,
+          src: V2_IMAGES.confettiBurst,
+          className: 'wv2-count-burst',
+          durationMs: COUNT_BURST_DURATION_MS,
+        });
       });
     }
 
@@ -630,6 +635,34 @@ function renderStreakRail(c: V2ExperienceController, preReveal = false): HTMLEle
  */
 type TileState = 'completed' | 'active' | 'ready' | 'locked';
 
+/**
+ * Joe's ACTUAL Figma tile animation (iOS d464194/02c9285 parity): one GIF
+ * carrying the check + confetti explosion mounts exactly when the tile flips
+ * to active (the reveal beat), sized ~150% of the tile (200x200 over the
+ * 106x134 card) so the explosion overflows the tile bounds, plays ONCE, and
+ * is then REMOVED — the tile's icon slot rests on the same small static
+ * check as completed tiles (freezing the GIF would leave a giant check
+ * covering the tile). A fresh <img> per mount restarts the GIF at frame 0;
+ * the removal timeout is teardown-guarded inside mountGifBurst, and the
+ * check swap re-checks the live DOM here.
+ */
+function mountTileBurst(box: HTMLElement, iconWrap: HTMLElement): void {
+  mountGifBurst({
+    parent: box,
+    src: V2_IMAGES.tileBurst,
+    className: 'wv2-tile-burst',
+    durationMs: TILE_BURST_DURATION_MS,
+    onFinished: () => {
+      if (!iconWrap.isConnected) return;
+      iconWrap.innerHTML = '';
+      const img = el('img');
+      img.src = V2_IMAGES.checkCompleted;
+      img.alt = '';
+      iconWrap.appendChild(img);
+    },
+  });
+}
+
 function renderStreakTile(
   day: number,
   entries: number,
@@ -653,7 +686,9 @@ function renderStreakTile(
     img.alt = '';
     iconWrap.appendChild(img);
   } else if (state === 'active') {
-    iconWrap.appendChild(createAnimatedCheck(12)); // 2.5pt at 20px ≈ 12/100 viewBox units
+    // During the burst the GIF paints the check — the slot stays an empty
+    // 20x20 spacer so the card layout matches other states; mountTileBurst
+    // swaps in the small static check once the GIF finishes.
   } else if (state === 'ready') {
     // Joe's frames: the current tile pre-check shows ONLY the glowing
     // number — no icon. The .wv2-tile-icon slot keeps its 24x24 size so the
@@ -663,14 +698,12 @@ function renderStreakTile(
   }
   tile.appendChild(iconWrap);
 
-  if (state === 'active') {
-    // Joe's active-tile motion: breathing glow (CSS) + confetti specks
-    // scattered around the tile.
-    const confetti = createConfetti({ style: 'celebration', count: 12, speed: 0.7 });
-    confetti.classList.add('wv2-tile-confetti');
-    box.appendChild(confetti);
-  }
   box.appendChild(tile);
+  if (state === 'active') {
+    // Joe's active-tile motion: breathing glow (CSS) + the one-shot Figma
+    // explosion GIF overflowing the tile.
+    mountTileBurst(box, iconWrap);
+  }
   return box;
 }
 

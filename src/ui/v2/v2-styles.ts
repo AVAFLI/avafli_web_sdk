@@ -217,11 +217,12 @@ img { display: block; }
 .wv2-stat .wv2-ic-ticket { width: 22px; height: 15px; color: var(--wv2-accent); transform: rotate(-25deg); flex: none; }
 .wv2-stat-col { display: flex; flex-direction: column; align-items: flex-start; }
 .wv2-stat-num { font-size: 15px; font-weight: 900; letter-spacing: -0.3px; color: var(--wv2-accent); line-height: 1.2; position: relative; }
-/* One-shot star burst popped over the total as the count-up lands. */
+/* Joe's one-shot Figma confetti-burst GIF popped over the total as the
+   count-up lands (54x44, per the iOS frame). */
 .wv2-count-burst {
   position: absolute;
   left: 50%; top: 50%;
-  width: 54px; height: 40px;
+  width: 54px; height: 44px;
   transform: translate(-50%, -50%);
   pointer-events: none;
 }
@@ -281,7 +282,6 @@ img { display: block; }
 .wv2-tile-icon { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; }
 .wv2-tile-icon .wv2-ic-lock { width: 16px; height: 20px; color: ${c.foregroundSecondary}; }
 .wv2-tile-icon img { width: 20px; height: 20px; }
-.wv2-tile-icon .wv2-animated-check { width: 20px; height: 20px; }
 
 .wv2-tile.wv2-completed .wv2-tile-num { color: var(--wv2-accent); }
 .wv2-tile.wv2-locked .wv2-tile-num,
@@ -307,12 +307,15 @@ img { display: block; }
   from { box-shadow: 0 0 7px 0 var(--wv2-accent-55); }
   to   { box-shadow: 0 0 14px 2px var(--wv2-accent-95); }
 }
-/* Confetti specks scattered around the active tile. */
-.wv2-tile-confetti {
+/* Joe's one-shot tile-burst GIF (check + confetti explosion): centered on
+   the active tile at ~150% of its size so the explosion overflows the tile
+   bounds (.wv2-tile-box never clips), above the tile (z-index 1). */
+.wv2-tile-burst {
   position: absolute;
-  width: 152px; height: 176px;
+  width: 200px; height: 200px;
   left: 50%; top: 50%;
   transform: translate(-50%, -50%);
+  z-index: 2;
   pointer-events: none;
 }
 

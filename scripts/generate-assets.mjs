@@ -44,6 +44,14 @@ const images = {
   trophy: ['assets/img/trophy.png', 'image/png'],
   /** Static white circle-check for COMPLETED streak tiles. */
   checkCompleted: ['assets/img/check-tile-completed.png', 'image/png'],
+  /**
+   * Joe's Figma tile explosion (check + confetti in one GIF) — plays ONCE
+   * over the active streak tile at the reveal beat. 600px downsample of the
+   * Figma export (matches iOS's decode size); 47 frames / 2970ms, no loop.
+   */
+  tileBurst: ['assets/img/tile-burst.gif', 'image/gif'],
+  /** Joe's Figma confetti burst — one-shot over the Total Entries count-up landing (34 frames / 2000ms). */
+  confettiBurst: ['assets/img/confetti-burst.gif', 'image/gif'],
 };
 
 let out = `/**

@@ -2,6 +2,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { V2ExperienceController, V2ControllerDeps } from '../src/ui/v2/controller';
 import { COMEBACK_TOAST_HOLD_MS, renderDashboard } from '../src/ui/v2/screens';
+import { TILE_BURST_DURATION_MS } from '../src/ui/v2/effects';
+import { V2_IMAGES } from '../src/ui/v2/assets.generated';
 import {
   ClaimDailyEntriesResponse,
   GetActiveGiveawayResponse,
@@ -252,6 +254,60 @@ describe('V2 Day 2+ reveal flow', () => {
     vi.advanceTimersByTime(COMEBACK_TOAST_HOLD_MS);
     expect(comeback?.classList.contains('wv2-toasting')).toBe(false);
     dash.remove();
+  });
+
+  it("the reveal mounts Joe's tile-burst GIF once; it removes itself and rests on the static check", async () => {
+    const { controller } = makeController({
+      giveawayResponse: { streakDay: 4, totalEntries: 340 },
+      claim: { entries: 130, streakDay: 5, totalEntries: 470 },
+    });
+    await controller.load();
+
+    const dash = renderDashboard(controller, null, () => {});
+    document.body.appendChild(dash);
+
+    // Pre-reveal: no burst overlay anywhere, ready tile's icon slot empty.
+    expect(dash.querySelector('.wv2-tile-burst')).toBeNull();
+
+    // The reveal beat flips the tile AND mounts the GIF in the same pass.
+    vi.advanceTimersByTime(DELAY);
+    const tile = dash.querySelector('.wv2-tile.wv2-active');
+    expect(tile).not.toBeNull();
+    const burst = dash.querySelector('.wv2-tile-burst') as HTMLImageElement;
+    expect(burst).not.toBeNull();
+    // Fresh <img> with the embedded GIF — mounting starts playback at frame 0.
+    expect(burst.src).toBe(V2_IMAGES.tileBurst);
+    // During the burst the icon slot is an empty spacer (the GIF paints the
+    // check) — layout matches the other states.
+    expect(tile?.querySelector('.wv2-tile-icon')?.childElementCount).toBe(0);
+
+    // After the GIF's full one-shot run the overlay is removed and the tile
+    // rests on the SAME small static check as completed tiles.
+    vi.advanceTimersByTime(TILE_BURST_DURATION_MS);
+    expect(dash.querySelector('.wv2-tile-burst')).toBeNull();
+    const restingCheck = tile?.querySelector('.wv2-tile-icon img') as HTMLImageElement;
+    expect(restingCheck?.src).toBe(V2_IMAGES.checkCompleted);
+    dash.remove();
+  });
+
+  it('tile-burst teardown guard: dismissing mid-burst never touches removed DOM', async () => {
+    const { controller } = makeController({
+      giveawayResponse: { streakDay: 4, totalEntries: 340 },
+      claim: { entries: 130, streakDay: 5, totalEntries: 470 },
+    });
+    await controller.load();
+
+    const dash = renderDashboard(controller, null, () => {});
+    document.body.appendChild(dash);
+    vi.advanceTimersByTime(DELAY);
+    const iconWrap = dash.querySelector('.wv2-tile.wv2-active .wv2-tile-icon');
+    expect(dash.querySelector('.wv2-tile-burst')).not.toBeNull();
+
+    // Dashboard unmounts before the GIF finishes → the removal timer no-ops.
+    dash.remove();
+    vi.advanceTimersByTime(TILE_BURST_DURATION_MS);
+    // The detached tile was never mutated: no resting check swapped in.
+    expect(iconWrap?.childElementCount).toBe(0);
   });
 
   it('a dashboard that mounts already claimed rests on the come-back pitch — no toast replay', async () => {

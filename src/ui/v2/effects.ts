@@ -122,6 +122,52 @@ function roundedRect(
   ctx.closePath();
 }
 
+// ─── One-shot Figma GIF bursts (Joe's actual reveal animations) ───
+
+/**
+ * tile-burst.gif: first frame holds ~1s, then the explosion+check burst —
+ * 47 frames, 2970ms total, plays once (no loop).
+ */
+export const TILE_BURST_DURATION_MS = 2970;
+
+/** confetti-burst.gif: 34 frames, 2000ms total, plays once. */
+export const COUNT_BURST_DURATION_MS = 2000;
+
+/**
+ * Mounts a one-shot GIF overlay (Joe's ACTUAL Figma animation files, embedded
+ * as data URIs) and removes it after the GIF's full duration.
+ *
+ * A FRESH <img> element is created on every call — the browser starts a GIF
+ * at frame 0 when the element is (re)created and mounted, so a new element
+ * per burst restarts playback reliably (no cache-busting needed for data
+ * URIs). GIFs play once (the files carry no loop extension) and would hold
+ * their last frame, so the guarded timeout removes the overlay instead.
+ *
+ * Teardown guard: if the parent re-rendered or unmounted before the timer
+ * fires, the overlay left the document with it — the callback no-ops and
+ * never touches removed DOM (same convention as the toast hold timer).
+ */
+export function mountGifBurst(options: {
+  parent: HTMLElement;
+  src: string;
+  className: string;
+  durationMs: number;
+  /** Runs after removal, only if the overlay was still mounted (live DOM). */
+  onFinished?: () => void;
+}): HTMLImageElement {
+  const img = document.createElement('img');
+  img.className = options.className;
+  img.alt = '';
+  img.src = options.src;
+  options.parent.appendChild(img);
+  window.setTimeout(() => {
+    if (!img.isConnected) return; // torn down first — never touch removed DOM
+    img.remove();
+    options.onFinished?.();
+  }, options.durationMs);
+  return img;
+}
+
 // ─── Animated checkmark (draw-on) ───
 
 /**
