@@ -1,6 +1,7 @@
 # WINR Web SDK
 **Drop-in sweepstakes, prizing, and gamification for your web application**
 
+[![npm](https://img.shields.io/npm/v/winr-web-sdk.svg)](https://www.npmjs.com/package/winr-web-sdk)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0%2B-blue.svg?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/AVAFLI/winr_web_sdk/blob/main/LICENSE)
 
@@ -13,7 +14,7 @@ WINR lets you add daily-entry sweepstakes and prize experiences to your app in u
 **Key capabilities:**
 - **Daily entry sweepstakes** — Users earn entries every day they engage
 - **Auto-open experience** — Opens automatically on the first visit of each day; entries are granted automatically the moment it opens
-- **Day 2+ reveal** — Returning users see yesterday's numbers behind a "CLAIM {n} ENTRIES" button; the click is the celebration (tile check-off, confetti, totals count up) — no modal. Day 1 keeps the "You're in!" celebration modal
+- **Celebration on open** — Returning users open straight into the celebration: today's tile checks off with a confetti burst, the total counts up and pops, and a "YOU'RE ON A ROLL!" toast leads the bar — no button to press, no modal. Day 1 keeps the one-time "You're in!" welcome modal
 - **Responsive V2 design** — Bottom drawer on mobile (<768px), centered modal card on desktop (≥768px)
 - **Publisher branding** — Logo, primary color, and prize image configured from the WINR dashboard
 - **GDPR/CCPA compliant** — Built-in consent flows and user data deletion
@@ -61,7 +62,19 @@ await WINR.configure({
 
 ## Installation
 
-The SDK ships as self-hosted ESM and UMD bundles (with TypeScript declarations). Build them from this repo and serve them with your app:
+### npm
+
+```bash
+npm install winr-web-sdk@^2.3.0
+```
+
+```typescript
+import { WINR } from 'winr-web-sdk';
+```
+
+### Self-hosted bundles
+
+The SDK also ships as self-hosted ESM and UMD bundles (with TypeScript declarations). Build them from this repo and serve them with your app:
 
 ```bash
 git clone https://github.com/AVAFLI/winr_web_sdk.git
@@ -71,12 +84,10 @@ npm run build
 # outputs: dist/winr-sdk.esm.js, dist/winr-sdk.umd.js, dist/winr-sdk.d.ts
 ```
 
-- **ESM / bundlers:** copy `dist/winr-sdk.esm.js` (and `winr-sdk.d.ts`) into your project, or add the repo as a git dependency (`npm install github:AVAFLI/winr_web_sdk`) and import `winr-web-sdk`.
+- **ESM / bundlers:** copy `dist/winr-sdk.esm.js` (and `winr-sdk.d.ts`) into your project, or add the repo as a git dependency (`npm install github:AVAFLI/winr_web_sdk`).
 - **Script tag:** self-host `dist/winr-sdk.umd.js` and load it with a `<script>` tag — it exposes a global `WINR`.
 
 The bundles are fully self-contained (fonts and imagery embedded, zero runtime dependencies).
-
-> **npm:** The package is not yet published to the public npm registry — `npm install winr-web-sdk` will not work until it is.
 
 > **Note:** Contact [AVAFLI](https://avafli-website.web.app/sdk/pricing) to obtain an API key.
 
@@ -126,7 +137,7 @@ await WINR.configure({
 
 There is no manual launch API — the WINR experience is exclusively SDK-driven. After `WINR.configure()`, the experience opens automatically at most once per calendar day (first visit of the day, re-checked when the tab regains focus; if `configure()` runs before the DOM is ready, the open is deferred until DOMContentLoaded). Auto-open respects the server-side kill switch (`sdkConfig.experience.autoOpenEnabled`), an unregistered-impression cap (default 3 impressions until the user submits an email), and the RTD opt-out — an opted-out user never sees the experience again.
 
-Entries are claimed silently the moment the experience opens. On day 1 the "You're in!" celebration modal is the reveal (its GOT IT closes the experience). On day 2+ there is no modal: the dashboard holds yesterday's streak label and total behind a "CLAIM {n} ENTRIES" button, and the click reveals the celebration in place — today's tile checks off with confetti, the streak label advances, and the total counts up. The button then reads GOT IT and closes the experience.
+Entries are claimed silently the moment the experience opens. On day 1 the "You're in!" celebration modal is the reveal (its GOT IT closes the experience). On day 2+ there is no modal and nothing to press: the celebration is the dashboard's first visible frame — today's tile checks off with a confetti burst, the streak label advances, the total counts up and pops, and the bar leads with a "YOU'RE ON A ROLL!" toast before settling into the come-back message. The pill reads GOT IT throughout and closes the experience.
 
 ## Winner Experience
 
@@ -207,7 +218,7 @@ For detailed API documentation, see the [WINR Docs](https://avafli-website.web.a
 
 ## Example / Demo
 
-A self-contained demo page (with a mock backend) lives in [`example/index.html`](example/index.html). It exercises the auto-open flow, email capture, the day-1 celebration modal, the day-2+ CLAIM reveal, streak modes, winner banner/dialog, and the responsive drawer/modal split.
+A self-contained demo page (with a mock backend) lives in [`example/index.html`](example/index.html). It exercises the auto-open flow, email capture, the day-1 celebration modal, the day-2+ celebration-on-open reveal, streak modes, winner banner/dialog, and the responsive drawer/modal split.
 
 ```bash
 npm install

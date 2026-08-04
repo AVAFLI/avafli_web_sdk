@@ -27,15 +27,31 @@
   claim shows the normal dashboard, and a stale "Not the winner"/"Already
   submitted" rejection falls back to the dashboard silently instead of
   trapping the user in the form.
-- **Post-reveal come-back bar** now celebrates
-  "{N} ENTRIES ADDED / You're on a roll!" (animated swap on the CLAIM reveal
-  and in any claimed-today dashboard state); pre-reveal/unclaimed states keep
-  the come-back pitch.
-- **Prize card is dark and full-bleed**: the prize image fills the whole card,
-  the streak/total-entries stats sit in a solid black strip inside the top
-  edge, and the headline overlays the bottom over a black→transparent scrim
-  (right-aligned "WIN $1,000 / CASH PRIZE" for cash; centered "Win a {Prize}"
-  + accent value line otherwise).
+- **First-frame celebration beat** — on a claim-day open the dashboard mounts
+  with a PREDICTED grant already staged from the pre-claim status (ladder math
+  mirrors the backend), so the celebration is the first visible frame; the
+  real claim runs in the background and reconciles totals/streak silently in
+  place (no second celebration; "Already claimed" re-syncs once and other
+  failures settle back to server truth quietly). The 2.2.0 "CLAIM {n}
+  ENTRIES" click is gone — nothing to press, the pill reads GOT IT
+  throughout, and only the Day-1 "You're in!" welcome modal remains.
+- **Toast-first come-back bar, new copy** — on celebration opens the bar's
+  first visible state is the "YOU'RE ON A ROLL! / Your {N} entries have been
+  added automatically." toast; it holds ~2.5s, then slides once to the
+  resting come-back pitch. Non-celebration opens rest on the pitch.
+- **Reveal-beat tile: confetti-burst explosion + restored check/confetti** —
+  the active day tile keeps the drawn draw-on check, falling-confetti field,
+  and pulsing glow, now topped by a one-shot confetti-burst GIF explosion
+  that overflows the tile (the big-check tile-burst GIF was rejected and
+  removed). The burst fires only on the reveal, never on a same-day reopen.
+- **Count-up total with burst** — Total Entries counts up (ease-out) and pops
+  a confetti burst as it lands.
+- **Prize card — the Delta A/B visuals** — dark and full-bleed: the prize
+  image fills the whole card, the streak/total-entries stats sit in a solid
+  black strip inside the top edge, and the headline overlays the bottom over
+  a black→transparent scrim, in two layouts (A: right-aligned "WIN $1,000 /
+  CASH PRIZE" for cash; B: centered "Win a {Prize}" + accent value line
+  otherwise).
 
 ## [2.2.0] - 2026-08-04
 
