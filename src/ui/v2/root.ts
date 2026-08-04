@@ -187,6 +187,8 @@ export class WINRV2Experience {
         break;
       case 'celebration': {
         // Dashboard behind + celebration modal on top (explicit dismiss only).
+        // Day-1 modal is the reveal for brand-new streaks; GOT IT closes the
+        // whole experience until the next day's open (mirrors iOS e7fae27).
         this.sheet.appendChild(renderDashboard(c, logoUrl, () => this.openWinnerModal()));
         this.sheet.style.filter = 'blur(3px)';
         this.celebrationOpen = true;
@@ -194,10 +196,7 @@ export class WINRV2Experience {
           renderCelebrationModal(
             c,
             { baseEntries: state.baseEntries, bonusEntries: state.bonusEntries },
-            () => {
-              this.sheet && (this.sheet.style.filter = '');
-              c.showDashboardAfterCelebration();
-            }
+            () => c.requestDismiss()
           )
         );
         return; // keep the blur until the celebration is dismissed

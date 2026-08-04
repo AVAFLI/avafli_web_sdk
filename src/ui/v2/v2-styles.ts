@@ -279,13 +279,17 @@ img { display: block; }
 .wv2-tile.wv2-completed .wv2-tile-num { color: var(--wv2-accent); }
 .wv2-tile.wv2-locked .wv2-tile-num,
 .wv2-tile.wv2-locked .wv2-tile-entries { color: ${c.foregroundSecondary}; }
-.wv2-tile.wv2-active {
+/* "ready" (pre-reveal) shares the active tile's radial accent bg + breathing
+   glow, but shows a white flame instead of the checkmark and no confetti. */
+.wv2-tile.wv2-active,
+.wv2-tile.wv2-ready {
   background: radial-gradient(150px at 50% 0,
     var(--wv2-accent) 0,
     var(--wv2-accent-45) 45%,
     ${c.gunmetal} 100%);
   animation: wv2-pulse-glow 1.1s ease-in-out infinite alternate;
 }
+.wv2-tile-icon .wv2-ic-flame { width: 16px; height: 20px; color: #fff; }
 /* Joe's active-tile motion: the accent glow breathes. */
 @keyframes wv2-pulse-glow {
   from { box-shadow: 0 0 7px 0 var(--wv2-accent-55); }

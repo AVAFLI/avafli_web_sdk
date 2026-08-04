@@ -12,7 +12,8 @@ WINR lets you add daily-entry sweepstakes and prize experiences to your app in u
 
 **Key capabilities:**
 - **Daily entry sweepstakes** — Users earn entries every day they engage
-- **Auto-open experience** — Opens automatically on the first visit of each day; entries are claimed automatically, no tap required
+- **Auto-open experience** — Opens automatically on the first visit of each day; entries are granted automatically the moment it opens
+- **Day 2+ reveal** — Returning users see yesterday's numbers behind a "CLAIM {n} ENTRIES" button; the click is the celebration (tile check-off, confetti, totals count up) — no modal. Day 1 keeps the "You're in!" celebration modal
 - **Responsive V2 design** — Bottom drawer on mobile (<768px), centered modal card on desktop (≥768px)
 - **Publisher branding** — Logo, primary color, and prize image configured from the WINR dashboard
 - **GDPR/CCPA compliant** — Built-in consent flows and user data deletion
@@ -123,7 +124,9 @@ await WINR.configure({
 
 ## The Experience Presents Itself
 
-There is no manual launch API — the WINR experience is exclusively SDK-driven. After `WINR.configure()`, the experience opens automatically at most once per calendar day (first visit of the day, re-checked when the tab regains focus). Auto-open respects the server-side kill switch (`sdkConfig.experience.autoOpenEnabled`), an unregistered-impression cap (default 3 impressions until the user submits an email), and the RTD opt-out — an opted-out user never sees the experience again.
+There is no manual launch API — the WINR experience is exclusively SDK-driven. After `WINR.configure()`, the experience opens automatically at most once per calendar day (first visit of the day, re-checked when the tab regains focus; if `configure()` runs before the DOM is ready, the open is deferred until DOMContentLoaded). Auto-open respects the server-side kill switch (`sdkConfig.experience.autoOpenEnabled`), an unregistered-impression cap (default 3 impressions until the user submits an email), and the RTD opt-out — an opted-out user never sees the experience again.
+
+Entries are claimed silently the moment the experience opens. On day 1 the "You're in!" celebration modal is the reveal (its GOT IT closes the experience). On day 2+ there is no modal: the dashboard holds yesterday's streak label and total behind a "CLAIM {n} ENTRIES" button, and the click reveals the celebration in place — today's tile checks off with confetti, the streak label advances, and the total counts up. The button then reads GOT IT and closes the experience.
 
 ## Push Notifications
 
@@ -200,7 +203,7 @@ For detailed API documentation, see the [WINR Docs](https://avafli-website.web.a
 
 ## Example / Demo
 
-A self-contained demo page (with a mock backend) lives in [`example/index.html`](example/index.html). It exercises the auto-open flow, email capture, auto-claim + celebration, streak modes, winner banner/dialog, and the responsive drawer/modal split.
+A self-contained demo page (with a mock backend) lives in [`example/index.html`](example/index.html). It exercises the auto-open flow, email capture, the day-1 celebration modal, the day-2+ CLAIM reveal, streak modes, winner banner/dialog, and the responsive drawer/modal split.
 
 ```bash
 npm install

@@ -228,7 +228,7 @@ export function renderCapture(c: V2ExperienceController, logoUrl?: string | null
     isAdult && input.value.includes('@') && input.value.includes('.');
 
   const cta = renderPill(
-    `GET MY ${day1Entries} ENTRIES`,
+    `CLAIM MY ${day1Entries} ENTRIES`,
     () => {
       void c.submitEmail(input.value.trim());
     },
@@ -296,6 +296,15 @@ export function renderDashboard(
   logoUrl: string | null | undefined,
   onWinnerTap: () => void
 ): HTMLElement {
+  // Day 2+ reveal flow (mirrors iOS e7fae27): the claim already succeeded
+  // server-side, but the UI holds yesterday's numbers until the user clicks
+  // "CLAIM N ENTRIES" — that click is the celebration (tile check + confetti +
+  // totals update), no modal.
+  const preReveal = c.pendingRevealGrant !== null && !c.claimRevealed;
+  const pendingEntries = c.pendingRevealGrant
+    ? c.pendingRevealGrant.baseEntries + c.pendingRevealGrant.bonusEntries
+    : 0;
+
   const screen = el('div', 'wv2-screen');
 
   const top = el('div', 'wv2-dash-stack');
@@ -317,13 +326,62 @@ export function renderDashboard(
     body.appendChild(renderWinnerBanner(onWinnerTap));
   }
 
-  body.appendChild(renderPrizeCard(c));
-  body.appendChild(renderStreakRail(c));
+  body.appendChild(renderPrizeCard(c, preReveal));
+  body.appendChild(renderStreakRail(c, preReveal));
   body.appendChild(renderComeBackBar(c));
 
   const footer = el('div', 'wv2-dash-footer');
   const pillWrap = el('div', 'wv2-pill-wrap');
-  pillWrap.appendChild(renderPill('GOT IT', () => c.requestDismiss()));
+
+  const noun = c.visitMode ? 'VISIT' : 'DAY';
+  const preClaimTotal = c.preClaimTotalEntries ?? c.totalEntries;
+
+  /**
+   * The reveal, animated in place (no re-render, so the draw-on check and the
+   * count-up run against the already-visible dashboard):
+   *  - today's tile flips ready → active (draw-on check + confetti specks)
+   *  - the streak label advances N-1 → N
+   *  - the total animates up to the post-claim value
+   *  - the pill becomes "GOT IT" (which closes the experience)
+   */
+  const doReveal = (): void => {
+    if (!c.pendingRevealGrant || c.claimRevealed) return;
+    c.revealClaim();
+
+    const tile = screen.querySelector('.wv2-tile.wv2-ready');
+    if (tile) {
+      tile.classList.remove('wv2-ready');
+      tile.classList.add('wv2-active');
+      const iconWrap = tile.querySelector('.wv2-tile-icon');
+      if (iconWrap) {
+        iconWrap.innerHTML = '';
+        iconWrap.appendChild(createAnimatedCheck(12));
+      }
+      const box = tile.parentElement;
+      if (box) {
+        const confetti = createConfetti({ style: 'celebration', count: 12, speed: 0.7 });
+        confetti.classList.add('wv2-tile-confetti');
+        box.insertBefore(confetti, tile);
+      }
+    }
+
+    const streakNum = screen.querySelector('.wv2-stat-streak');
+    if (streakNum) streakNum.textContent = `${c.streakDay} ${noun} STREAK`;
+
+    const totalNum = screen.querySelector('.wv2-stat-total');
+    if (totalNum) animateCount(totalNum as HTMLElement, preClaimTotal, c.totalEntries, 700);
+
+    pill.textContent = 'GOT IT';
+  };
+
+  const pill = renderPill(
+    preReveal ? `CLAIM ${formatInt(pendingEntries)} ENTRIES` : 'GOT IT',
+    () => {
+      if (c.pendingRevealGrant && !c.claimRevealed) doReveal();
+      else c.requestDismiss();
+    }
+  );
+  pillWrap.appendChild(pill);
   footer.appendChild(pillWrap);
   footer.appendChild(renderLegalLinks(c.rulesUrl));
   body.appendChild(footer);
@@ -333,16 +391,37 @@ export function renderDashboard(
   return screen;
 }
 
+/** rAF count-up for the total-entries stat during the reveal. */
+function animateCount(node: HTMLElement, from: number, to: number, durationMs: number): void {
+  if (typeof requestAnimationFrame !== 'function' || from === to) {
+    node.textContent = formatInt(to);
+    return;
+  }
+  const start = performance.now();
+  const step = (now: number): void => {
+    const t = Math.min(1, (now - start) / durationMs);
+    const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
+    node.textContent = formatInt(from + (to - from) * eased);
+    if (t < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
 /**
  * Day 2+ prize card: white stats strip (streak + total entries) over the prize
  * image. The image is publisher-configurable (prizeImageUrl); default is the
  * bundled cash pile with the prize-derived headline overlaid.
  */
-function renderPrizeCard(c: V2ExperienceController): HTMLElement {
+function renderPrizeCard(c: V2ExperienceController, preReveal = false): HTMLElement {
   const giveaway = c.giveaway;
   const description = giveaway?.prizeDescription ?? '';
   const value = Math.round(giveaway?.prizeValue ?? 0);
   const noun = c.visitMode ? 'VISIT' : 'DAY';
+
+  // Pre-reveal, the card is pinned to YESTERDAY's numbers: streak label N-1
+  // and the pre-claim total. The CLAIM click advances both (see doReveal).
+  const displayStreakDay = preReveal ? Math.max(c.streakDay - 1, 1) : c.streakDay;
+  const displayTotal = preReveal ? (c.preClaimTotalEntries ?? c.totalEntries) : c.totalEntries;
 
   const card = el('div', 'wv2-prize-card');
 
@@ -351,7 +430,9 @@ function renderPrizeCard(c: V2ExperienceController): HTMLElement {
   const streakStat = el('div', 'wv2-stat');
   streakStat.appendChild(icon(flameIcon, 'wv2-ic-flame'));
   const streakCol = el('div', 'wv2-stat-col');
-  streakCol.appendChild(el('div', 'wv2-stat-num', `${c.streakDay} ${noun} STREAK`));
+  streakCol.appendChild(
+    el('div', 'wv2-stat-num wv2-stat-streak', `${displayStreakDay} ${noun} STREAK`)
+  );
   streakCol.appendChild(el('div', 'wv2-stat-label', 'Keep it going!'));
   streakStat.appendChild(streakCol);
   strip.appendChild(streakStat);
@@ -359,7 +440,7 @@ function renderPrizeCard(c: V2ExperienceController): HTMLElement {
   const entriesStat = el('div', 'wv2-stat');
   entriesStat.appendChild(icon(ticketIcon, 'wv2-ic-ticket'));
   const entriesCol = el('div', 'wv2-stat-col');
-  entriesCol.appendChild(el('div', 'wv2-stat-num', formatInt(c.totalEntries)));
+  entriesCol.appendChild(el('div', 'wv2-stat-num wv2-stat-total', formatInt(displayTotal)));
   entriesCol.appendChild(el('div', 'wv2-stat-label', 'Total Entries'));
   entriesStat.appendChild(entriesCol);
   strip.appendChild(entriesStat);
@@ -410,7 +491,7 @@ function renderPrizeCard(c: V2ExperienceController): HTMLElement {
 
 // ─── Streak rail (STREAK STEP + MILESTONE tiles) ───
 
-function renderStreakRail(c: V2ExperienceController): HTMLElement {
+function renderStreakRail(c: V2ExperienceController, preReveal = false): HTMLElement {
   const rail = el('div', 'wv2-rail');
   const noun = c.visitMode ? 'VISIT' : 'DAY';
   const streakDay = c.streakDay;
@@ -421,8 +502,14 @@ function renderStreakRail(c: V2ExperienceController): HTMLElement {
   let activeItem: HTMLElement | null = null;
 
   for (let day = 1; day <= maxDay; day++) {
-    const state: 'completed' | 'active' | 'locked' =
-      day < streakDay ? 'completed' : day === streakDay ? 'active' : 'locked';
+    const state: TileState =
+      day < streakDay
+        ? 'completed'
+        : day === streakDay
+          ? preReveal
+            ? 'ready'
+            : 'active'
+          : 'locked';
 
     const item = el('div', 'wv2-rail-item');
     if (day === streakDay) item.classList.add('wv2-current');
@@ -475,10 +562,17 @@ function renderStreakRail(c: V2ExperienceController): HTMLElement {
   return rail;
 }
 
+/**
+ * `ready` = today's tile before the user clicks CLAIM (claim already granted
+ * server-side, reveal withheld): glows like `active` but shows a white flame
+ * instead of the checkmark, and no confetti specks.
+ */
+type TileState = 'completed' | 'active' | 'ready' | 'locked';
+
 function renderStreakTile(
   day: number,
   entries: number,
-  state: 'completed' | 'active' | 'locked',
+  state: TileState,
   noun: string
 ): HTMLElement {
   const box = el('div', 'wv2-tile-box');
@@ -499,6 +593,10 @@ function renderStreakTile(
     iconWrap.appendChild(img);
   } else if (state === 'active') {
     iconWrap.appendChild(createAnimatedCheck(12)); // 2.5pt at 20px ≈ 12/100 viewBox units
+  } else if (state === 'ready') {
+    // Pre-reveal: glow draws the eye to CLAIM, but the confetti and checkmark
+    // are saved for the reveal moment.
+    iconWrap.appendChild(icon(flameIcon, 'wv2-ic-flame'));
   } else {
     iconWrap.appendChild(icon(lockIcon, 'wv2-ic-lock'));
   }

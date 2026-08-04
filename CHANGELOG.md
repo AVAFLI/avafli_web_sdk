@@ -1,6 +1,31 @@
 # Changelog
 
-## [2.1.0] - 2026-08-04
+## [2.2.0] - 2026-08-04
+
+- **Day 2+ reveal flow** (parity with iOS `e7fae27`) — the auto-claim still
+  fires silently the moment the experience opens, but for returning users
+  (streak day 2+) there is no celebration modal anymore. The dashboard opens
+  pinned to YESTERDAY's numbers — streak label N-1, pre-claim total, today's
+  tile in a new `ready` state (accent glow + white flame, no checkmark, no
+  confetti) — behind a "CLAIM {n} ENTRIES" pill. Clicking it is the reveal:
+  the tile checks off with confetti, the streak label advances, the total
+  counts up to the post-claim value, and the pill becomes "GOT IT" (which
+  closes the experience). The come-back bar shows the next day's entries in
+  both states.
+- **Day 1** keeps the "You're in!" celebration modal as its reveal (email
+  capture → claim → modal); its GOT IT now closes the whole experience.
+- **Copy** — email-capture CTA renamed "GET MY {n} ENTRIES" →
+  "CLAIM MY {n} ENTRIES".
+- **Fixed: auto-open never firing when `configure()` runs before the DOM is
+  ready** (e.g. the SDK snippet in `<head>`). The shadow-DOM host was appended
+  to `document.body` before it existed, the resulting error was swallowed, and
+  — because the once-per-day mark and the unregistered-impression count were
+  written *before* presentation — every same-day re-check short-circuited and
+  the SDK stayed silent (after 3 such days, permanently for unregistered
+  users). The auto-open check now defers until DOMContentLoaded when `<body>`
+  isn't available yet, rolls the once-per-day mark and impression count back
+  if a presentation fails to mount, and releases the internal
+  "already on screen" guard on a failed mount.
 
 - **Removed (BREAKING)** — manual `WINR.present()` and `WINR.presentInline()`
   (and the `PresentationOptions` export): the experience is exclusively

@@ -407,6 +407,7 @@ export class WINR {
       return;
     }
 
+    let experience: WINRV2Experience | null = null;
     try {
       // Track presentation (the controller fetches fresh giveaway/claim state
       // itself in a single getActiveGiveaway round-trip after mount).
@@ -414,10 +415,20 @@ export class WINR {
         giveawayId: WINR.instance!.currentGiveaway?.id,
       });
 
-      const experience = WINR.instance!.createExperience(options);
+      experience = WINR.instance!.createExperience(options);
       await experience.present();
 
     } catch (error) {
+      // The mount failed before anything reached the screen — release the
+      // "already on screen" guard so a later (re-)check can present again.
+      // (Read through a local to sidestep TS's stale narrowing from the
+      // pre-try guard above.)
+      const current = WINR.instance
+        ? (WINR.instance.currentExperience as WINRV2Experience | null)
+        : null;
+      if (experience && current === experience) {
+        WINR.instance!.currentExperience = null;
+      }
       const winrError = error instanceof WINRError
         ? error
         : new WINRError(
@@ -576,9 +587,25 @@ export class WINR {
     if (experience?.autoOpenEnabled === false) return; // server kill switch
     if (!instance.currentGiveaway) return;
 
+    // configure() is typically called from a <head> script — before the parser
+    // has created <body>. Mounting the shadow-DOM host would throw, so defer
+    // the WHOLE check (no eligibility marks are written) until the DOM is
+    // ready, then re-run it.
+    if (!document.body) {
+      document.addEventListener(
+        'DOMContentLoaded',
+        () => void WINR.autoPresentIfEligible(),
+        { once: true }
+      );
+      return;
+    }
+
     // Once per calendar day.
     const today = WINR.dayString(new Date());
     if (instance.storage.getItem(instance.lastAutoPresentKey) === today) return;
+
+    // Don't stack on top of an already-presented experience.
+    if (instance.currentExperience) return;
 
     // Unregistered users (no confirmed email) see the auto-open at most N
     // times, then the SDK goes quiet until they register or the publisher
@@ -586,9 +613,10 @@ export class WINR {
     const emailConsent =
       instance.currentEmailConsentStatus ||
       instance.storage.getItem(emailSubmittedStorageKey(instance.config.bundleId)) === 'true';
+    let seen = 0;
     if (!emailConsent) {
       const cap = experience?.unregisteredImpressionCap ?? 3;
-      const seen = parseInt(
+      seen = parseInt(
         instance.storage.getItem(instance.unregisteredImpressionsKey) ?? '0',
         10
       );
@@ -599,12 +627,20 @@ export class WINR {
       instance.storage.setItem(instance.unregisteredImpressionsKey, String(seen + 1));
     }
 
-    // Don't stack on top of an already-presented experience.
-    if (instance.currentExperience) return;
-
+    // The once-per-day mark (and the unregistered impression above) is burned
+    // up front so a midnight-crossing session can't double-open — but ROLLED
+    // BACK if the presentation never made it on screen, so the DOM-ready /
+    // visibility re-checks can retry instead of going silent for the day.
     instance.storage.setItem(instance.lastAutoPresentKey, today);
     logger.info('Auto-presenting WINR experience (first visit of the day)');
-    await WINR.presentExperience().catch(() => undefined);
+    await WINR.presentExperience().catch(() => {
+      if (instance.storage.getItem(instance.lastAutoPresentKey) === today) {
+        instance.storage.removeItem(instance.lastAutoPresentKey);
+      }
+      if (!emailConsent) {
+        instance.storage.setItem(instance.unregisteredImpressionsKey, String(seen));
+      }
+    });
   }
 
   /**

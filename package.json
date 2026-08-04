@@ -1,6 +1,6 @@
 {
   "name": "winr-web-sdk",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Web SDK for WINR sweepstakes platform",
   "main": "dist/winr-sdk.umd.js",
   "module": "dist/winr-sdk.esm.js",
@@ -52,6 +52,7 @@
     "@typescript-eslint/parser": "^7.0.2",
     "@vitest/coverage-v8": "^1.3.1",
     "eslint": "^8.56.0",
+    "happy-dom": "^20.11.1",
     "rollup": "^4.12.0",
     "rollup-plugin-dts": "^6.1.0",
     "tslib": "^2.6.2",

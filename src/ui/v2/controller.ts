@@ -18,9 +18,12 @@ import { ladderEntries } from './v2-theme';
  * V2 experience state machine — ported from iOS WINRExperienceViewModel.
  *
  * Flow: loading → (emailCapture | dashboard) → auto-claim on open →
- * celebration on success / silent claimed-state on "Already claimed"
- * (with a ONE-SHOT re-sync so cached totals catch up when another device
- * claimed between the status fetch and our claim).
+ * Day 1: celebration modal (its GOT IT closes the experience) /
+ * Day 2+: dashboard pinned to yesterday's numbers behind a "CLAIM N ENTRIES"
+ * pill — the click is the reveal (tile check + confetti + totals advance) /
+ * silent claimed-state on "Already claimed" (with a ONE-SHOT re-sync so
+ * cached totals catch up when another device claimed between the status
+ * fetch and our claim).
  */
 
 export type V2State =
@@ -70,6 +73,25 @@ export class V2ExperienceController {
   public streakDay = 1;
   public totalEntries = 0;
   public isSubmittingEmail = false;
+
+  // ─── Day 2+ reveal flow (ported from iOS WINRExperienceViewModel) ───
+  //
+  // The auto-claim on open grants entries server-side immediately, but the UI
+  // holds the previous day's numbers until the user clicks "CLAIM N ENTRIES".
+  // That click flips `claimRevealed` — the day tile checks off with confetti,
+  // the streak label and totals advance, and the pill becomes "GOT IT".
+
+  /** The grant held back for the reveal (null when nothing is pending). */
+  public pendingRevealGrant: { baseEntries: number; bonusEntries: number } | null = null;
+  /** Whether the user has clicked CLAIM and seen the in-place celebration. */
+  public claimRevealed = false;
+  /** Total entries as of before today's claim, for pre-reveal display. */
+  public preClaimTotalEntries: number | null = null;
+
+  public revealClaim(): void {
+    if (!this.pendingRevealGrant || this.claimRevealed) return;
+    this.claimRevealed = true;
+  }
 
   /** Re-render hook (root view). */
   public onChange?: (state: V2State) => void;
@@ -257,13 +279,25 @@ export class V2ExperienceController {
         ...(response.milestone ? { milestone: response.milestone } : {}),
       });
 
-      // Celebration modal after every successful claim (explicit dismiss only).
-      this.transition({
-        kind: 'celebration',
-        baseEntries: response.entries,
-        bonusEntries: bonus,
-        totalEntries: response.totalEntries,
-      });
+      // V2 auto-claim routing (mirrors iOS commit e7fae27):
+      // - Day 1 (brand-new or restarted streak, typically right after email
+      //   capture): the "You're in!" celebration modal is the reveal.
+      // - Day 2+: no modal. Land on the dashboard pinned to yesterday's
+      //   numbers with a "CLAIM N ENTRIES" pill; the click reveals the
+      //   celebration in place (Joe's Slice Day 2+ flow).
+      if (response.streakDay <= 1) {
+        this.transition({
+          kind: 'celebration',
+          baseEntries: response.entries,
+          bonusEntries: bonus,
+          totalEntries: response.totalEntries,
+        });
+      } else {
+        this.pendingRevealGrant = { baseEntries: response.entries, bonusEntries: bonus };
+        this.claimRevealed = false;
+        this.preClaimTotalEntries = response.totalEntries - (response.entries + bonus);
+        this.transition({ kind: 'dashboard' });
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
 
@@ -340,12 +374,6 @@ export class V2ExperienceController {
       this.transition({ kind: 'loading' });
       void this.load();
     }
-  }
-
-  /** The celebration modal's GOT IT — settle onto the dashboard. */
-  public showDashboardAfterCelebration(): void {
-    this.claimedToday = true;
-    this.transition({ kind: 'dashboard' });
   }
 
   /** Close the whole experience (X buttons / GOT IT on the dashboard). */
