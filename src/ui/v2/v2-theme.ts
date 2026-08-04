@@ -146,6 +146,17 @@ export function showsValueLine(description: string, value: number): boolean {
   );
 }
 
+/**
+ * The white-strip headline (Day-1 capture + winner splash):
+ * cash → "$1,000.00 CASH PRIZE"; other → "Win a $500 Amazon Gift Card".
+ * (Mirrors iOS WINRV2PrizeText.stripHeadline.)
+ */
+export function stripHeadline(description: string, value: number): string {
+  return isCashPrize(description)
+    ? `$${formatInt(value)}.00 CASH PRIZE`
+    : `Win ${prizeArticle(description, false)} ${description}`;
+}
+
 /** "August 20, 2026" from "2026-08-20" — falls back to the raw string. */
 export function awardedAtDisplay(awardedAt?: string | null): string | null {
   if (!awardedAt) return null;

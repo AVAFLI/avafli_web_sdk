@@ -208,6 +208,11 @@ export interface RegisterDeviceResponse {
   optedOut?: boolean;
   /** SDK configuration */
   sdkConfig?: SDKConfig | null;
+  /**
+   * Present only when this person is the drawn winner of one of this
+   * publisher's giveaways (winner prize-claim flow).
+   */
+  prizeClaim?: PrizeClaimBlock;
 }
 
 export interface SDKCopy {
@@ -360,6 +365,49 @@ export interface GetActiveGiveawayResponse {
   optedOut?: boolean;
   /** SDK configuration */
   sdkConfig?: SDKConfig | null;
+  /**
+   * Present only when this person is the drawn winner of one of this
+   * publisher's giveaways and the winner record is still claimable.
+   * `status === "pending"` drives the winner splash → claim form flow;
+   * `"submitted"` means the form was already sent (normal dashboard shows).
+   */
+  prizeClaim?: PrizeClaimBlock;
+}
+
+// ─── Prize Claim (winner flow) ───
+
+/** FIXED API contract, mirroring `PrizeClaimBlock` in the backend's types.ts. */
+export interface PrizeClaimBlock {
+  status: 'pending' | 'submitted';
+  giveawayId: string;
+  prizeDescription: string;
+  prizeValue: number;
+  /** Present when submitted. */
+  claimNumber?: string;
+  /** ISO date, when submitted. */
+  submittedAt?: string;
+}
+
+/** Payload for `submitPrizeClaim` (exact backend field names). */
+export interface SubmitPrizeClaimRequest {
+  giveawayId: string;
+  firstName: string;
+  lastName: string;
+  phone?: string;
+  street: string;
+  apt?: string;
+  city: string;
+  state: string;
+  zip: string;
+  country: string;
+  photoBase64?: string;
+  story?: string;
+}
+
+export interface SubmitPrizeClaimResponse {
+  claimNumber: string;
+  /** ISO date */
+  submittedAt: string;
 }
 
 export interface ClaimDailyEntriesResponse {
@@ -560,7 +608,7 @@ export interface PresentationOptions {
 // ─── Constants ───
 
 export const WINR_CONSTANTS = {
-  SDK_VERSION: '2.2.0',
+  SDK_VERSION: '2.3.0',
   PLATFORM_OS: 'Web',
   getApiBaseUrl: (_environment: 'production' = 'production'): string => {
     return 'https://us-central1-winr-9c11f.cloudfunctions.net';

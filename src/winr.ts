@@ -474,6 +474,11 @@ export class WINR {
         WINR.submitEmailAndAdopt({ ...request, publisherUserId: this.config.user.id }),
       hasRegisteredUuid: () =>
         this.secureStorage.getItem(WINR_CONSTANTS.STORAGE_KEYS.UUID) !== null,
+      userPrefill: {
+        firstName: this.config.user.firstName,
+        lastName: this.config.user.lastName,
+        ...(this.config.user.phone ? { phone: this.config.user.phone } : {}),
+      },
       cachedGiveaway: this.currentGiveaway,
       cachedSdkConfig: this.getCurrentSDKConfig(),
       onGiveawayRefreshed: (response) => this.onGiveawayResponse(response),

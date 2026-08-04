@@ -128,6 +128,10 @@ There is no manual launch API — the WINR experience is exclusively SDK-driven.
 
 Entries are claimed silently the moment the experience opens. On day 1 the "You're in!" celebration modal is the reveal (its GOT IT closes the experience). On day 2+ there is no modal: the dashboard holds yesterday's streak label and total behind a "CLAIM {n} ENTRIES" button, and the click reveals the celebration in place — today's tile checks off with confetti, the streak label advances, and the total counts up. The button then reads GOT IT and closes the experience.
 
+## Winner Experience
+
+When one of your users is drawn as a giveaway winner, the experience automatically opens on a winner splash instead of the dashboard, then walks them through a prize-claim form (name, shipping address, optional photo, required consents) and a confirmation with their claim number on a keepsake OFFICIAL WINNER card. This requires no integration work — the flow appears only for the drawn winner and disappears once their claim is submitted. The winning email is never re-entered; the claim is keyed to the account server-side.
+
 ## Push Notifications
 
 Streak reminder pushes are primarily a mobile-SDK feature. On the web, `WINR.registerForPushNotifications()` requests the browser's notification permission where supported; otherwise the SDK focuses on in-app engagement through the daily auto-open experience itself.

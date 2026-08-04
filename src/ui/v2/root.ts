@@ -4,11 +4,14 @@ import { V2ExperienceController, V2State } from './controller';
 import {
   renderCapture,
   renderCelebrationModal,
+  renderClaimConfirmation,
+  renderClaimForm,
   renderDashboard,
   renderEmpty,
   renderHowItWorks,
   renderLoading,
   renderWinnerModal,
+  renderWinnerSplash,
 } from './screens';
 import { v2Styles } from './v2-styles';
 import { accentAlpha, ensureV2Fonts, resolveAccent } from './v2-theme';
@@ -204,6 +207,22 @@ export class WINRV2Experience {
       case 'howItWorks':
         this.sheet.appendChild(renderHowItWorks(c, logoUrl));
         break;
+      case 'winnerClaim': {
+        // Winner prize-claim flow: splash → form → confirmation, routed by the
+        // controller's winnerClaimStep sub-state (mirrors iOS
+        // WINRV2WinnerClaimFlow).
+        const step = c.winnerClaimStep;
+        if (step.kind === 'splash') {
+          this.sheet.appendChild(renderWinnerSplash(c, state.claim, logoUrl));
+        } else if (step.kind === 'form') {
+          this.sheet.appendChild(renderClaimForm(c, logoUrl));
+        } else {
+          this.sheet.appendChild(
+            renderClaimConfirmation(c, step.claimNumber, step.submittedAt, logoUrl)
+          );
+        }
+        break;
+      }
     }
     this.sheet.style.filter = '';
   }

@@ -63,6 +63,21 @@ export const chevronLeftIcon = svg(
   '<path d="M8.5 1L2 8L8.5 15" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>'
 );
 
+/** Half-filled shield (claim splash security card) — SF "shield.lefthalf.filled". */
+export const shieldIcon = svg(
+  '0 0 20 24',
+  '<path d="M10 0L20 3.5V11C20 17.2 15.9 22.2 10 24C4.1 22.2 0 17.2 0 11V3.5L10 0Z" ' +
+    'stroke="currentColor" stroke-width="1.6" fill="none"/>' +
+    '<path d="M10 1.06L1 4.21V11C1 16.6 4.7 21.2 10 22.94V1.06Z" fill="currentColor"/>'
+);
+
+/** Paperclip (ATTACH A PHOTO button on the claim form). */
+export const paperclipIcon = svg(
+  '0 0 18 20',
+  '<path d="M15.5 9.2L8.7 16A4.06 4.06 0 0 1 3 10.3L10.5 2.8A2.7 2.7 0 0 1 14.3 6.6L7.3 13.6A1.35 1.35 0 0 1 5.4 11.7L11.6 5.5" ' +
+    'stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>'
+);
+
 /** Empty / checked checkbox squares (18+ consent). */
 export const squareIcon = svg(
   '0 0 20 20',

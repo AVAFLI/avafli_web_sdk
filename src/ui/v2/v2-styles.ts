@@ -201,37 +201,36 @@ img { display: block; }
 .wv2-dash-stack { display: flex; flex-direction: column; gap: 15px; padding-top: 15px; }
 .wv2-dash-body { display: flex; flex-direction: column; gap: 15px; }
 
-/* Prize card: white stats strip over the prize image. */
-.wv2-prize-card { margin: 0 22px; border-radius: 10px; overflow: hidden; }
-.wv2-stats-strip { display: flex; height: 46px; background: #fff; }
+/* Prize card (Joe's Aug-2026 dark full-bleed revision): the art fills the
+   whole card, a solid black stats strip sits inside the top edge, and the
+   prize headline rides the bottom over a black→transparent scrim. */
+.wv2-prize-card {
+  position: relative;
+  margin: 0 22px; height: 200px;
+  border-radius: 10px; overflow: hidden;
+  background: ${c.deepCharcoal};
+}
+.wv2-prize-hero { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.wv2-stats-strip { position: absolute; top: 0; left: 0; right: 0; display: flex; height: 46px; background: #000; }
 .wv2-stat { flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px; }
 .wv2-stat .wv2-ic-flame { width: 18px; height: 22px; color: var(--wv2-accent); flex: none; }
 .wv2-stat .wv2-ic-ticket { width: 22px; height: 15px; color: var(--wv2-accent); transform: rotate(-25deg); flex: none; }
 .wv2-stat-col { display: flex; flex-direction: column; align-items: flex-start; }
 .wv2-stat-num { font-size: 15px; font-weight: 900; letter-spacing: -0.3px; color: var(--wv2-accent); line-height: 1.2; }
-.wv2-stat-label { font-size: 12px; font-weight: 500; color: ${c.gunmetal}; line-height: 1.2; }
+.wv2-stat-label { font-size: 12px; font-weight: 500; color: #fff; line-height: 1.2; }
 
-.wv2-promo { position: relative; height: 150px; overflow: hidden; background: ${c.gunmetal}; }
-.wv2-promo-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.wv2-promo-img.wv2-promo-cash { transform: translateY(14px); }
-.wv2-promo-fade {
-  position: absolute; inset: 0;
-  background: linear-gradient(to bottom, #fff 0, rgba(255,255,255,0.55) 30%, rgba(255,255,255,0) 62%);
+.wv2-prize-headline {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  padding: 34px 14px 10px;
+  background: linear-gradient(to bottom, rgba(0,0,0,0) 0, rgba(0,0,0,0.55) 45%, rgba(0,0,0,0.9) 100%);
 }
-.wv2-promo-cash-lockup {
-  position: absolute; top: 4px; left: 14px; right: 14px;
-  display: flex; flex-direction: column; align-items: flex-end;
-  color: ${c.gunmetal};
-}
-.wv2-promo-cash-win { font-size: 54px; font-weight: 900; letter-spacing: -2.7px; line-height: 1; white-space: nowrap; }
-.wv2-promo-cash-sub { font-size: 19px; font-weight: 900; letter-spacing: -0.57px; margin-top: -2px; }
-.wv2-promo-prize-lockup {
-  position: absolute; top: 6px; left: 12px; right: 12px;
-  text-align: center; color: ${c.gunmetal};
-}
-.wv2-promo-prize-title { font-size: 30px; font-weight: 900; letter-spacing: -1.1px; line-height: 1.05; }
-.wv2-promo-prize-value { font-size: 15px; font-weight: 700; }
-@media (max-width: 379px) { .wv2-promo-cash-win { font-size: 44px; } }
+.wv2-ph-cash { display: flex; flex-direction: column; align-items: flex-end; color: #fff; }
+.wv2-ph-cash-win { font-size: 44px; font-weight: 900; letter-spacing: -2.2px; line-height: 1; white-space: nowrap; }
+.wv2-ph-cash-sub { font-size: 19px; font-weight: 900; letter-spacing: -0.57px; margin-top: -2px; }
+.wv2-ph-prize { text-align: center; }
+.wv2-ph-prize-title { font-size: 28px; font-weight: 900; letter-spacing: -1px; line-height: 1.05; color: #fff; }
+.wv2-ph-prize-value { font-size: 15px; font-weight: 900; color: var(--wv2-accent); }
+@media (max-width: 379px) { .wv2-ph-cash-win { font-size: 38px; } .wv2-ph-prize-title { font-size: 24px; } }
 
 /* Streak rail (horizontal scroll; internal scroll, hidden scrollbars). */
 .wv2-rail {
@@ -318,17 +317,42 @@ img { display: block; }
 .wv2-powerup-every { font-size: 14px; font-weight: 900; margin-top: -2px; }
 .wv2-powerup-footnote { font-family: ${V2_OSWALD}; font-weight: 700; font-size: 8px; }
 
-/* Confirmation ("come back tomorrow") bar. */
+/* Confirmation ("come back tomorrow") bar — with the claimed-today variant
+   (Joe's Aug-2026 frames): "{N} ENTRIES ADDED / You're on a roll!". */
 .wv2-comeback {
   position: relative;
   height: 71px; background: #000;
-  display: flex; align-items: center; justify-content: center; gap: 14px;
   overflow: hidden;
+}
+.wv2-cb-come, .wv2-cb-claimed {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.wv2-cb-come { gap: 14px; }
+.wv2-cb-claimed { gap: 16px; padding: 0 16px; display: none; }
+.wv2-comeback.wv2-claimed .wv2-cb-come { display: none; }
+.wv2-comeback.wv2-claimed .wv2-cb-claimed { display: flex; }
+/* Reveal swap: the come-back pitch fades out, the celebration pops in. */
+.wv2-comeback.wv2-cb-animate .wv2-cb-claimed {
+  animation: wv2-cb-pop 0.5s cubic-bezier(0.34, 1.35, 0.5, 1);
+}
+@keyframes wv2-cb-pop {
+  from { transform: scale(0.8); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
 }
 .wv2-comeback .wv2-ic-cal { width: 26px; height: 28px; color: var(--wv2-accent); flex: none; }
 .wv2-comeback-col { display: flex; flex-direction: column; gap: 1px; text-align: center; color: #fff; }
 .wv2-comeback-line { font-size: 12px; white-space: pre-line; }
 .wv2-comeback-entries { font-size: 16px; font-weight: 900; color: var(--wv2-accent); }
+.wv2-cb-check { width: 38px; height: 38px; flex: none; }
+.wv2-cb-check .wv2-animated-check { width: 38px; height: 38px; }
+.wv2-cb-claimed-col { display: flex; flex-direction: column; text-align: center; min-width: 0; }
+.wv2-cb-added {
+  font-size: 20px; font-weight: 900; letter-spacing: -0.6px;
+  color: var(--wv2-accent);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.wv2-cb-roll { font-size: 13px; font-weight: 700; color: #fff; }
 .wv2-comeback .wv2-confetti { position: absolute; inset: 0; }
 
 .wv2-dash-footer { display: flex; flex-direction: column; gap: 6px; padding-bottom: 24px; }
@@ -506,6 +530,208 @@ img { display: block; }
   text-align: center; padding: 22px 40px 0;
 }
 .wv2-hiw-cta { padding: 20px 28px 30px; }
+
+/* ═══ Winner prize-claim flow (splash → form → confirmation) ═══
+   Ported from iOS WINRV2Claim.swift (Joe's Light variant, 1pt = 1px). */
+
+.wv2-claim-screen { background: ${c.deepCharcoal}; }
+.wv2-claim-stack { display: flex; flex-direction: column; padding-top: 18px; }
+
+/* Claim-flow header: publisher logo centered, X close only (no "?"). */
+.wv2-claim-header {
+  position: relative; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 56px; min-height: 60px;
+}
+.wv2-claim-close { position: absolute; right: 20px; top: 50%; transform: translateY(-50%); }
+
+/* Splash: trophy over the gold-sparkle art. */
+.wv2-claim-trophy-art {
+  position: relative; height: 280px; margin-top: 4px;
+  display: flex; align-items: center; justify-content: center;
+}
+.wv2-claim-trophy-bg {
+  position: absolute; left: 50%; top: 50%;
+  width: 300px; height: 260px; object-fit: cover;
+  transform: translate(-50%, -50%) rotate(-2deg);
+}
+.wv2-claim-trophy { position: relative; height: 230px; object-fit: contain; }
+
+.wv2-claim-congrats {
+  font-size: 34px; font-weight: 900; letter-spacing: -1px; color: #fff;
+  text-align: center; padding: 2px 20px 0; white-space: nowrap;
+}
+@media (max-width: 379px) { .wv2-claim-congrats { font-size: 28px; } }
+.wv2-claim-latest {
+  font-size: 17px; font-weight: 900; letter-spacing: -0.4px;
+  color: var(--wv2-accent); text-align: center;
+}
+.wv2-claim-youve-won { font-size: 14px; color: #fff; text-align: center; margin: 18px 0 8px; }
+
+/* Full-width white strip with the prize-derived headline. */
+.wv2-claim-strip {
+  background: #fff; color: ${c.gunmetal};
+  font-size: 28px; font-weight: 900; letter-spacing: -0.8px;
+  text-align: center; padding: 14px 16px;
+}
+@media (max-width: 379px) { .wv2-claim-strip { font-size: 22px; } }
+
+.wv2-claim-body-copy { font-size: 15px; color: #fff; text-align: center; padding: 16px 30px 0; }
+
+/* Dark info card with a leading icon (shield/mail) — splash + confirmation. */
+.wv2-claim-info-card {
+  display: flex; align-items: center; gap: 14px;
+  margin: 14px 22px 0; padding: 14px 18px;
+  border-radius: 12px; background: rgba(255,255,255,0.08);
+  text-align: left;
+}
+.wv2-claim-shield { width: 24px; height: 28px; color: var(--wv2-accent); flex: none; }
+.wv2-claim-shield svg { width: 100%; height: 100%; }
+.wv2-claim-info-text { font-size: 13px; color: #fff; }
+
+.wv2-claim-cta { padding: 20px 30px 30px; }
+
+/* Form: gold-sparkle backdrop at the top, fading into the dark body. */
+.wv2-claim-form-bg { position: absolute; top: 0; left: 0; right: 0; height: 430px; overflow: hidden; }
+.wv2-claim-form-bg img { width: 100%; height: 100%; object-fit: cover; }
+.wv2-claim-form-bg-grad {
+  position: absolute; inset: 0;
+  background: linear-gradient(to bottom,
+    rgba(24, 28, 38, 0.15) 0,
+    rgba(24, 28, 38, 0.55) 55%,
+    ${c.deepCharcoal} 100%);
+}
+
+.wv2-claim-form-pill {
+  align-self: center; margin-top: 10px;
+  height: 40px; padding: 0 26px; border-radius: 999px; background: #fff;
+  display: flex; align-items: center;
+  font-size: 15px; font-weight: 900; letter-spacing: -0.3px; color: ${c.gunmetal};
+}
+.wv2-claim-form-title {
+  font-size: 24px; font-weight: 900; letter-spacing: -0.7px; color: #fff;
+  text-align: center; margin-top: 18px; padding: 0 20px;
+}
+.wv2-claim-form-sub { font-size: 15px; color: #fff; text-align: center; padding: 4px 34px 0; }
+
+.wv2-claim-fields { display: flex; flex-direction: column; gap: 16px; padding: 22px 22px 0; }
+.wv2-claim-field { display: flex; flex-direction: column; gap: 6px; }
+.wv2-claim-label { font-size: 12px; color: #fff; }
+.wv2-claim-input {
+  height: 50px; padding: 0 14px; border-radius: 8px;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.25);
+  font-family: ${V2_INTER}; font-size: 16px; color: #fff;
+  outline: none; width: 100%;
+}
+.wv2-claim-input:focus { border-color: rgba(255,255,255,0.5); }
+.wv2-claim-input-locked, .wv2-claim-input:disabled { color: rgba(255,255,255,0.4); opacity: 0.6; }
+
+.wv2-claim-row { display: flex; align-items: flex-start; gap: 12px; }
+.wv2-claim-state { flex: 1; min-width: 0; }
+.wv2-claim-zip { width: 110px; flex: none; }
+.wv2-claim-select-wrap { position: relative; }
+.wv2-claim-select {
+  appearance: none; -webkit-appearance: none;
+  height: 50px; width: 100%; padding: 0 34px 0 14px; border-radius: 8px;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.25);
+  font-family: ${V2_INTER}; font-size: 16px; color: #fff;
+  outline: none; cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.wv2-claim-select.wv2-placeholder { color: rgba(255,255,255,0.4); }
+/* The dropdown list renders natively (light) — keep its options legible. */
+.wv2-claim-select option { color: ${c.gunmetal}; background: #fff; }
+.wv2-claim-select-chevron {
+  position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+  width: 12px; height: 8px; color: rgba(255,255,255,0.7); pointer-events: none;
+}
+.wv2-claim-select-chevron svg { display: block; width: 100%; height: 100%; }
+
+/* Optional photo: outlined ATTACH button / attached row with thumb + remove. */
+.wv2-claim-attach {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  height: 52px; width: 100%; border-radius: 8px;
+  border: 1.5px solid rgba(255,255,255,0.7); color: #fff;
+  font-size: 17px; font-weight: 800; letter-spacing: -0.3px;
+}
+.wv2-claim-clip { width: 15px; height: 17px; flex: none; }
+.wv2-claim-clip svg { display: block; width: 100%; height: 100%; }
+.wv2-claim-attached {
+  display: flex; align-items: center; gap: 12px;
+  height: 70px; padding: 0 12px; border-radius: 8px;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.25);
+}
+.wv2-claim-thumb { width: 54px; height: 54px; border-radius: 8px; object-fit: cover; flex: none; background: rgba(255,255,255,0.1); }
+.wv2-claim-attached-label { flex: 1; font-size: 15px; font-weight: 600; color: #fff; text-align: left; }
+.wv2-claim-remove {
+  width: 32px; height: 32px; border-radius: 50%; flex: none;
+  background: rgba(255,255,255,0.12); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* Required consent confirmations. */
+.wv2-claim-consents { display: flex; flex-direction: column; gap: 12px; margin-top: 4px; }
+.wv2-claim-consent { display: flex; align-items: flex-start; gap: 10px; text-align: left; color: #fff; }
+.wv2-claim-consent .wv2-ic { width: 20px; height: 20px; flex: none; margin-top: 1px; }
+.wv2-claim-consent span:last-child { font-size: 13px; line-height: 1.35; }
+
+.wv2-claim-error {
+  font-size: 13px; font-weight: 600; color: #ff7366;
+  text-align: center; padding: 14px 30px 0;
+}
+.wv2-claim-submit { padding: 20px 22px 0; }
+.wv2-claim-lock-note {
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  padding: 12px 30px 34px; color: rgba(255,255,255,0.6); font-size: 12px;
+  text-align: center;
+}
+.wv2-claim-lock-ic { width: 12px; height: 15px; flex: none; }
+.wv2-claim-lock-ic svg { display: block; width: 100%; height: 100%; }
+
+/* Confirmation. */
+.wv2-claim-done-title {
+  font-size: 26px; font-weight: 900; letter-spacing: -0.7px; color: #fff;
+  text-align: center; padding: 20px 30px 0;
+}
+.wv2-claim-done-sub { font-size: 15px; color: rgba(255,255,255,0.85); text-align: center; padding: 8px 34px 0; }
+.wv2-claim-info-card .wv2-claim-mail { width: 28px; height: 22px; color: var(--wv2-accent); flex: none; }
+.wv2-claim-mail svg { display: block; width: 100%; height: 100%; }
+.wv2-claim-mail-col { display: flex; flex-direction: column; gap: 1px; }
+.wv2-claim-mail-line { font-size: 14px; color: #fff; }
+.wv2-claim-mail-days { font-size: 18px; font-weight: 900; color: var(--wv2-accent); }
+
+/* The gold OFFICIAL WINNER keepsake card: cream/gold gradient, small trophy
+   breaking the top border, serif name, award month + claim number. */
+.wv2-gold-card {
+  position: relative; margin: 40px 34px 0;
+  border-radius: 14px;
+  background: linear-gradient(to bottom, #fffaeb, #f2e0ad);
+  border: 2px solid #d4ad47;
+}
+.wv2-gold-trophy {
+  position: absolute; top: -27px; left: 50%; transform: translateX(-50%);
+  height: 54px; object-fit: contain;
+}
+.wv2-gold-official {
+  display: flex; justify-content: space-between;
+  padding: 18px 26px 0;
+  font-size: 16px; font-weight: 900; letter-spacing: 0.5px; color: #b88c29;
+}
+.wv2-gold-name {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 30px; font-weight: 900; color: #1a1712;
+  text-align: center; padding: 6px 20px 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.wv2-gold-loc { font-size: 14px; color: #737373; text-align: center; margin-top: 4px; }
+.wv2-gold-meta {
+  font-size: 11px; font-weight: 700; letter-spacing: 1.1px; color: #b88c29;
+  text-align: center; padding: 8px 12px 20px;
+}
+.wv2-claim-done-cta { padding: 30px 30px 34px; }
 
 /* ═══ Loading / empty states ═══ */
 

@@ -10,6 +10,8 @@ import {
   SubmitEmailResponse,
   SubmitUserProfileRequest,
   SubmitUserProfileResponse,
+  SubmitPrizeClaimRequest,
+  SubmitPrizeClaimResponse,
   DeleteUserDataResponse,
 } from '../types';
 import { NetworkClient } from './client';
@@ -71,6 +73,14 @@ export class WINRAPI {
    */
   public async submitUserProfile(data: SubmitUserProfileRequest): Promise<SubmitUserProfileResponse> {
     return this.client.post<SubmitUserProfileResponse>('/submitUserProfile', data);
+  }
+
+  /**
+   * Submit the drawn winner's prize-claim form (winner flow). Same POST
+   * `{data}`/`{result}` callable envelope as every other endpoint.
+   */
+  public async submitPrizeClaim(data: SubmitPrizeClaimRequest): Promise<SubmitPrizeClaimResponse> {
+    return this.client.post<SubmitPrizeClaimResponse>('/submitPrizeClaim', data);
   }
 
   /**

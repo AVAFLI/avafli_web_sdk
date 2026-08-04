@@ -2,12 +2,14 @@ import {
   DailyEntryGrant,
   GetActiveGiveawayResponse,
   Giveaway,
+  PrizeClaimBlock,
   SDKConfig,
   SubmitEmailRequest,
   SubmitEmailResponse,
   WINRError,
   WINR_CONSTANTS,
 } from '../../types';
+import { CLAIM_COUNTRY, PrizeClaimForm, isClaimFormValid } from './claim';
 import { WINRAPI } from '../../network/api';
 import { LocalStorageProvider } from '../../storage/local-storage';
 import { logger } from '../../services/logger';
@@ -37,7 +39,20 @@ export type V2State =
       bonusEntries: number;
       totalEntries: number;
     }
-  | { kind: 'howItWorks' };
+  | { kind: 'howItWorks' }
+  /**
+   * This person is the drawn winner and hasn't submitted their claim yet —
+   * the drawer shows the winner splash → claim form → confirmation flow
+   * instead of the dashboard. Takes precedence on open (even before the
+   * email-capture gate — the claim is keyed to the account server-side).
+   */
+  | { kind: 'winnerClaim'; claim: PrizeClaimBlock };
+
+/** Sub-screen of the winner claim flow (`state.kind === 'winnerClaim'`). */
+export type WinnerClaimStep =
+  | { kind: 'splash' }
+  | { kind: 'form' }
+  | { kind: 'confirmation'; claimNumber: string; submittedAt: string };
 
 export interface V2ControllerDeps {
   api: WINRAPI;
@@ -47,6 +62,8 @@ export interface V2ControllerDeps {
   submitEmailAndAdopt: (request: SubmitEmailRequest) => Promise<SubmitEmailResponse>;
   /** Whether the registration handshake produced a user_uid. */
   hasRegisteredUuid: () => boolean;
+  /** Host-app-provided identity — prefills the winner claim form. */
+  userPrefill?: { firstName?: string; lastName?: string; phone?: string };
   /** Warm-start data cached by WINR from device registration. */
   cachedGiveaway?: Giveaway | null;
   cachedSdkConfig?: SDKConfig | null;
@@ -91,6 +108,39 @@ export class V2ExperienceController {
   public revealClaim(): void {
     if (!this.pendingRevealGrant || this.claimRevealed) return;
     this.claimRevealed = true;
+  }
+
+  // ─── Winner prize claim (ported from iOS WINRExperienceViewModel) ───
+
+  /** Which screen of the winner claim flow is showing. */
+  public winnerClaimStep: WinnerClaimStep = { kind: 'splash' };
+  /** Spinner state for the claim form's SUBMIT pill. */
+  public isSubmittingClaim = false;
+  /**
+   * Transport-level submit failure surfaced inline on the form ("Not the
+   * winner"/"Already submitted" instead fall back to the dashboard silently).
+   */
+  public claimSubmitError: string | null = null;
+  /** The submitted form, kept for the confirmation screen's winner card. */
+  public submittedClaimForm: PrizeClaimForm | null = null;
+  /**
+   * Set after a "Not the winner"/"Already submitted" rejection so the next
+   * load skips the winner flow and lands on the normal dashboard.
+   */
+  private suppressWinnerClaim = false;
+
+  /** Prefill for the claim form (host-app-provided identity). */
+  public get claimFormPrefill(): PrizeClaimForm {
+    return {
+      firstName: this.deps.userPrefill?.firstName ?? '',
+      lastName: this.deps.userPrefill?.lastName ?? '',
+      phone: this.deps.userPrefill?.phone ?? '',
+      street: '',
+      apt: '',
+      city: '',
+      state: '',
+      zip: '',
+    };
   }
 
   /** Re-render hook (root view). */
@@ -165,6 +215,7 @@ export class V2ExperienceController {
   }
 
   public async load(): Promise<void> {
+    let pendingPrizeClaim: PrizeClaimBlock | null = null;
     try {
       const response = await this.deps.api.getActiveGiveaway();
       this.deps.onGiveawayRefreshed?.(response);
@@ -175,7 +226,16 @@ export class V2ExperienceController {
         return;
       }
 
-      if (!response.giveaway) {
+      // Winner prize claim: a PENDING block takes precedence over the
+      // dashboard on open (routed below, once the caches are synced).
+      // A "submitted" block is ignored — the normal dashboard shows.
+      if (response.prizeClaim?.status === 'pending' && !this.suppressWinnerClaim) {
+        pendingPrizeClaim = response.prizeClaim;
+      }
+
+      // A pending prize claim can outlive its giveaway — the winner flow
+      // still shows even when the backend has no active giveaway.
+      if (!response.giveaway && !pendingPrizeClaim) {
         this.giveaway = null;
         this.deps.storage.removeItem(this.giveawayCacheKey);
         this.transition({ kind: 'empty' });
@@ -199,7 +259,9 @@ export class V2ExperienceController {
         this.deps.storage.setItem(this.emailSubmittedKey, 'true');
       }
 
-      this.deps.storage.setItem(this.giveawayCacheKey, JSON.stringify(response.giveaway));
+      if (response.giveaway) {
+        this.deps.storage.setItem(this.giveawayCacheKey, JSON.stringify(response.giveaway));
+      }
     } catch (error) {
       // Offline fallback: use cached giveaway.
       if (!this.giveaway) {
@@ -217,6 +279,23 @@ export class V2ExperienceController {
         this.transition({ kind: 'empty' });
         return;
       }
+    }
+
+    // Winner prize claim takes precedence over the email gate and the
+    // auto-claim/dashboard on open — the claim is keyed to the account
+    // server-side, so it works even before the email-capture flow (and when
+    // the giveaway is null). The daily auto-claim still fires silently in the
+    // background so the winner's entries keep accruing.
+    if (pendingPrizeClaim) {
+      this.winnerClaimStep = { kind: 'splash' };
+      this.transition({ kind: 'winnerClaim', claim: pendingPrizeClaim });
+      analyticsAdapter.track('winr_winner_claim_shown', {
+        giveaway_id: pendingPrizeClaim.giveawayId,
+      });
+      if (!this.claimedToday && this.hasEmailConsent) {
+        void this.silentDailyClaim();
+      }
+      return;
     }
 
     // Email-capture gate: shown until the user completes the consent flow.
@@ -356,6 +435,87 @@ export class V2ExperienceController {
     // streak + claim status drive the UI (and the auto-claim fires).
     this.transition({ kind: 'loading' });
     await this.load();
+  }
+
+  // ─── Winner prize claim ───
+
+  /**
+   * Fire-and-forget daily claim while the winner flow is on screen — the
+   * winner still accrues their streak entries, but nothing is revealed.
+   */
+  private async silentDailyClaim(): Promise<void> {
+    try {
+      const response = await this.deps.api.claimDailyEntries();
+      this.claimedToday = true;
+      this.streakDay = response.streakDay;
+      this.totalEntries = response.totalEntries;
+      logger.debug(`Silent daily claim during winner flow: +${response.entries}`);
+    } catch (error) {
+      logger.debug('Silent daily claim declined during winner flow:', error);
+    }
+  }
+
+  /** Splash CONTINUE → the claim form. */
+  public winnerClaimContinue(): void {
+    if (this.state.kind !== 'winnerClaim') return;
+    this.winnerClaimStep = { kind: 'form' };
+    this.onChange?.(this.state);
+  }
+
+  /**
+   * SUBMIT on the claim form. Success → confirmation screen. A backend
+   * "Not the winner"/"Already submitted" rejection falls back to the normal
+   * dashboard silently (logged); transport failures surface inline
+   * (`claimSubmitError` — read by the form after this settles).
+   */
+  public async submitPrizeClaim(form: PrizeClaimForm): Promise<void> {
+    if (this.state.kind !== 'winnerClaim' || this.isSubmittingClaim) return;
+    if (!isClaimFormValid(form)) return;
+    const claim = this.state.claim;
+    this.claimSubmitError = null;
+    this.isSubmittingClaim = true;
+
+    try {
+      const response = await this.deps.api.submitPrizeClaim({
+        giveawayId: claim.giveawayId,
+        firstName: form.firstName.trim(),
+        lastName: form.lastName.trim(),
+        ...(form.phone.trim() ? { phone: form.phone.trim() } : {}),
+        street: form.street.trim(),
+        ...(form.apt.trim() ? { apt: form.apt.trim() } : {}),
+        city: form.city.trim(),
+        state: form.state.trim(),
+        zip: form.zip.trim(),
+        country: CLAIM_COUNTRY,
+        ...(form.photoBase64 ? { photoBase64: form.photoBase64 } : {}),
+      });
+      this.isSubmittingClaim = false;
+      this.submittedClaimForm = form;
+      this.winnerClaimStep = {
+        kind: 'confirmation',
+        claimNumber: response.claimNumber,
+        submittedAt: response.submittedAt,
+      };
+      analyticsAdapter.track('winr_prize_claim_submitted', {
+        giveaway_id: claim.giveawayId,
+        claim_number: response.claimNumber,
+      });
+      this.onChange?.(this.state);
+    } catch (error) {
+      this.isSubmittingClaim = false;
+      const message = error instanceof Error ? error.message : String(error);
+      if (/not the winner|already submitted/i.test(message)) {
+        // Stale/duplicate winner state — never trap the user in the claim
+        // flow. Fall back to the normal dashboard silently.
+        logger.info(`Prize claim rejected (${message}) — falling back to dashboard`);
+        this.suppressWinnerClaim = true;
+        this.transition({ kind: 'loading' });
+        await this.load();
+        return;
+      }
+      logger.error('Prize claim submit failed:', error);
+      this.claimSubmitError = 'Something went wrong. Please check your connection and try again.';
+    }
   }
 
   // ─── Navigation ───

@@ -1,4 +1,4 @@
-import { Giveaway, GiveawayWinner } from '../../types';
+import { Giveaway, GiveawayWinner, PrizeClaimBlock } from '../../types';
 import { V2_IMAGES } from './assets.generated';
 import { createAnimatedCheck, createConfetti } from './effects';
 import {
@@ -10,17 +10,30 @@ import {
   flameIcon,
   lockIcon,
   mailIcon,
+  paperclipIcon,
   plusIcon,
+  shieldIcon,
   squareIcon,
   ticketIcon,
 } from './icons';
 import { V2ExperienceController } from './controller';
+import {
+  CLAIM_CONSENTS,
+  CLAIM_COUNTRY,
+  PrizeClaimForm,
+  US_STATES,
+  claimDisplayName,
+  claimPhotoBase64Jpeg,
+  isClaimFormValid,
+  monthYearDisplay,
+} from './claim';
 import {
   awardedAtDisplay,
   formatInt,
   isCashPrize,
   prizeArticle,
   showsValueLine,
+  stripHeadline,
 } from './v2-theme';
 
 /**
@@ -371,6 +384,19 @@ export function renderDashboard(
     const totalNum = screen.querySelector('.wv2-stat-total');
     if (totalNum) animateCount(totalNum as HTMLElement, preClaimTotal, c.totalEntries, 700);
 
+    // Delta A: the come-back bar swaps to its claimed celebration
+    // ("{N} ENTRIES ADDED / You're on a roll!") with an animated pop. The
+    // checkmark is recreated so its draw-on runs at the reveal moment.
+    const comeback = screen.querySelector('.wv2-comeback');
+    if (comeback) {
+      const cbCheck = comeback.querySelector('.wv2-cb-check');
+      if (cbCheck) {
+        cbCheck.innerHTML = '';
+        cbCheck.appendChild(createAnimatedCheck(9));
+      }
+      comeback.classList.add('wv2-claimed', 'wv2-cb-animate');
+    }
+
     pill.textContent = 'GOT IT';
   };
 
@@ -408,9 +434,11 @@ function animateCount(node: HTMLElement, from: number, to: number, durationMs: n
 }
 
 /**
- * Day 2+ prize card: white stats strip (streak + total entries) over the prize
- * image. The image is publisher-configurable (prizeImageUrl); default is the
- * bundled cash pile with the prize-derived headline overlaid.
+ * Day 2+ prize card (Joe's Aug-2026 dark full-bleed revision): the prize art
+ * fills the WHOLE card, a solid black stats strip (streak + total entries)
+ * sits inside the top edge, and the prize-derived headline rides the bottom
+ * over a black→transparent scrim. The image is publisher-configurable
+ * (prizeImageUrl); default is the bundled cash pile.
  */
 function renderPrizeCard(c: V2ExperienceController, preReveal = false): HTMLElement {
   const giveaway = c.giveaway;
@@ -425,7 +453,13 @@ function renderPrizeCard(c: V2ExperienceController, preReveal = false): HTMLElem
 
   const card = el('div', 'wv2-prize-card');
 
-  // Stats strip
+  // Full-bleed hero art.
+  const hero = el('img', 'wv2-prize-hero');
+  hero.src = giveaway?.prizeImageUrl || V2_IMAGES.cashHero;
+  hero.alt = '';
+  card.appendChild(hero);
+
+  // Solid black stats strip inside the top edge: accent title + white sub.
   const strip = el('div', 'wv2-stats-strip');
   const streakStat = el('div', 'wv2-stat');
   streakStat.appendChild(icon(flameIcon, 'wv2-ic-flame'));
@@ -446,46 +480,26 @@ function renderPrizeCard(c: V2ExperienceController, preReveal = false): HTMLElem
   strip.appendChild(entriesStat);
   card.appendChild(strip);
 
-  // Promo
-  const promo = el('div', 'wv2-promo');
-  if (giveaway?.prizeImageUrl) {
-    // Publisher-supplied prize art fills the card as-is.
-    const img = el('img', 'wv2-promo-img');
-    img.src = giveaway.prizeImageUrl;
-    img.alt = '';
-    promo.appendChild(img);
+  // Prize headline over the bottom black→transparent scrim.
+  const headline = el('div', 'wv2-prize-headline');
+  if (isCashPrize(description)) {
+    // "WIN $1,000" over "CASH PRIZE", right-aligned.
+    const lockup = el('div', 'wv2-ph-cash');
+    lockup.appendChild(el('div', 'wv2-ph-cash-win', `WIN $${formatInt(value)}`));
+    lockup.appendChild(el('div', 'wv2-ph-cash-sub', 'CASH PRIZE'));
+    headline.appendChild(lockup);
   } else {
-    // Default: bundled cash pile fading up into white, with the prize-derived
-    // headline over the fade (Figma cash card).
-    const img = el('img', 'wv2-promo-img wv2-promo-cash');
-    img.src = V2_IMAGES.cashHero;
-    img.alt = '';
-    promo.appendChild(img);
-    promo.appendChild(el('div', 'wv2-promo-fade'));
-
-    if (isCashPrize(description)) {
-      // Figma cash lockup: "WIN $1,000" over "CASH PRIZE", right-aligned.
-      const lockup = el('div', 'wv2-promo-cash-lockup');
-      lockup.appendChild(el('div', 'wv2-promo-cash-win', `WIN $${formatInt(value)}`));
-      lockup.appendChild(el('div', 'wv2-promo-cash-sub', 'CASH PRIZE'));
-      promo.appendChild(lockup);
-    } else {
-      // "WIN A $500 AMAZON GIFT CARD" + "$500.00 Value!"
-      const lockup = el('div', 'wv2-promo-prize-lockup');
-      lockup.appendChild(
-        el(
-          'div',
-          'wv2-promo-prize-title',
-          `WIN ${prizeArticle(description, true)} ${description.toUpperCase()}`
-        )
-      );
-      if (showsValueLine(description, value)) {
-        lockup.appendChild(el('div', 'wv2-promo-prize-value', `$${formatInt(value)}.00 Value!`));
-      }
-      promo.appendChild(lockup);
+    // Centered "Win a {Prize}" + accent "$X.00 VALUE!".
+    const lockup = el('div', 'wv2-ph-prize');
+    lockup.appendChild(
+      el('div', 'wv2-ph-prize-title', `Win ${prizeArticle(description, false)} ${description}`)
+    );
+    if (showsValueLine(description, value)) {
+      lockup.appendChild(el('div', 'wv2-ph-prize-value', `$${formatInt(value)}.00 VALUE!`));
     }
+    headline.appendChild(lockup);
   }
-  card.appendChild(promo);
+  card.appendChild(headline);
   return card;
 }
 
@@ -673,8 +687,22 @@ function attachRailScrolling(rail: HTMLElement): void {
 // ─── Confirmation ("come back tomorrow") bar ───
 
 function renderComeBackBar(c: V2ExperienceController): HTMLElement {
+  const preReveal = c.pendingRevealGrant !== null && !c.claimRevealed;
+  // Delta A: once today's claim is revealed (or the user reopens in a claimed
+  // state) the bar celebrates the entries that were just added instead of
+  // pitching tomorrow. Pre-reveal keeps the come-back copy. The reveal click
+  // swaps the contents with an animated pop (see doReveal).
+  const claimed = c.claimedToday && !preReveal;
+  const claimedEntries = c.pendingRevealGrant
+    ? c.pendingRevealGrant.baseEntries + c.pendingRevealGrant.bonusEntries
+    : c.ladderValue(c.streakDay);
+
   const bar = el('div', 'wv2-comeback');
-  bar.appendChild(icon(calendarIcon, 'wv2-ic-cal'));
+  if (claimed) bar.classList.add('wv2-claimed');
+
+  // Come-back pitch (pre-reveal / unclaimed).
+  const come = el('div', 'wv2-cb-come');
+  come.appendChild(icon(calendarIcon, 'wv2-ic-cal'));
   const col = el('div', 'wv2-comeback-col');
   col.appendChild(
     el(
@@ -686,7 +714,20 @@ function renderComeBackBar(c: V2ExperienceController): HTMLElement {
     )
   );
   col.appendChild(el('div', 'wv2-comeback-entries', `${formatInt(c.nextEntries)} ENTRIES`));
-  bar.appendChild(col);
+  come.appendChild(col);
+  bar.appendChild(come);
+
+  // Claimed celebration ("{N} ENTRIES ADDED / You're on a roll!").
+  const done = el('div', 'wv2-cb-claimed');
+  const check = el('div', 'wv2-cb-check');
+  check.appendChild(createAnimatedCheck(9)); // 3.5pt at 38px ≈ 9/100 viewBox units
+  done.appendChild(check);
+  const doneCol = el('div', 'wv2-cb-claimed-col');
+  doneCol.appendChild(el('div', 'wv2-cb-added', `${formatInt(claimedEntries)} ENTRIES ADDED`));
+  doneCol.appendChild(el('div', 'wv2-cb-roll', 'You’re on a roll!'));
+  done.appendChild(doneCol);
+  bar.appendChild(done);
+
   // Joe's toast has celebratory sprinkles drifting over the reward line.
   bar.appendChild(createConfetti({ style: 'celebration', count: 10, speed: 0.55 }));
   return bar;
@@ -858,6 +899,450 @@ export function renderHowItWorks(c: V2ExperienceController, logoUrl?: string | n
   cta.appendChild(renderPill('GOT IT - START MY STREAK', () => c.hideHowItWorks()));
   scroll.appendChild(cta);
 
+  screen.appendChild(scroll);
+  return screen;
+}
+
+// ═══ Winner prize-claim flow (splash → form → confirmation) ═══
+// Ported from iOS WINRV2Claim.swift (Joe's Light variant).
+
+/** Claim-flow header: publisher logo centered, X close only (no "?"). */
+function renderClaimHeader(logoUrl: string | null | undefined, onClose: () => void): HTMLElement {
+  const header = el('div', 'wv2-claim-header');
+
+  const logo = el('div', 'wv2-header-logo');
+  if (logoUrl) {
+    const img = el('img');
+    img.src = logoUrl;
+    img.alt = '';
+    logo.appendChild(img);
+  } else {
+    logo.appendChild(el('span', 'wv2-header-logo-fallback', 'WINR'));
+  }
+  header.appendChild(logo);
+
+  const close = el('button', 'wv2-circle-btn wv2-claim-close');
+  const x = icon(closeIcon, 'wv2-ic');
+  x.style.cssText = 'width:12px;height:12px';
+  close.appendChild(x);
+  close.setAttribute('aria-label', 'Close');
+  close.addEventListener('click', onClose);
+  header.appendChild(close);
+
+  return header;
+}
+
+/** Dark info card with a leading icon (shield/mail) — splash + confirmation. */
+function renderClaimInfoCard(iconEl: HTMLElement, content: HTMLElement): HTMLElement {
+  const card = el('div', 'wv2-claim-info-card');
+  card.appendChild(iconEl);
+  card.appendChild(content);
+  return card;
+}
+
+// ─── Winner splash ("CONGRATULATIONS!") ───
+
+export function renderWinnerSplash(
+  c: V2ExperienceController,
+  claim: PrizeClaimBlock,
+  logoUrl?: string | null
+): HTMLElement {
+  const screen = el('div', 'wv2-screen wv2-claim-screen');
+  const scroll = el('div', 'wv2-scroll');
+  const stack = el('div', 'wv2-claim-stack');
+
+  stack.appendChild(renderClaimHeader(logoUrl, () => c.requestDismiss()));
+
+  // Trophy over the gold-sparkle art.
+  const art = el('div', 'wv2-claim-trophy-art');
+  const bg = el('img', 'wv2-claim-trophy-bg');
+  bg.src = V2_IMAGES.winnerModalBg;
+  bg.alt = '';
+  art.appendChild(bg);
+  const trophy = el('img', 'wv2-claim-trophy');
+  trophy.src = V2_IMAGES.trophy;
+  trophy.alt = '';
+  art.appendChild(trophy);
+  stack.appendChild(art);
+
+  stack.appendChild(el('div', 'wv2-claim-congrats', 'CONGRATULATIONS!'));
+  stack.appendChild(el('div', 'wv2-claim-latest', 'YOU’RE OUR LATEST WINNER!'));
+  stack.appendChild(el('div', 'wv2-claim-youve-won', 'You’ve won:'));
+
+  // Full-width white strip with the prize-derived headline (same derivation
+  // as the Day-1 capture strip).
+  stack.appendChild(
+    el(
+      'div',
+      'wv2-claim-strip',
+      stripHeadline(claim.prizeDescription, Math.round(claim.prizeValue))
+    )
+  );
+
+  stack.appendChild(
+    el('div', 'wv2-claim-body-copy', 'To process your prize, we just need a few details.')
+  );
+
+  const shield = icon(shieldIcon, 'wv2-claim-shield');
+  stack.appendChild(
+    renderClaimInfoCard(
+      shield,
+      el(
+        'div',
+        'wv2-claim-info-text',
+        'Your information is securely collected and only used to verify your prize and announce you as our winner.'
+      )
+    )
+  );
+
+  const cta = el('div', 'wv2-claim-cta');
+  cta.appendChild(renderPill('CONTINUE', () => c.winnerClaimContinue()));
+  stack.appendChild(cta);
+
+  scroll.appendChild(stack);
+  screen.appendChild(scroll);
+  return screen;
+}
+
+// ─── Claim form ("TELL US ABOUT YOURSELF") ───
+
+export function renderClaimForm(c: V2ExperienceController, logoUrl?: string | null): HTMLElement {
+  const form: PrizeClaimForm = c.claimFormPrefill;
+  const consents: boolean[] = CLAIM_CONSENTS.map(() => false);
+
+  const screen = el('div', 'wv2-screen wv2-claim-screen');
+
+  // Gold-sparkle backdrop at the top, fading into the dark body.
+  const backdrop = el('div', 'wv2-claim-form-bg');
+  const backdropImg = el('img');
+  backdropImg.src = V2_IMAGES.winnerModalBg;
+  backdropImg.alt = '';
+  backdrop.appendChild(backdropImg);
+  backdrop.appendChild(el('div', 'wv2-claim-form-bg-grad'));
+  screen.appendChild(backdrop);
+
+  const scroll = el('div', 'wv2-scroll');
+  scroll.style.position = 'relative';
+  const stack = el('div', 'wv2-claim-stack');
+
+  stack.appendChild(renderClaimHeader(logoUrl, () => c.requestDismiss()));
+
+  stack.appendChild(el('div', 'wv2-claim-form-pill', 'PRIZE CLAIM FORM'));
+  stack.appendChild(el('div', 'wv2-claim-form-title', 'TELL US ABOUT YOURSELF'));
+  stack.appendChild(
+    el(
+      'div',
+      'wv2-claim-form-sub',
+      'We’ll use this information to verify your prize and personalize your winner announcement.'
+    )
+  );
+
+  const fields = el('div', 'wv2-claim-fields');
+
+  /** A labeled dark rounded text field (claim form). */
+  const field = (options: {
+    label: string;
+    key?: keyof Pick<PrizeClaimForm, 'firstName' | 'lastName' | 'phone' | 'street' | 'apt' | 'city' | 'zip'>;
+    value?: string;
+    disabled?: boolean;
+    type?: string;
+    autocomplete?: string;
+    inputmode?: string;
+  }): { wrap: HTMLElement; input: HTMLInputElement } => {
+    const wrap = el('div', 'wv2-claim-field');
+    wrap.appendChild(el('label', 'wv2-claim-label', options.label));
+    const input = el('input', 'wv2-claim-input');
+    input.type = options.type ?? 'text';
+    if (options.autocomplete) input.setAttribute('autocomplete', options.autocomplete);
+    if (options.inputmode) input.setAttribute('inputmode', options.inputmode);
+    input.setAttribute('autocorrect', 'off');
+    if (options.disabled) {
+      input.value = options.value ?? '';
+      input.disabled = true;
+      input.classList.add('wv2-claim-input-locked');
+    } else if (options.key) {
+      input.value = form[options.key];
+      input.addEventListener('input', () => {
+        form[options.key!] = input.value;
+        refresh();
+      });
+    }
+    wrap.appendChild(input);
+    return { wrap, input };
+  };
+
+  fields.appendChild(
+    field({ label: 'First Name', key: 'firstName', autocomplete: 'given-name' }).wrap
+  );
+  fields.appendChild(
+    field({
+      label: 'Last Name (we will only show your last initial)',
+      key: 'lastName',
+      autocomplete: 'family-name',
+    }).wrap
+  );
+  // The winning email lives server-side (the SDK never stores raw email) and
+  // the claim is keyed to the account — shown locked, no value editable.
+  fields.appendChild(
+    field({
+      label: 'Winning Email Address (cannot be changed)',
+      value: 'On file with your winning entry',
+      disabled: true,
+    }).wrap
+  );
+  fields.appendChild(
+    field({
+      label: 'Phone Number (optional)',
+      key: 'phone',
+      type: 'tel',
+      autocomplete: 'tel',
+      inputmode: 'tel',
+    }).wrap
+  );
+  fields.appendChild(
+    field({ label: 'Street Address', key: 'street', autocomplete: 'address-line1' }).wrap
+  );
+  fields.appendChild(
+    field({
+      label: 'Apartment, Suite, etc. (optional)',
+      key: 'apt',
+      autocomplete: 'address-line2',
+    }).wrap
+  );
+  fields.appendChild(
+    field({ label: 'City', key: 'city', autocomplete: 'address-level2' }).wrap
+  );
+
+  // State picker + zip, side by side.
+  const row = el('div', 'wv2-claim-row');
+  const stateWrap = el('div', 'wv2-claim-field wv2-claim-state');
+  stateWrap.appendChild(el('label', 'wv2-claim-label', 'State'));
+  const selectWrap = el('div', 'wv2-claim-select-wrap');
+  const select = el('select', 'wv2-claim-select');
+  const placeholder = el('option', undefined, 'Select');
+  placeholder.value = '';
+  placeholder.disabled = true;
+  placeholder.selected = true;
+  select.appendChild(placeholder);
+  for (const state of US_STATES) {
+    const option = el('option', undefined, state);
+    option.value = state;
+    select.appendChild(option);
+  }
+  select.addEventListener('change', () => {
+    form.state = select.value;
+    select.classList.toggle('wv2-placeholder', select.value === '');
+    refresh();
+  });
+  select.classList.add('wv2-placeholder');
+  selectWrap.appendChild(select);
+  selectWrap.appendChild(icon(arrowDownIcon, 'wv2-claim-select-chevron'));
+  stateWrap.appendChild(selectWrap);
+  row.appendChild(stateWrap);
+
+  const zip = field({ label: 'Zip Code', key: 'zip', inputmode: 'numeric' });
+  zip.wrap.classList.add('wv2-claim-zip');
+  zip.input.maxLength = 5;
+  zip.input.addEventListener('input', () => {
+    const digits = zip.input.value.replace(/\D/g, '').slice(0, 5);
+    if (digits !== zip.input.value) zip.input.value = digits;
+    form.zip = digits;
+    refresh();
+  });
+  row.appendChild(zip.wrap);
+  fields.appendChild(row);
+
+  fields.appendChild(field({ label: 'Country', value: CLAIM_COUNTRY, disabled: true }).wrap);
+
+  // Optional photo: file input with client-side downscale (≤1200px long edge
+  // → JPEG base64 ≤5MB) before it ever leaves the browser.
+  const photoSection = el('div', 'wv2-claim-photo');
+  const fileInput = el('input');
+  fileInput.type = 'file';
+  fileInput.accept = 'image/png,image/jpeg,image/webp';
+  fileInput.style.display = 'none';
+  photoSection.appendChild(fileInput);
+
+  const attachBtn = el('button', 'wv2-claim-attach');
+  attachBtn.type = 'button';
+  const clip = icon(paperclipIcon, 'wv2-claim-clip');
+  attachBtn.appendChild(clip);
+  attachBtn.appendChild(el('span', undefined, 'ATTACH A PHOTO'));
+  attachBtn.addEventListener('click', () => fileInput.click());
+  photoSection.appendChild(attachBtn);
+
+  const attachedRow = el('div', 'wv2-claim-attached');
+  attachedRow.style.display = 'none';
+  const thumb = el('img', 'wv2-claim-thumb');
+  thumb.alt = '';
+  attachedRow.appendChild(thumb);
+  attachedRow.appendChild(el('div', 'wv2-claim-attached-label', 'Photo attached'));
+  const removeBtn = el('button', 'wv2-claim-remove');
+  removeBtn.type = 'button';
+  const removeX = icon(closeIcon, 'wv2-ic');
+  removeX.style.cssText = 'width:11px;height:11px';
+  removeBtn.appendChild(removeX);
+  removeBtn.setAttribute('aria-label', 'Remove photo');
+  removeBtn.addEventListener('click', () => {
+    delete form.photoBase64;
+    fileInput.value = '';
+    thumb.removeAttribute('src');
+    attachedRow.style.display = 'none';
+    attachBtn.style.display = '';
+  });
+  attachedRow.appendChild(removeBtn);
+  photoSection.appendChild(attachedRow);
+
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files?.[0];
+    if (!file) return;
+    delete form.photoBase64;
+    attachBtn.style.display = 'none';
+    attachedRow.style.display = '';
+    void claimPhotoBase64Jpeg(file).then((encoded) => {
+      if (encoded) {
+        form.photoBase64 = encoded;
+        thumb.src = `data:image/jpeg;base64,${encoded}`;
+      }
+    });
+  });
+  fields.appendChild(photoSection);
+
+  // Required consent confirmations.
+  const consentsWrap = el('div', 'wv2-claim-consents');
+  CLAIM_CONSENTS.forEach((text, index) => {
+    const rowBtn = el('button', 'wv2-claim-consent');
+    rowBtn.type = 'button';
+    const box = icon(squareIcon, 'wv2-ic');
+    rowBtn.appendChild(box);
+    rowBtn.appendChild(el('span', undefined, text));
+    rowBtn.addEventListener('click', () => {
+      consents[index] = !consents[index];
+      box.innerHTML = consents[index] ? checkSquareIcon : squareIcon;
+      refresh();
+    });
+    consentsWrap.appendChild(rowBtn);
+  });
+  fields.appendChild(consentsWrap);
+
+  stack.appendChild(fields);
+
+  const errorEl = el('div', 'wv2-claim-error');
+  errorEl.style.display = 'none';
+  stack.appendChild(errorEl);
+
+  const canSubmit = (): boolean => isClaimFormValid(form) && consents.every(Boolean);
+
+  const submitWrap = el('div', 'wv2-claim-submit');
+  const submit = renderPill('SUBMIT PRIZE CLAIM', () => void onSubmit(), {
+    disabled: !canSubmit(),
+  });
+  submitWrap.appendChild(submit);
+  stack.appendChild(submitWrap);
+
+  // Lock note under the submit pill.
+  const lockNote = el('div', 'wv2-claim-lock-note');
+  lockNote.appendChild(icon(lockIcon, 'wv2-claim-lock-ic'));
+  lockNote.appendChild(
+    el('span', undefined, 'Your information is encrypted and only used to process your prize.')
+  );
+  stack.appendChild(lockNote);
+
+  const refresh = (): void => {
+    if (c.isSubmittingClaim) return;
+    submit.disabled = !canSubmit();
+    submit.classList.toggle('wv2-pill-dim', !canSubmit());
+  };
+
+  const onSubmit = async (): Promise<void> => {
+    if (!canSubmit() || c.isSubmittingClaim) return;
+    errorEl.style.display = 'none';
+    submit.textContent = '';
+    submit.appendChild(el('span', 'wv2-spinner'));
+    submit.disabled = true;
+
+    await c.submitPrizeClaim(form);
+
+    // Success and "not the winner" fall-back both re-render the whole state;
+    // only a transport failure leaves us on the form — surface it inline.
+    if (c.state.kind === 'winnerClaim' && c.winnerClaimStep.kind === 'form') {
+      submit.textContent = 'SUBMIT PRIZE CLAIM';
+      submit.disabled = !canSubmit();
+      submit.classList.toggle('wv2-pill-dim', !canSubmit());
+      if (c.claimSubmitError) {
+        errorEl.textContent = c.claimSubmitError;
+        errorEl.style.display = '';
+      }
+    }
+  };
+
+  scroll.appendChild(stack);
+  screen.appendChild(scroll);
+  return screen;
+}
+
+// ─── Confirmation ("YOUR PRIZE CLAIM HAS BEEN SUBMITTED") ───
+
+export function renderClaimConfirmation(
+  c: V2ExperienceController,
+  claimNumber: string,
+  submittedAt: string,
+  logoUrl?: string | null
+): HTMLElement {
+  const form = c.submittedClaimForm;
+
+  const screen = el('div', 'wv2-screen wv2-claim-screen');
+  const scroll = el('div', 'wv2-scroll');
+  const stack = el('div', 'wv2-claim-stack');
+
+  stack.appendChild(renderClaimHeader(logoUrl, () => c.requestDismiss()));
+
+  stack.appendChild(
+    el('div', 'wv2-claim-done-title', 'YOUR PRIZE CLAIM HAS BEEN SUBMITTED')
+  );
+  stack.appendChild(
+    el(
+      'div',
+      'wv2-claim-done-sub',
+      'Our team is reviewing your information. You’ll receive a confirmation email shortly.'
+    )
+  );
+
+  const mail = icon(mailIcon, 'wv2-claim-mail');
+  const mailCol = el('div', 'wv2-claim-mail-col');
+  mailCol.appendChild(el('div', 'wv2-claim-mail-line', 'Expect to receive your prize within'));
+  mailCol.appendChild(el('div', 'wv2-claim-mail-days', '3-5 Business Days'));
+  stack.appendChild(renderClaimInfoCard(mail, mailCol));
+
+  // The gold OFFICIAL WINNER keepsake card: cream/gold gradient, small trophy
+  // breaking the top border, serif name, award month + claim number.
+  const card = el('div', 'wv2-gold-card');
+  const trophy = el('img', 'wv2-gold-trophy');
+  trophy.src = V2_IMAGES.trophy;
+  trophy.alt = '';
+  card.appendChild(trophy);
+
+  const officialRow = el('div', 'wv2-gold-official');
+  officialRow.appendChild(el('span', undefined, 'OFFICIAL'));
+  officialRow.appendChild(el('span', undefined, 'WINNER'));
+  card.appendChild(officialRow);
+
+  card.appendChild(el('div', 'wv2-gold-name', form ? claimDisplayName(form) : 'Our Winner'));
+  if (form && form.city.trim() !== '') {
+    card.appendChild(
+      el('div', 'wv2-gold-loc', `${form.city.trim()}, ${form.state.trim()}`)
+    );
+  }
+  card.appendChild(
+    el('div', 'wv2-gold-meta', `${monthYearDisplay(submittedAt)} • ${claimNumber}`)
+  );
+  stack.appendChild(card);
+
+  const cta = el('div', 'wv2-claim-cta wv2-claim-done-cta');
+  cta.appendChild(renderPill('RETURN TO APP', () => c.requestDismiss()));
+  stack.appendChild(cta);
+
+  scroll.appendChild(stack);
   screen.appendChild(scroll);
   return screen;
 }
