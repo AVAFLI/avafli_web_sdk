@@ -19,14 +19,19 @@ import { ladderEntries } from './v2-theme';
 /**
  * V2 experience state machine — ported from iOS WINRExperienceViewModel.
  *
- * Flow: loading → (emailCapture | dashboard) → auto-claim on open →
- * Day 1: celebration modal (its GOT IT closes the experience) /
- * Day 2+: the celebration is the dashboard's FIRST VISIBLE FRAME — a
- * PREDICTED grant (ladder math over the pre-claim status response) is staged
- * before entering the dashboard, the in-place celebration (tile check +
- * confetti + totals advance) fires on first mount, and the real claim runs
- * in the background, reconciling totals/streak silently when it returns (no
- * second celebration; failures settle back to server truth quietly) /
+ * Flow: loading → (emailCapture | dashboard) → auto-claim on open → the
+ * celebration is ALWAYS the dashboard's FIRST VISIBLE FRAME (there is no
+ * celebration modal):
+ * Day 1: the previous screen (email capture with its CTA spinner, or the
+ * loading state) HOLDS while the claim is awaited, then the dashboard mounts
+ * with the celebration staged straight from the claim response ("YOU'RE IN!"
+ * toast, 0→N count-up, tile burst) /
+ * Day 2+ (pre-claim streak >= 2): a PREDICTED grant (ladder math over the
+ * pre-claim status response) is staged before entering the dashboard, the
+ * in-place celebration (tile check + confetti + totals advance) fires on
+ * first mount, and the real claim runs in the background, reconciling
+ * totals/streak silently when it returns (no second celebration; failures
+ * settle back to server truth quietly) /
  * silent claimed-state on "Already claimed" (with a ONE-SHOT re-sync so
  * cached totals catch up when another device claimed between the status
  * fetch and our claim).
@@ -37,12 +42,6 @@ export type V2State =
   | { kind: 'empty' } // no active giveaway / opted out / fatal error
   | { kind: 'emailCapture' }
   | { kind: 'dashboard' }
-  | {
-      kind: 'celebration';
-      baseEntries: number;
-      bonusEntries: number;
-      totalEntries: number;
-    }
   | { kind: 'howItWorks' }
   /**
    * This person is the drawn winner and hasn't submitted their claim yet —
@@ -95,15 +94,17 @@ export class V2ExperienceController {
   public totalEntries = 0;
   public isSubmittingEmail = false;
 
-  // ─── Day 2+ reveal flow ───
+  // ─── In-place reveal flow (every day — there is no celebration modal) ───
   //
-  // The celebration is the dashboard's first visible frame: before entering
-  // the dashboard state a PREDICTED grant is staged straight from the
-  // pre-claim status response (predicted entries = the ladder value for the
-  // streak day being claimed today), the reveal fires on first mount, and
-  // the real claim runs in the BACKGROUND — its response reconciles the
-  // totals/streak silently (no second celebration). The pill reads "GOT IT"
-  // the whole time — there is no claim click.
+  // The celebration is the dashboard's first visible frame.
+  // Day 2+ (pre-claim streak >= 2): a PREDICTED grant is staged straight
+  // from the pre-claim status response (predicted entries = the ladder value
+  // for the streak day being claimed today), the reveal fires on first
+  // mount, and the real claim runs in the BACKGROUND — its response
+  // reconciles the totals/streak silently (no second celebration).
+  // Day 1: the claim is AWAITED while the previous screen holds, and the
+  // grant is staged directly from the claim response (no prediction needed).
+  // The pill reads "GOT IT" the whole time — there is no claim click.
 
   /** The grant staged for the auto-reveal (null when nothing is pending). */
   public pendingRevealGrant: { baseEntries: number; bonusEntries: number } | null = null;
@@ -357,12 +358,15 @@ export class V2ExperienceController {
       return;
     }
 
-    // Day 2+ (an existing streak, unclaimed today): the celebration is the
-    // dashboard's FIRST VISIBLE FRAME. Stage a PREDICTED grant from the
-    // pre-claim response (no waiting on the claim round-trip), enter the
-    // dashboard, arm the first-mount reveal, and reconcile with the real
-    // claim in the background.
-    if (!this.claimedToday && this.streakDay >= 1) {
+    // Day 2+ (an existing streak of at least 2 pre-claim, unclaimed today):
+    // the celebration is the dashboard's FIRST VISIBLE FRAME. Stage a
+    // PREDICTED grant from the pre-claim response (no waiting on the claim
+    // round-trip), enter the dashboard, arm the first-mount reveal, and
+    // reconcile with the real claim in the background. Gated to
+    // streakDay >= 2 — Day 1 must NEVER stage the predicted celebration (its
+    // pre-claim streakDay is 0/unset-default-1 and the reveal is staged from
+    // the awaited claim response below instead).
+    if (!this.claimedToday && this.streakDay >= 2) {
       this.stagePredictedReveal();
       this.transition({ kind: 'dashboard' });
       this.scheduleAutoReveal();
@@ -370,14 +374,18 @@ export class V2ExperienceController {
       return;
     }
 
-    this.transition({ kind: 'dashboard' });
-
-    // Day 1 (brand-new or restarted streak): entries are granted
-    // automatically when the drawer opens — no tap required — and the
-    // "You're in!" celebration modal is the reveal, so the claim is awaited.
+    // Day 1 (brand-new or restarted streak, typically right after email
+    // capture): entries are granted automatically — no tap required. The
+    // CURRENT screen holds while the claim is awaited (the capture form's
+    // CTA spinner, or the loading state — never a bare pre-claim dashboard),
+    // and autoClaim() lands on the dashboard mounting as its first-frame
+    // celebration, staged straight from the claim response.
     if (!this.claimedToday) {
       await this.autoClaim();
+      return;
     }
+
+    this.transition({ kind: 'dashboard' });
   }
 
   /**
@@ -549,28 +557,17 @@ export class V2ExperienceController {
         ...(response.milestone ? { milestone: response.milestone } : {}),
       });
 
-      // V2 auto-claim routing (mirrors iOS commit 50cd438):
-      // - Day 1 (brand-new or restarted streak, typically right after email
-      //   capture): the "You're in!" celebration modal is the reveal.
-      // - Day 2+: no modal, no claim click. Land on the dashboard pinned to
-      //   yesterday's numbers; the in-place celebration fires on its own a
-      //   beat later (Joe's Slice Day 2+ flow).
-      if (response.streakDay <= 1) {
-        this.transition({
-          kind: 'celebration',
-          baseEntries: response.entries,
-          bonusEntries: bonus,
-          totalEntries: response.totalEntries,
-        });
-      } else {
-        this.pendingRevealGrant = { baseEntries: response.entries, bonusEntries: bonus };
-        this.claimRevealed = false;
-        this.preClaimTotalEntries = response.totalEntries - (response.entries + bonus);
-        this.transition({ kind: 'dashboard' });
-        // Armed HERE (not in the render): the claim response is what stages
-        // the grant, and the dashboard may already have been on screen.
-        this.scheduleAutoReveal();
-      }
+      // V2 auto-claim routing: Day 1 is UNIFIED with Day 2+ — no modal, no
+      // claim click. The reveal is staged straight from the claim response
+      // and the dashboard mounts as its first-frame celebration ("YOU'RE
+      // IN!" toast + 0→N count-up on Day 1, the streak toast on Day 2+).
+      this.pendingRevealGrant = { baseEntries: response.entries, bonusEntries: bonus };
+      this.claimRevealed = false;
+      this.preClaimTotalEntries = response.totalEntries - (response.entries + bonus);
+      this.transition({ kind: 'dashboard' });
+      // Armed HERE (not in the render): the claim response is what stages
+      // the grant, and the dashboard may already have been on screen.
+      this.scheduleAutoReveal();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
 
@@ -621,14 +618,22 @@ export class V2ExperienceController {
       logger.info('Email submitted to backend');
     } catch (error) {
       logger.error('Email submit to backend failed (will retry later):', error);
-    } finally {
-      this.isSubmittingEmail = false;
     }
 
     // Re-load so the (possibly switched) canonical user's authoritative
-    // streak + claim status drive the UI (and the auto-claim fires).
-    this.transition({ kind: 'loading' });
-    await this.load();
+    // streak + claim status drive the UI (and the auto-claim fires). The
+    // CAPTURE SCREEN HOLDS — its CTA spinner keeps spinning — through the
+    // reload AND the awaited Day-1 claim, so the next frame the user sees is
+    // the dashboard mounting as its first-frame celebration (never a bare
+    // pre-claim dashboard, never an interstitial loading screen).
+    try {
+      await this.load();
+    } finally {
+      this.isSubmittingEmail = false;
+      // If we settled back on the capture (e.g. consent didn't stick), the
+      // CTA must come out of its spinner state.
+      if (this.state.kind === 'emailCapture') this.onChange?.(this.state);
+    }
   }
 
   // ─── Winner prize claim ───

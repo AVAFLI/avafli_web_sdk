@@ -3,7 +3,6 @@ import { logger } from '../../services/logger';
 import { V2ExperienceController, V2State } from './controller';
 import {
   renderCapture,
-  renderCelebrationModal,
   renderClaimConfirmation,
   renderClaimSteps,
   renderDashboard,
@@ -33,7 +32,6 @@ export class WINRV2Experience {
   private modalHost: HTMLElement | null = null;
   private escapeHandler: ((e: KeyboardEvent) => void) | null = null;
 
-  private celebrationOpen = false;
   private winnerOpen = false;
 
   // present() settlement: resolves with the grant when a claim succeeded, or
@@ -106,11 +104,7 @@ export class WINRV2Experience {
 
     const backdrop = document.createElement('div');
     backdrop.className = 'wv2-backdrop';
-    backdrop.addEventListener('click', () => {
-      // The celebration modal requires an explicit GOT IT / X — the backdrop
-      // must not swallow it.
-      if (!this.celebrationOpen) this.dismiss();
-    });
+    backdrop.addEventListener('click', () => this.dismiss());
     overlay.appendChild(backdrop);
 
     const sheet = document.createElement('div');
@@ -147,7 +141,7 @@ export class WINRV2Experience {
         this.closeWinnerModal();
         return;
       }
-      if (!this.celebrationOpen) this.dismiss();
+      this.dismiss();
     };
     document.addEventListener('keydown', this.escapeHandler);
   }
@@ -174,7 +168,6 @@ export class WINRV2Experience {
 
     this.sheet.innerHTML = '';
     this.modalHost.innerHTML = '';
-    this.celebrationOpen = false;
     this.winnerOpen = false;
 
     const c = this.controller;
@@ -189,24 +182,10 @@ export class WINRV2Experience {
         this.sheet.appendChild(renderCapture(c, logoUrl));
         break;
       case 'dashboard':
+        // Every celebration (Day 1 included) is the dashboard's own
+        // first-frame in-place reveal — there is no celebration modal.
         this.sheet.appendChild(renderDashboard(c, logoUrl, () => this.openWinnerModal()));
         break;
-      case 'celebration': {
-        // Dashboard behind + celebration modal on top (explicit dismiss only).
-        // Day-1 modal is the reveal for brand-new streaks; GOT IT closes the
-        // whole experience until the next day's open (mirrors iOS e7fae27).
-        this.sheet.appendChild(renderDashboard(c, logoUrl, () => this.openWinnerModal()));
-        this.sheet.style.filter = 'blur(3px)';
-        this.celebrationOpen = true;
-        this.modalHost.appendChild(
-          renderCelebrationModal(
-            c,
-            { baseEntries: state.baseEntries, bonusEntries: state.bonusEntries },
-            () => c.requestDismiss()
-          )
-        );
-        return; // keep the blur until the celebration is dismissed
-      }
       case 'howItWorks':
         this.sheet.appendChild(renderHowItWorks(c, logoUrl));
         break;
@@ -227,7 +206,6 @@ export class WINRV2Experience {
         break;
       }
     }
-    this.sheet.style.filter = '';
   }
 
   private openWinnerModal(): void {

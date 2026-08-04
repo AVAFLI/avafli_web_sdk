@@ -51,7 +51,8 @@ import {
 
 /**
  * The V2 experience screens, ported from iOS WINRV2Screens/Components/Winner:
- * new-user capture, return-user dashboard, celebration modal, how-it-works,
+ * new-user capture, return-user dashboard (whose first-frame in-place reveal
+ * is the ONLY celebration — there is no celebration modal), how-it-works,
  * and the winner banner/dialog. Publishers can customize ONLY: logo, prize
  * image, primary color. Everything else is hardcoded to the design or derived
  * from the prize.
@@ -816,12 +817,16 @@ function renderComeBackBar(c: V2ExperienceController): HTMLElement {
   bar.appendChild(come);
 
   // Claimed celebration toast: headline + "your entries landed" subline.
+  // Day 1 (post-claim streak 1) greets with "YOU'RE IN!" — Day 2+ keeps the
+  // streak headline. The subline is the same either way.
   const done = el('div', 'wv2-cb-claimed');
   const check = el('div', 'wv2-cb-check');
   check.appendChild(createAnimatedCheck(9)); // 3.5pt at 38px ≈ 9/100 viewBox units
   done.appendChild(check);
   const doneCol = el('div', 'wv2-cb-claimed-col');
-  doneCol.appendChild(el('div', 'wv2-cb-added', 'YOU’RE ON A ROLL!'));
+  doneCol.appendChild(
+    el('div', 'wv2-cb-added', c.streakDay <= 1 ? 'YOU’RE IN!' : 'YOU’RE ON A ROLL!')
+  );
   doneCol.appendChild(
     el(
       'div',
@@ -835,98 +840,6 @@ function renderComeBackBar(c: V2ExperienceController): HTMLElement {
   // Joe's toast has celebratory sprinkles drifting over the reward line.
   bar.appendChild(createConfetti({ style: 'celebration', count: 10, speed: 0.55 }));
   return bar;
-}
-
-// ─── Celebration modal (Day 1 "You're in!" / Day 2+ streak) ───
-
-export function renderCelebrationModal(
-  c: V2ExperienceController,
-  earned: { baseEntries: number; bonusEntries: number },
-  onDismiss: () => void
-): HTMLElement {
-  const layer = el('div', 'wv2-modal-layer');
-  layer.appendChild(el('div', 'wv2-modal-dim')); // explicit dismiss only — no tap-through
-
-  const streakDay = c.streakDay;
-  const isFirstDay = streakDay <= 1;
-  const visitMode = c.visitMode;
-  const earnedEntries = earned.baseEntries + earned.bonusEntries;
-  const nextEntries = c.nextEntries;
-
-  const card = el('div', 'wv2-celebration-card');
-
-  // Animated draw-on checkmark.
-  const check = el('div', 'wv2-celebration-check');
-  check.appendChild(createAnimatedCheck(7));
-  card.appendChild(check);
-
-  if (isFirstDay) {
-    card.appendChild(el('div', 'wv2-celebration-youre-in', 'You’re in!'));
-    card.appendChild(
-      el('div', 'wv2-celebration-added', `${earnedEntries} ENTRIES HAVE BEEN ADDED`)
-    );
-  } else {
-    card.appendChild(el('div', 'wv2-celebration-on-a', 'YOU’RE ON A'));
-    card.appendChild(
-      el('div', 'wv2-celebration-streak', `${streakDay} ${visitMode ? 'VISIT' : 'DAY'} STREAK!`)
-    );
-  }
-
-  card.appendChild(el('div', 'wv2-celebration-divider'));
-
-  const bigNumber = (value: number): HTMLElement => {
-    const wrap = el('div', 'wv2-bignum');
-    wrap.appendChild(el('div', 'wv2-bignum-value', formatInt(value)));
-    wrap.appendChild(el('div', 'wv2-bignum-entries', 'ENTRIES'));
-    return wrap;
-  };
-
-  if (isFirstDay) {
-    card.appendChild(
-      el(
-        'div',
-        'wv2-celebration-comeback-line',
-        visitMode
-          ? 'NEXT TIME YOU VISIT GET'
-          : 'COME BACK TOMORROW TO KEEP\nYOUR STREAK GOING AND GET'
-      )
-    );
-    card.appendChild(bigNumber(nextEntries));
-  } else {
-    card.appendChild(el('div', 'wv2-celebration-earned', 'YOU EARNED'));
-    card.appendChild(bigNumber(earnedEntries));
-    const next = el('div', 'wv2-celebration-next');
-    next.appendChild(icon(calendarIcon, 'wv2-ic-cal'));
-    const col = el('div', 'wv2-celebration-next-col');
-    col.appendChild(
-      el(
-        'div',
-        'wv2-celebration-next-line',
-        visitMode ? 'Come back again for' : 'Come back tomorrow for'
-      )
-    );
-    col.appendChild(el('div', 'wv2-celebration-next-entries', `${formatInt(nextEntries)} ENTRIES`));
-    next.appendChild(col);
-    card.appendChild(next);
-  }
-
-  const cta = el('div', 'wv2-celebration-cta');
-  cta.appendChild(renderPill('GOT IT', onDismiss));
-  card.appendChild(cta);
-
-  // Confetti flutters over the upper card, like Joe's GIF (looping).
-  const confettiWrap = el('div', 'wv2-celebration-confetti');
-  confettiWrap.appendChild(createConfetti({ style: 'celebration', count: 34 }));
-  card.appendChild(confettiWrap);
-
-  const close = el('button', 'wv2-modal-close');
-  close.appendChild(icon(closeIcon, 'wv2-ic'));
-  close.setAttribute('aria-label', 'Close');
-  close.addEventListener('click', onDismiss);
-  card.appendChild(close);
-
-  layer.appendChild(card);
-  return layer;
 }
 
 // ─── How it works ───
@@ -1745,7 +1658,19 @@ export function renderClaimConfirmation(
   const form = c.submittedClaimForm;
 
   const screen = el('div', 'wv2-screen wv2-claim-screen');
+
+  // Gold-sparkle backdrop behind the header/title, fading into the dark body
+  // (Joe's confirmation frame — same treatment as the stepped form).
+  const backdrop = el('div', 'wv2-claim-form-bg wv2-claim-done-bg');
+  const backdropImg = el('img');
+  backdropImg.src = V2_IMAGES.winnerModalBg;
+  backdropImg.alt = '';
+  backdrop.appendChild(backdropImg);
+  backdrop.appendChild(el('div', 'wv2-claim-form-bg-grad'));
+  screen.appendChild(backdrop);
+
   const scroll = el('div', 'wv2-scroll');
+  scroll.style.position = 'relative'; // content stacks above the backdrop
   const stack = el('div', 'wv2-claim-stack');
 
   stack.appendChild(renderClaimHeader(logoUrl, () => c.requestDismiss()));
@@ -1761,11 +1686,13 @@ export function renderClaimConfirmation(
     )
   );
 
-  const mail = icon(mailIcon, 'wv2-claim-mail');
+  // Mail icon in an accent-ringed circle on the "3-5 Business Days" card.
+  const mailRing = el('div', 'wv2-claim-mail-ring');
+  mailRing.appendChild(icon(mailIcon, 'wv2-claim-mail'));
   const mailCol = el('div', 'wv2-claim-mail-col');
   mailCol.appendChild(el('div', 'wv2-claim-mail-line', 'Expect to receive your prize within'));
   mailCol.appendChild(el('div', 'wv2-claim-mail-days', '3-5 Business Days'));
-  stack.appendChild(renderClaimInfoCard(mail, mailCol));
+  stack.appendChild(renderClaimInfoCard(mailRing, mailCol));
 
   // The gold OFFICIAL WINNER keepsake card: cream/gold gradient, small trophy
   // breaking the top border, serif name, award month + claim number.

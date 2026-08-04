@@ -8,6 +8,7 @@ import {
 } from '../src/types';
 import {
   PrizeClaimForm,
+  emptyClaimForm,
   hasAllConsents,
   isClaimFormValid,
   isStep1Valid,
@@ -230,7 +231,7 @@ describe('Winner prize-claim routing', () => {
     expect(controller.winnerClaimStep.kind).toBe('form');
   });
 
-  it('missing consents block the submit (likeness release must be affirmative)', async () => {
+  it('an unticked consent blocks the submit (all three stay required)', async () => {
     const { controller, api } = makeController({
       giveawayResponse: { claimedToday: true, prizeClaim: PENDING_CLAIM },
     });
@@ -240,6 +241,26 @@ describe('Winner prize-claim routing', () => {
     await controller.submitPrizeClaim({ ...VALID_FORM, authorizesLikeness: false });
     expect(api.submitPrizeClaim).not.toHaveBeenCalled();
     expect(controller.winnerClaimStep.kind).toBe('form');
+  });
+
+  it('review consents are PRE-CHECKED by default, so a complete form submits without ticking anything', async () => {
+    // The form model (and the controller prefill built from it) starts with
+    // all three consents affirmed — SUBMIT is enabled as soon as the
+    // required fields are in.
+    expect(hasAllConsents(emptyClaimForm())).toBe(true);
+
+    const { controller } = makeController({
+      giveawayResponse: { claimedToday: true, prizeClaim: PENDING_CLAIM },
+    });
+    const prefill = controller.claimFormPrefill;
+    expect(prefill.confirmsAccuracy).toBe(true);
+    expect(prefill.authorizesLikeness).toBe(true);
+    expect(prefill.agreesToRules).toBe(true);
+
+    // With names prefilled, only the address is needed for full validity.
+    expect(
+      isClaimFormValid({ ...prefill, street: '1 Main St', city: 'Troy', state: 'New York', zip: '12180' })
+    ).toBe(true);
   });
 
   it('a non-empty story is sent trimmed; an empty one is omitted', async () => {

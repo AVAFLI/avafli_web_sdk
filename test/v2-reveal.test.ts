@@ -13,16 +13,21 @@ import { WINRAPI } from '../src/network/api';
 import { LocalStorageProvider } from '../src/storage/local-storage';
 
 /**
- * Day 2+ reveal flow: the celebration is the dashboard's FIRST VISIBLE FRAME.
+ * In-place reveal flow: the celebration is ALWAYS the dashboard's FIRST
+ * VISIBLE FRAME — there is no celebration modal (deleted; Day 1 is unified
+ * with Day 2+).
  *
- *  - Pre-claim streakDay 0 (day 1) → the awaited auto-claim's "You're in!"
- *    celebration modal is the reveal.
- *  - Pre-claim streakDay >= 1 (day 2+) → NO modal and NO claim click. A
- *    PREDICTED grant (ladder value for the streak day being claimed today)
- *    is staged from the pre-claim status response BEFORE entering the
- *    dashboard; the celebration fires on first mount (~0.15s) and the real
- *    claim runs in the background, reconciling totals/streak silently (no
- *    second celebration). The pill reads GOT IT the whole time.
+ *  - Pre-claim streakDay < 2 (day 1, and the day-2 claim of a 1-day streak)
+ *    → the claim is AWAITED while the previous screen holds (email capture
+ *    spinner / loading), and the grant is staged straight from the claim
+ *    response before the dashboard mounts. Day 1's toast headline is
+ *    "YOU'RE IN!".
+ *  - Pre-claim streakDay >= 2 (day 3+) → a PREDICTED grant (ladder value for
+ *    the streak day being claimed today) is staged from the pre-claim status
+ *    response BEFORE entering the dashboard; the celebration fires on first
+ *    mount (~0.15s) and the real claim runs in the background, reconciling
+ *    totals/streak silently (no second celebration). The pill reads GOT IT
+ *    the whole time.
  *  - "Already claimed" (cross-device) re-syncs once; other claim failures
  *    settle back to the pre-claim server truth quietly.
  */
@@ -59,6 +64,8 @@ function makeController(options: {
   claimError?: Error;
   /** Hold the claim response until releaseClaim() — pins the predicted frame. */
   holdClaim?: boolean;
+  /** Seed (or omit) the local non-PII "email submitted" flag. */
+  emailSubmitted?: boolean;
 }): {
   controller: V2ExperienceController;
   api: { getActiveGiveaway: ReturnType<typeof vi.fn> };
@@ -94,7 +101,9 @@ function makeController(options: {
   };
   const deps: V2ControllerDeps = {
     api: api as unknown as WINRAPI,
-    storage: fakeStorage({ 'winr_email_submitted_com.test': 'true' }),
+    storage: fakeStorage(
+      options.emailSubmitted === false ? {} : { 'winr_email_submitted_com.test': 'true' }
+    ),
     bundleId: 'com.test',
     submitEmailAndAdopt: async () => ({ success: true }),
     hasRegisteredUuid: () => true,
@@ -118,19 +127,132 @@ describe('V2 Day 2+ reveal flow', () => {
     vi.useRealTimers();
   });
 
-  it('day 1 auto-claim lands on the celebration modal (the day-1 reveal) — no auto-reveal timer', async () => {
+  it('day 1 stages the reveal FROM THE CLAIM RESPONSE — dashboard first frame, never a modal', async () => {
     const { controller } = makeController({
       giveawayResponse: { streakDay: 0, totalEntries: 0 },
       claim: { entries: 10, streakDay: 1, totalEntries: 10 },
     });
     await controller.load();
 
-    expect(controller.state.kind).toBe('celebration');
-    expect(controller.pendingRevealGrant).toBeNull();
+    // Straight to the dashboard with the grant staged from the awaited
+    // claim (no prediction, no 'celebration' modal state — it no longer
+    // exists) and the first-mount reveal armed.
+    expect(controller.state.kind).toBe('dashboard');
     expect(controller.claimedToday).toBe(true);
-
-    vi.advanceTimersByTime(DELAY * 2);
+    expect(controller.pendingRevealGrant).toEqual({ baseEntries: 10, bonusEntries: 0 });
+    expect(controller.preClaimTotalEntries).toBe(0);
     expect(controller.claimRevealed).toBe(false);
+
+    vi.advanceTimersByTime(DELAY);
+    expect(controller.claimRevealed).toBe(true);
+  });
+
+  it('day 1 never stages the PREDICTED celebration — the claim is awaited while the previous screen holds', async () => {
+    const { controller, releaseClaim } = makeController({
+      giveawayResponse: { streakDay: 0, totalEntries: 0 },
+      claim: { entries: 10, streakDay: 1, totalEntries: 10 },
+      holdClaim: true,
+    });
+    const loadPromise = controller.load();
+    await vi.advanceTimersByTimeAsync(0);
+
+    // Claim in flight: NO predicted staging and NO dashboard yet — the
+    // previous screen (here the loading state) holds.
+    expect(controller.state.kind).toBe('loading');
+    expect(controller.pendingRevealGrant).toBeNull();
+    expect(controller.claimRevealed).toBe(false);
+
+    await releaseClaim();
+    await loadPromise;
+    expect(controller.state.kind).toBe('dashboard');
+    expect(controller.pendingRevealGrant).toEqual({ baseEntries: 10, bonusEntries: 0 });
+  });
+
+  it('a 1-day pre-claim streak (the day-2 claim) also awaits the claim — prediction is gated to streakDay >= 2', async () => {
+    const { controller, releaseClaim } = makeController({
+      giveawayResponse: { streakDay: 1, totalEntries: 10 },
+      claim: { entries: 30, streakDay: 2, totalEntries: 40 },
+      holdClaim: true,
+    });
+    const loadPromise = controller.load();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(controller.state.kind).toBe('loading');
+    expect(controller.pendingRevealGrant).toBeNull();
+
+    await releaseClaim();
+    await loadPromise;
+    expect(controller.state.kind).toBe('dashboard');
+    expect(controller.pendingRevealGrant).toEqual({ baseEntries: 30, bonusEntries: 0 });
+    expect(controller.preClaimTotalEntries).toBe(10);
+    vi.advanceTimersByTime(DELAY);
+    expect(controller.claimRevealed).toBe(true);
+  });
+
+  it('email submit HOLDS the capture screen (spinner) through the claim, then the dashboard mounts as the celebration', async () => {
+    const { controller, releaseClaim } = makeController({
+      giveawayResponse: { streakDay: 0, totalEntries: 0, emailConsentStatus: false },
+      claim: { entries: 10, streakDay: 1, totalEntries: 10 },
+      holdClaim: true,
+      emailSubmitted: false,
+    });
+    await controller.load();
+    expect(controller.state.kind).toBe('emailCapture');
+
+    const submitPromise = controller.submitEmail('ada@example.com');
+    await vi.advanceTimersByTimeAsync(0);
+
+    // Email sent, reload done, Day-1 claim STILL IN FLIGHT: the capture
+    // screen is still the rendered state, its CTA still spinning. The user
+    // never sees a loading interstitial or a pre-claim dashboard.
+    expect(controller.state.kind).toBe('emailCapture');
+    expect(controller.isSubmittingEmail).toBe(true);
+    expect(controller.pendingRevealGrant).toBeNull();
+
+    await releaseClaim();
+    await submitPromise;
+    expect(controller.state.kind).toBe('dashboard');
+    expect(controller.isSubmittingEmail).toBe(false);
+    expect(controller.pendingRevealGrant).toEqual({ baseEntries: 10, bonusEntries: 0 });
+    expect(controller.claimRevealed).toBe(false);
+    vi.advanceTimersByTime(DELAY);
+    expect(controller.claimRevealed).toBe(true);
+  });
+
+  it('day 1 dashboard greets with the "YOU’RE IN!" toast and counts up 0→N in place', async () => {
+    const { controller } = makeController({
+      giveawayResponse: { streakDay: 0, totalEntries: 0 },
+      claim: { entries: 10, streakDay: 1, totalEntries: 10 },
+    });
+    await controller.load();
+
+    const dash = renderDashboard(controller, null, () => {});
+    document.body.appendChild(dash);
+
+    // First visible frame: toast-first bar with the DAY-1 headline (same
+    // subline as Day 2+), stats pinned to the pre-claim zero, today's tile
+    // "ready", GOT IT pill.
+    const comeback = dash.querySelector('.wv2-comeback');
+    expect(comeback?.classList.contains('wv2-toast-start')).toBe(true);
+    expect(comeback?.querySelector('.wv2-cb-added')?.textContent).toBe('YOU’RE IN!');
+    expect(comeback?.querySelector('.wv2-cb-roll')?.textContent).toBe(
+      'Your 10 entries have been added automatically.'
+    );
+    expect(dash.querySelector('.wv2-stat-total')?.textContent).toBe('0');
+    expect(dash.querySelector('.wv2-tile.wv2-ready')).not.toBeNull();
+    expect(dash.querySelector('.wv2-pill')?.textContent).toBe('GOT IT');
+
+    // The reveal fires on its own: tile explosion (check + confetti field +
+    // burst GIF) on the Day-1 tile, streak label set, count-up armed.
+    vi.advanceTimersByTime(DELAY);
+    expect(controller.claimRevealed).toBe(true);
+    const tile = dash.querySelector('.wv2-tile.wv2-active');
+    expect(tile).not.toBeNull();
+    expect(tile?.querySelector('.wv2-tile-icon .wv2-animated-check')).not.toBeNull();
+    expect(dash.querySelector('.wv2-tile-confetti')).not.toBeNull();
+    expect(dash.querySelector('.wv2-tile-burst')).not.toBeNull();
+    expect(dash.querySelector('.wv2-stat-streak')?.textContent).toBe('1 DAY STREAK');
+    dash.remove();
   });
 
   it('day 2+ stages a PREDICTED grant from the pre-claim response — no waiting on the claim', async () => {

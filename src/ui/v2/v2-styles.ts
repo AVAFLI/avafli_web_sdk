@@ -481,63 +481,6 @@ img { display: block; }
 }
 .wv2-modal-close .wv2-ic { width: 11px; height: 11px; color: #fff; }
 
-/* ═══ Celebration modal ═══ */
-
-.wv2-celebration-card {
-  position: relative;
-  width: 340px; max-width: calc(100% - 32px);
-  max-height: calc(100% - 32px);
-  overflow-y: auto; scrollbar-width: none;
-  background: ${c.panel};
-  border: 1px solid ${c.panelBorder};
-  border-radius: 20px;
-  display: flex; flex-direction: column;
-  animation: wv2-modal-in 0.4s cubic-bezier(0.2, 0.8, 0.3, 1);
-}
-.wv2-celebration-card::-webkit-scrollbar { display: none; }
-.wv2-celebration-confetti {
-  position: absolute; top: 0; left: 0; right: 0; height: 330px;
-  pointer-events: none;
-  border-radius: 20px 20px 0 0;
-  overflow: hidden;
-}
-.wv2-celebration-confetti .wv2-confetti { position: absolute; inset: 0; }
-.wv2-celebration-check {
-  width: 88px; height: 110px; margin: 17px auto 0;
-  display: flex; align-items: flex-start; justify-content: center;
-  animation: wv2-check-pop 0.45s cubic-bezier(0.34, 1.4, 0.64, 1);
-}
-.wv2-celebration-check .wv2-animated-check { width: 88px; height: 88px; }
-@keyframes wv2-check-pop { from { transform: scale(0.4); } to { transform: scale(1); } }
-
-.wv2-celebration-youre-in { font-size: 14px; font-weight: 700; color: #fff; text-align: center; }
-.wv2-celebration-added {
-  font-size: 23px; font-weight: 900; color: var(--wv2-accent);
-  text-align: center; padding: 0 16px; white-space: nowrap;
-}
-.wv2-celebration-on-a { font-size: 20px; font-weight: 700; color: #fff; text-align: center; }
-.wv2-celebration-streak { font-size: 32px; font-weight: 900; letter-spacing: -0.96px; color: var(--wv2-accent); text-align: center; }
-.wv2-celebration-divider { height: 1px; background: rgba(255,255,255,0.15); margin: 14px 28px; }
-.wv2-celebration-comeback-line { font-size: 14px; font-weight: 700; color: #fff; text-align: center; white-space: pre-line; }
-.wv2-celebration-earned { font-size: 20px; font-weight: 700; color: #fff; text-align: center; }
-.wv2-bignum { display: flex; flex-direction: column; align-items: center; }
-.wv2-bignum-value {
-  font-size: 96px; font-weight: 900; letter-spacing: -4.8px;
-  color: var(--wv2-accent); line-height: 1; white-space: nowrap;
-  padding: 0 40px; max-width: 100%; overflow: hidden;
-}
-.wv2-bignum-entries { font-size: 32px; font-weight: 900; letter-spacing: -0.96px; color: #fff; margin-top: -14px; }
-.wv2-celebration-next {
-  display: flex; align-items: center; justify-content: center; gap: 14px;
-  height: 71px; border-radius: 10px; background: #000;
-  margin: 10px 20px 0;
-}
-.wv2-celebration-next .wv2-ic-cal { width: 24px; height: 26px; color: var(--wv2-accent); flex: none; }
-.wv2-celebration-next-col { display: flex; flex-direction: column; gap: 1px; text-align: center; }
-.wv2-celebration-next-line { font-size: 15px; color: #fff; }
-.wv2-celebration-next-entries { font-size: 20px; font-weight: 900; color: var(--wv2-accent); }
-.wv2-celebration-cta { padding: 20px 28px 24px; }
-
 /* Draw-on checkmark strokes. */
 .wv2-check-circle {
   stroke-dasharray: 1; stroke-dashoffset: 1;
@@ -805,12 +748,21 @@ img { display: block; }
 }
 .wv2-review-lock-ic { width: 20px; height: 26px; color: var(--wv2-accent); flex: none; }
 
-/* Confirmation. */
+/* Confirmation — gold-sparkle backdrop behind the header/title fading into
+   the dark body (shorter than the stepped form's), accent-ringed mail
+   circle on the "3-5 Business Days" card. */
+.wv2-claim-done-bg { height: 250px; }
 .wv2-claim-done-title {
   font-size: 26px; font-weight: 900; letter-spacing: -0.7px; color: #fff;
   text-align: center; padding: 20px 30px 0;
 }
 .wv2-claim-done-sub { font-size: 15px; color: rgba(255,255,255,0.85); text-align: center; padding: 8px 34px 0; }
+.wv2-claim-mail-ring {
+  width: 54px; height: 54px; border-radius: 50%; flex: none;
+  border: 2px solid var(--wv2-accent);
+  background: rgba(255,255,255,0.05);
+  display: flex; align-items: center; justify-content: center;
+}
 .wv2-claim-info-card .wv2-claim-mail { width: 28px; height: 22px; color: var(--wv2-accent); flex: none; }
 .wv2-claim-mail svg { display: block; width: 100%; height: 100%; }
 .wv2-claim-mail-col { display: flex; flex-direction: column; gap: 1px; }

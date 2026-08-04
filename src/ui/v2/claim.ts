@@ -22,9 +22,10 @@ export interface PrizeClaimForm {
   /** Optional "please share a little" story (step 4). Sent trimmed; omitted when empty. */
   story: string;
   /**
-   * Explicit consents (Joe's "review and agree" checkboxes). All three are
-   * REQUIRED — the likeness release in particular must be an affirmative
-   * user action for the publicity authorization to hold up.
+   * The review screen's consents (Joe's "review and agree" checkboxes). All
+   * three are REQUIRED for submit, but they default to CHECKED (CTO
+   * decision) so SUBMIT is enabled immediately — the user can still untick
+   * any of them, which disables SUBMIT until re-checked.
    */
   confirmsAccuracy: boolean;
   authorizesLikeness: boolean;
@@ -45,9 +46,10 @@ export function emptyClaimForm(): PrizeClaimForm {
     state: '',
     zip: '',
     story: '',
-    confirmsAccuracy: false,
-    authorizesLikeness: false,
-    agreesToRules: false,
+    // Pre-checked (still untickable — unticking disables SUBMIT).
+    confirmsAccuracy: true,
+    authorizesLikeness: true,
+    agreesToRules: true,
   };
 }
 
@@ -93,8 +95,8 @@ export function isStep2Valid(form: PrizeClaimForm): boolean {
 // Steps 3 (photo) and 4 (story) are fully optional — always advanceable.
 
 /**
- * All three review-screen consents affirmed. The likeness release must be an
- * affirmative user action for the publicity authorization to hold up.
+ * All three review-screen consents affirmed. They start pre-checked, so this
+ * only blocks a submit after the user deliberately unticks one.
  */
 export function hasAllConsents(form: PrizeClaimForm): boolean {
   return form.confirmsAccuracy && form.authorizesLikeness && form.agreesToRules;
