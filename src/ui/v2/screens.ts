@@ -325,7 +325,12 @@ export function renderDashboard(
   // celebration (tile check + confetti + totals update, bar → "N ENTRIES
   // ADDED") fires on its own a beat later — Joe's Slice prototype has no
   // claim click and no modal. The pill reads GOT IT the whole time.
-  const preReveal = c.pendingRevealGrant !== null && !c.claimRevealed;
+  // Pinned from the FIRST frame: while today is unclaimed OR the reveal
+  // hasn't played, show yesterday's numbers. Without the claimedToday clause
+  // there's a flash of the raw post-claim server state during the network
+  // round-trip, and elements flip at different times (the current tile
+  // animated at claim-response time, ~1s before the count-up/toast beat).
+  const preReveal = !c.claimRevealed && (c.pendingRevealGrant !== null || !c.claimedToday);
 
   const screen = el('div', 'wv2-screen');
 
