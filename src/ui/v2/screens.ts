@@ -312,6 +312,9 @@ function renderPrizeStrip(giveaway: Giveaway | null): HTMLElement {
 
 // ─── Return-user dashboard (Day 2+ drawer) ───
 
+/** How long the "N ENTRIES ADDED" toast holds before sliding back to the pitch. */
+export const COMEBACK_TOAST_HOLD_MS = 2600;
+
 export function renderDashboard(
   c: V2ExperienceController,
   logoUrl: string | null | undefined,
@@ -393,8 +396,9 @@ export function renderDashboard(
     const totalNum = screen.querySelector('.wv2-stat-total');
     if (totalNum) animateCount(totalNum as HTMLElement, preClaimTotal, c.totalEntries, 700);
 
-    // Delta A: the come-back bar swaps to its claimed celebration
-    // ("{N} ENTRIES ADDED / You're on a roll!") with an animated pop. The
+    // Joe's Slice sequence: "{N} ENTRIES ADDED / You're on a roll!" SLIDES
+    // into the come-back bar, holds ~2.6s, then SLIDES back out to the
+    // come-back pitch — the pitch is the bar's final resting state. The
     // checkmark is recreated so its draw-on runs at the reveal moment.
     const comeback = screen.querySelector('.wv2-comeback');
     if (comeback) {
@@ -403,7 +407,12 @@ export function renderDashboard(
         cbCheck.innerHTML = '';
         cbCheck.appendChild(createAnimatedCheck(9));
       }
-      comeback.classList.add('wv2-claimed', 'wv2-cb-animate');
+      comeback.classList.add('wv2-toasting');
+      window.setTimeout(() => {
+        // Teardown-safe: no-op if the dashboard was dismissed mid-hold.
+        if (!comeback.isConnected) return;
+        comeback.classList.remove('wv2-toasting');
+      }, COMEBACK_TOAST_HOLD_MS);
     }
   };
 
@@ -586,8 +595,9 @@ function renderStreakRail(c: V2ExperienceController, preReveal = false): HTMLEle
 
 /**
  * `ready` = today's tile before the auto-reveal fires (claim already granted
- * server-side, celebration pending): glows like `active` but shows a white
- * flame instead of the checkmark, and no confetti specks.
+ * server-side, celebration pending): glows like `active` but shows only the
+ * glowing number — no icon, no confetti specks (the check draws in at the
+ * reveal).
  */
 type TileState = 'completed' | 'active' | 'ready' | 'locked';
 
@@ -616,9 +626,9 @@ function renderStreakTile(
   } else if (state === 'active') {
     iconWrap.appendChild(createAnimatedCheck(12)); // 2.5pt at 20px ≈ 12/100 viewBox units
   } else if (state === 'ready') {
-    // Pre-reveal: the glow marks today, but the confetti and checkmark are
-    // saved for the auto-reveal moment.
-    iconWrap.appendChild(icon(flameIcon, 'wv2-ic-flame'));
+    // Joe's frames: the current tile pre-check shows ONLY the glowing
+    // number — no icon. The .wv2-tile-icon slot keeps its 24x24 size so the
+    // check can draw into place without the card resizing.
   } else {
     iconWrap.appendChild(icon(lockIcon, 'wv2-ic-lock'));
   }
@@ -695,34 +705,29 @@ function attachRailScrolling(rail: HTMLElement): void {
 // ─── Confirmation ("come back tomorrow") bar ───
 
 function renderComeBackBar(c: V2ExperienceController): HTMLElement {
-  const preReveal = c.pendingRevealGrant !== null && !c.claimRevealed;
-  // Delta A: once today's claim is revealed (or the user reopens in a claimed
-  // state) the bar celebrates the entries that were just added instead of
-  // pitching tomorrow. Pre-reveal keeps the come-back copy. The auto-reveal
-  // swaps the contents with an animated pop (see doReveal) — and any
-  // re-render after the reveal lands directly in this claimed state, so the
-  // swap is idempotent.
-  const claimed = c.claimedToday && !preReveal;
+  // Joe's Slice sequence: the bar RESTS on the come-back pitch — always,
+  // including claimed-at-mount reopens (no toast replay). The auto-reveal
+  // slides the "{N} ENTRIES ADDED" toast in for a ~2.6s hold, then slides
+  // back out to the pitch (see doReveal + .wv2-toasting).
   const claimedEntries = c.pendingRevealGrant
     ? c.pendingRevealGrant.baseEntries + c.pendingRevealGrant.bonusEntries
     : c.ladderValue(c.streakDay);
 
   const bar = el('div', 'wv2-comeback');
-  if (claimed) bar.classList.add('wv2-claimed');
 
-  // Come-back pitch (pre-reveal / unclaimed).
+  // Come-back pitch (the resting state). "Come back tomorrow"/"Come back
+  // again" is BOLD, the rest regular — per Joe's banner lockup.
   const come = el('div', 'wv2-cb-come');
   come.appendChild(icon(calendarIcon, 'wv2-ic-cal'));
   const col = el('div', 'wv2-comeback-col');
-  col.appendChild(
-    el(
-      'div',
-      'wv2-comeback-line',
-      c.visitMode
-        ? 'Come back again to receive:'
-        : 'Come back tomorrow to\nkeep your streak alive and receive:'
+  const line = el('div', 'wv2-comeback-line');
+  line.appendChild(el('strong', undefined, c.visitMode ? 'Come back again' : 'Come back tomorrow'));
+  line.appendChild(
+    document.createTextNode(
+      c.visitMode ? ' to receive:' : ' to\nkeep your streak alive and receive:'
     )
   );
+  col.appendChild(line);
   col.appendChild(el('div', 'wv2-comeback-entries', `${formatInt(c.nextEntries)} ENTRIES`));
   come.appendChild(col);
   bar.appendChild(come);

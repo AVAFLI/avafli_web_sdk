@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { V2ExperienceController, V2ControllerDeps } from '../src/ui/v2/controller';
-import { renderDashboard } from '../src/ui/v2/screens';
+import { COMEBACK_TOAST_HOLD_MS, renderDashboard } from '../src/ui/v2/screens';
 import {
   ClaimDailyEntriesResponse,
   GetActiveGiveawayResponse,
@@ -221,17 +221,20 @@ describe('V2 Day 2+ reveal flow', () => {
     await controller.load();
 
     const dash = renderDashboard(controller, null, () => {});
+    // Attach so the toast hold timer's teardown guard sees a live DOM.
+    document.body.appendChild(dash);
 
     // Pinned pre-reveal frame: GOT IT pill (no CLAIM), yesterday's streak
-    // label, today's tile "ready", come-back pitch (not the claimed bar).
+    // label, today's tile "ready", come-back pitch (no toast).
     const pill = dash.querySelector('.wv2-pill');
     expect(pill?.textContent).toBe('GOT IT');
     expect(dash.querySelector('.wv2-stat-streak')?.textContent).toBe('4 DAY STREAK');
     expect(dash.querySelector('.wv2-tile.wv2-ready')).not.toBeNull();
     expect(dash.querySelector('.wv2-tile.wv2-active')).toBeNull();
-    expect(dash.querySelector('.wv2-comeback')?.classList.contains('wv2-claimed')).toBe(false);
+    expect(dash.querySelector('.wv2-comeback')?.classList.contains('wv2-toasting')).toBe(false);
 
-    // The celebration fires on its own.
+    // The celebration fires on its own: "N ENTRIES ADDED" slides into the
+    // bar and holds (.wv2-toasting = the hold window).
     vi.advanceTimersByTime(DELAY);
 
     expect(controller.claimRevealed).toBe(true);
@@ -239,10 +242,33 @@ describe('V2 Day 2+ reveal flow', () => {
     expect(dash.querySelector('.wv2-tile.wv2-active')).not.toBeNull();
     expect(dash.querySelector('.wv2-stat-streak')?.textContent).toBe('5 DAY STREAK');
     const comeback = dash.querySelector('.wv2-comeback');
-    expect(comeback?.classList.contains('wv2-claimed')).toBe(true);
+    expect(comeback?.classList.contains('wv2-toasting')).toBe(true);
     expect(comeback?.querySelector('.wv2-cb-added')?.textContent).toBe('130 ENTRIES ADDED');
     // Still GOT IT — the pill never changed and only dismisses.
     expect(pill?.textContent).toBe('GOT IT');
+
+    // After the ~2.6s hold the toast slides back out: the bar's FINAL
+    // resting state is the come-back pitch, not the ADDED toast.
+    vi.advanceTimersByTime(COMEBACK_TOAST_HOLD_MS);
+    expect(comeback?.classList.contains('wv2-toasting')).toBe(false);
+    dash.remove();
+  });
+
+  it('a dashboard that mounts already claimed rests on the come-back pitch — no toast replay', async () => {
+    const { controller } = makeController({
+      giveawayResponse: { streakDay: 5, totalEntries: 470, claimedToday: true },
+    });
+    await controller.load();
+    expect(controller.pendingRevealGrant).toBeNull();
+
+    const dash = renderDashboard(controller, null, () => {});
+    const comeback = dash.querySelector('.wv2-comeback');
+    expect(comeback?.classList.contains('wv2-toasting')).toBe(false);
+    expect(comeback?.querySelector('.wv2-comeback-line')?.textContent).toBe(
+      'Come back tomorrow to\nkeep your streak alive and receive:'
+    );
+    vi.advanceTimersByTime(DELAY * 2 + COMEBACK_TOAST_HOLD_MS);
+    expect(comeback?.classList.contains('wv2-toasting')).toBe(false);
   });
 
   it('"Already claimed" (cross-device) keeps the plain dashboard — no pending reveal, no timer', async () => {

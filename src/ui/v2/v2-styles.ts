@@ -288,7 +288,6 @@ img { display: block; }
     ${c.gunmetal} 100%);
   animation: wv2-pulse-glow 1.1s ease-in-out infinite alternate;
 }
-.wv2-tile-icon .wv2-ic-flame { width: 16px; height: 20px; color: #fff; }
 /* Joe's active-tile motion: the accent glow breathes. */
 @keyframes wv2-pulse-glow {
   from { box-shadow: 0 0 7px 0 var(--wv2-accent-55); }
@@ -317,8 +316,10 @@ img { display: block; }
 .wv2-powerup-every { font-size: 14px; font-weight: 900; margin-top: -2px; }
 .wv2-powerup-footnote { font-family: ${V2_OSWALD}; font-weight: 700; font-size: 8px; }
 
-/* Confirmation ("come back tomorrow") bar — with the claimed-today variant
-   (Joe's Aug-2026 frames): "{N} ENTRIES ADDED / You're on a roll!". */
+/* Confirmation ("come back tomorrow") bar — Joe's Slice sequence: the bar
+   RESTS on the come-back pitch; the auto-reveal SLIDES the "{N} ENTRIES
+   ADDED / You're on a roll!" toast in for a ~2.6s hold (.wv2-toasting), then
+   slides back out to the pitch. */
 .wv2-comeback {
   position: relative;
   height: 71px; background: #000;
@@ -327,22 +328,21 @@ img { display: block; }
 .wv2-cb-come, .wv2-cb-claimed {
   position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center;
+  transition:
+    transform 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.5s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .wv2-cb-come { gap: 14px; }
-.wv2-cb-claimed { gap: 16px; padding: 0 16px; display: none; }
-.wv2-comeback.wv2-claimed .wv2-cb-come { display: none; }
-.wv2-comeback.wv2-claimed .wv2-cb-claimed { display: flex; }
-/* Reveal swap: the come-back pitch fades out, the celebration pops in. */
-.wv2-comeback.wv2-cb-animate .wv2-cb-claimed {
-  animation: wv2-cb-pop 0.5s cubic-bezier(0.34, 1.35, 0.5, 1);
-}
-@keyframes wv2-cb-pop {
-  from { transform: scale(0.8); opacity: 0; }
-  to   { transform: scale(1); opacity: 1; }
-}
+.wv2-cb-claimed { gap: 16px; padding: 0 16px; transform: translateX(100%); opacity: 0; }
+/* Hold window: the ADDED toast slides in at the trailing edge while the
+   pitch slides out the leading edge; when the class reverts the pitch
+   slides back — the pitch is the bar's resting state. */
+.wv2-comeback.wv2-toasting .wv2-cb-come { transform: translateX(-100%); opacity: 0; }
+.wv2-comeback.wv2-toasting .wv2-cb-claimed { transform: translateX(0); opacity: 1; }
 .wv2-comeback .wv2-ic-cal { width: 26px; height: 28px; color: var(--wv2-accent); flex: none; }
 .wv2-comeback-col { display: flex; flex-direction: column; gap: 1px; text-align: center; color: #fff; }
 .wv2-comeback-line { font-size: 12px; white-space: pre-line; }
+.wv2-comeback-line strong { font-weight: 700; }
 .wv2-comeback-entries { font-size: 16px; font-weight: 900; color: var(--wv2-accent); }
 .wv2-cb-check { width: 38px; height: 38px; flex: none; }
 .wv2-cb-check .wv2-animated-check { width: 38px; height: 38px; }
