@@ -6,7 +6,7 @@
 
 export interface WINROptions {
   /** API environment */
-  environment?: 'production' | 'staging' | 'qa';
+  environment?: 'production';
   /** Enable debug logging */
   debug?: boolean;
   /** Enable streak reminder push notifications */
@@ -77,21 +77,6 @@ export interface StreakState {
   monthlyStart?: string;
 }
 
-export interface StreakConfig {
-  /** Day of week for weekly reset (0=Sunday) */
-  weeklyResetDay: number;
-  /** Day of month for monthly reset */
-  monthlyResetDay: number;
-  /** Days needed for weekly bonus */
-  weeklyBonusThreshold: number;
-  /** Weekly bonus entries amount */
-  weeklyBonusEntries: number;
-  /** Days needed for monthly bonus */
-  monthlyBonusThreshold: number;
-  /** Monthly bonus entries amount */
-  monthlyBonusEntries: number;
-}
-
 export interface MilestoneConfig {
   /** Day threshold for milestone */
   day: number;
@@ -131,8 +116,6 @@ export interface Giveaway {
   maxDailyBaseEntries: number;
   /** Rules URL */
   rulesUrl: string;
-  /** Streak configuration */
-  streakConfig: StreakConfig;
   /** Milestone configurations */
   milestones: MilestoneConfig[];
   /** Ad provider configuration */
@@ -575,15 +558,8 @@ export interface PresentationOptions {
 export const WINR_CONSTANTS = {
   SDK_VERSION: '2.0.0',
   PLATFORM_OS: 'Web',
-  getApiBaseUrl: (environment: 'production' | 'staging' | 'qa' = 'production'): string => {
-    switch (environment) {
-      case 'production':
-        return 'https://us-central1-winr-9c11f.cloudfunctions.net';
-      case 'staging':
-        return 'https://us-central1-winr-staging.cloudfunctions.net';
-      case 'qa':
-        return 'https://us-central1-winr-qa.cloudfunctions.net';
-    }
+  getApiBaseUrl: (_environment: 'production' = 'production'): string => {
+    return 'https://us-central1-winr-9c11f.cloudfunctions.net';
   },
   DEFAULT_STREAK_LADDER: [10, 30, 60, 130, 240, 300],
   STORAGE_KEYS: {

@@ -14,7 +14,6 @@ export type {
   WINRBranding,
   WINRUser,
   StreakState,
-  StreakConfig,
   MilestoneConfig,
   MilestoneAward,
   Giveaway,

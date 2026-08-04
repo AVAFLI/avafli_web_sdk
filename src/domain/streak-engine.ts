@@ -1,4 +1,4 @@
-import { StreakState, StreakConfig, WINRError, WINRErrorCode } from '../types';
+import { StreakState, WINRError, WINRErrorCode } from '../types';
 
 /**
  * Three-tier streak system engine
@@ -130,26 +130,6 @@ export class StreakEngine {
     const ladder = streakLadder || [10, 30, 60, 130, 240, 300];
     const index = Math.max(0, Math.min(day - 1, ladder.length - 1));
     return ladder[index] || 60; // Default fallback
-  }
-
-  /**
-   * Check if weekly bonus should be awarded
-   */
-  public checkWeeklyBonus(state: StreakState, config: StreakConfig): number | null {
-    if (state.weeklyCurrent === config.weeklyBonusThreshold) {
-      return config.weeklyBonusEntries;
-    }
-    return null;
-  }
-
-  /**
-   * Check if monthly bonus should be awarded
-   */
-  public checkMonthlyBonus(state: StreakState, config: StreakConfig): number | null {
-    if (state.monthlyCurrent === config.monthlyBonusThreshold) {
-      return config.monthlyBonusEntries;
-    }
-    return null;
   }
 
   // ─── Private Helper Methods ───
