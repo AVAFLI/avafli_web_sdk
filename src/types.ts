@@ -445,6 +445,17 @@ export interface ClaimBonusEntriesResponse {
 
 export interface SubmitEmailRequest {
   email: string;
+  /**
+   * The capture screen's age-gate checkbox ("I confirm I am 18 years of age or
+   * older"), as the user left it. Stored server-side.
+   */
+  ageConfirmed?: boolean;
+  /**
+   * The capture screen's email/marketing-consent checkbox — pre-checked, and
+   * unchecking it does NOT block entry.
+   */
+  emailConsent?: boolean;
+  /** Legacy alias of {@link emailConsent}, kept for older backends. */
   marketingConsent?: boolean;
   publisherUserId?: string;
 }
@@ -613,7 +624,7 @@ export interface PresentationOptions {
 // ─── Constants ───
 
 export const WINR_CONSTANTS = {
-  SDK_VERSION: '2.3.3',
+  SDK_VERSION: '2.4.0',
   PLATFORM_OS: 'Web',
   getApiBaseUrl: (_environment: 'production' = 'production'): string => {
     return 'https://us-central1-winr-9c11f.cloudfunctions.net';

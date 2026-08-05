@@ -199,7 +199,10 @@ describe('V2 Day 2+ reveal flow', () => {
     await controller.load();
     expect(controller.state.kind).toBe('emailCapture');
 
-    const submitPromise = controller.submitEmail('ada@example.com');
+    const submitPromise = controller.submitEmail('ada@example.com', {
+      ageConfirmed: true,
+      emailConsent: true,
+    });
     await vi.advanceTimersByTimeAsync(0);
 
     // Email sent, reload done, Day-1 claim STILL IN FLIGHT: the capture

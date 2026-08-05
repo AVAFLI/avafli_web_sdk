@@ -1,5 +1,34 @@
 # Changelog
 
+## [2.4.0] - 2026-08-05
+
+Consent capture on the email screen, matching the iOS, Android and Flutter
+SDKs.
+
+### Added
+- **Email-consent checkbox on the capture screen.** A second checkbox sits
+  directly below the 18+ age gate, PRE-CHECKED, reading "Get notified about
+  prizes and rewards" (server-overridable via
+  `sdkConfig.copy.emailCapture.emailConsentText`, or the flat legacy
+  `sdkConfig.copy.emailConsentText`). It is styled by the same code path as
+  the age row, so the two rows are identical. It does NOT gate entry: the CTA
+  is still enabled on (age confirmed AND valid email) alone, and a user who
+  opts out of marketing email still claims their entries.
+
+### Changed
+- **Age confirmation is now transmitted and stored server-side.** `submitEmail`
+  sends `{ email, ageConfirmed, emailConsent }` carrying the real state of
+  both checkboxes — the age gate's value used to be discarded on the client.
+  The legacy `marketingConsent` field is still sent (mirroring `emailConsent`)
+  for older backends.
+
+### Tests
+- 5 new: the age gate renders unchecked and email consent renders pre-checked
+  directly below it with identical styling, the copy override precedence
+  (nested → flat → default), the CTA gating being untouched by the consent box
+  (including unchecking it after enabling the CTA), and the submitted payload
+  carrying the real `ageConfirmed`/`emailConsent` values in both directions.
+
 ## [2.3.3] - 2026-08-05
 
 Load-experience defects found testing the SDK inside a real publisher app

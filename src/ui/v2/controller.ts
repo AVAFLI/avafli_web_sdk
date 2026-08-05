@@ -87,6 +87,20 @@ export interface V2ControllerDeps {
   resolveSdkConfig?: () => SDKConfig;
 }
 
+/**
+ * The capture screen's two consent checkboxes, as the user left them. Both
+ * travel to the backend on submit; only {@link ageConfirmed} gates the CTA.
+ */
+export interface EmailCaptureConsent {
+  /** "I confirm I am 18 years of age or older" — required to submit. */
+  ageConfirmed: boolean;
+  /** Email/marketing consent — pre-checked, and NEVER blocks entry. */
+  emailConsent: boolean;
+}
+
+/** Fallback copy when the server supplies no `emailConsentText` override. */
+export const DEFAULT_EMAIL_CONSENT_TEXT = 'Get notified about prizes and rewards';
+
 /** Non-PII "email submitted" flag key — shared with the auto-open engine. */
 export function emailSubmittedStorageKey(bundleId: string): string {
   return `${WINR_CONSTANTS.STORAGE_KEYS.EMAIL_SUBMITTED}_${bundleId}`;
@@ -264,6 +278,19 @@ export class V2ExperienceController {
 
   public get rulesUrl(): string | undefined {
     return this.giveaway?.rulesUrl || this.sdkConfig?.rulesUrl;
+  }
+
+  /**
+   * Label for the capture screen's email-consent checkbox. Prefers the nested
+   * per-screen override, then the flat legacy field, then the SDK default.
+   */
+  public get emailConsentText(): string {
+    const copy = this.sdkConfig?.copy;
+    return (
+      copy?.emailCapture?.emailConsentText ||
+      copy?.emailConsentText ||
+      DEFAULT_EMAIL_CONSENT_TEXT
+    );
   }
 
   // ─── Email consent gate ───
@@ -723,7 +750,13 @@ export class V2ExperienceController {
 
   // ─── Email capture ───
 
-  public async submitEmail(email: string): Promise<void> {
+  /**
+   * Capture-screen submit. `consent` carries BOTH checkboxes exactly as the
+   * user left them — the age gate (which the CTA already required) and the
+   * pre-checked email consent (which the user may have turned off without
+   * losing their entry).
+   */
+  public async submitEmail(email: string, consent: EmailCaptureConsent): Promise<void> {
     if (!email || this.isSubmittingEmail) return;
     this.isSubmittingEmail = true;
     this.onChange?.(this.state); // re-render the CTA into its loading state
@@ -737,7 +770,13 @@ export class V2ExperienceController {
       // Cross-device streak unification: if this email already belonged to an
       // existing user under this publisher, submitEmailAndAdopt switches the
       // session to that canonical user's credentials.
-      await this.deps.submitEmailAndAdopt({ email, marketingConsent: true });
+      await this.deps.submitEmailAndAdopt({
+        email,
+        ageConfirmed: consent.ageConfirmed,
+        emailConsent: consent.emailConsent,
+        // Legacy field, still sent for older backends — same choice.
+        marketingConsent: consent.emailConsent,
+      });
       analyticsAdapter.track('winr_email_captured');
       logger.info('Email submitted to backend');
     } catch (error) {

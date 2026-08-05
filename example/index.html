@@ -180,7 +180,7 @@ window.fetch = async (url, init) => {
       log('→ getActiveGiveaway (claimedToday:', claimedToday() + ')');
       return ok({ giveaway: giveaway(), sdkConfig: sdkConfig(), ...userPayload() });
     case 'submitEmail':
-      log('→ submitEmail', body.email);
+      log('→ submitEmail', body.email, '(ageConfirmed:', body.ageConfirmed + ', emailConsent:', body.emailConsent + ')');
       state.emailConsent = true; saveState();
       return ok({ success: true });
     case 'claimDailyEntries': {

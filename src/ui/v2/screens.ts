@@ -238,6 +238,37 @@ export function renderEmpty(onClose: () => void): HTMLElement {
 
 // ─── New-user capture ("VISIT. EARN. WIN.") ───
 
+/**
+ * One capture-screen consent checkbox (age gate, email consent). Both rows go
+ * through here so their box, check treatment, spacing, color, text style and
+ * tap target are identical by construction — style them in ONE place
+ * (`.wv2-age-row`).
+ */
+function renderConsentRow(
+  label: string,
+  initialChecked: boolean,
+  onToggle: (checked: boolean) => void
+): HTMLButtonElement {
+  let checked = initialChecked;
+  const row = el('button', 'wv2-age-row');
+  row.type = 'button';
+  row.setAttribute('role', 'checkbox');
+  row.setAttribute('aria-checked', String(checked));
+
+  const box = icon(checked ? checkSquareIcon : squareIcon, 'wv2-ic');
+  box.style.color = '#fff';
+  row.appendChild(box);
+  row.appendChild(el('span', undefined, label));
+
+  row.addEventListener('click', () => {
+    checked = !checked;
+    box.innerHTML = checked ? checkSquareIcon : squareIcon;
+    row.setAttribute('aria-checked', String(checked));
+    onToggle(checked);
+  });
+  return row;
+}
+
 export function renderCapture(c: V2ExperienceController, logoUrl?: string | null): HTMLElement {
   const giveaway = c.giveaway;
   const day1Entries = c.ladderValue(1);
@@ -278,40 +309,46 @@ export function renderCapture(c: V2ExperienceController, logoUrl?: string | null
   field.appendChild(input);
   form.appendChild(field);
 
+  // Two consent checkboxes, built by the same helper so they are identical in
+  // every visual respect. The age gate starts UNCHECKED (affirmative action
+  // required) and gates the CTA; email consent starts CHECKED and never does.
   let isAdult = false;
-  const ageRow = el('button', 'wv2-age-row');
-  ageRow.type = 'button';
-  const box = icon(squareIcon, 'wv2-ic');
-  box.style.color = '#fff';
-  ageRow.appendChild(box);
-  ageRow.appendChild(el('span', undefined, 'I confirm I am 18 years of age or older'));
-  form.appendChild(ageRow);
+  let wantsEmail = true;
 
   const canSubmit = (): boolean =>
     isAdult && input.value.includes('@') && input.value.includes('.');
-
-  const cta = renderPill(
-    `CLAIM MY ${day1Entries} ENTRIES`,
-    () => {
-      void c.submitEmail(input.value.trim());
-    },
-    { loading: c.isSubmittingEmail, disabled: !canSubmit() }
-  );
-  form.appendChild(cta);
-  stack.appendChild(form);
 
   const refreshCta = (): void => {
     cta.disabled = !canSubmit() || c.isSubmittingEmail;
     cta.classList.toggle('wv2-pill-dim', !canSubmit());
   };
-  input.addEventListener('input', refreshCta);
-  ageRow.addEventListener('click', () => {
-    isAdult = !isAdult;
-    box.innerHTML = isAdult ? checkSquareIcon : squareIcon;
-    refreshCta();
+
+  form.appendChild(
+    renderConsentRow('I confirm I am 18 years of age or older', false, (checked) => {
+      isAdult = checked;
+      refreshCta();
+    })
+  );
+  form.appendChild(
+    renderConsentRow(c.emailConsentText, true, (checked) => {
+      wantsEmail = checked;
+    })
+  );
+
+  const submit = (): void => {
+    void c.submitEmail(input.value.trim(), { ageConfirmed: isAdult, emailConsent: wantsEmail });
+  };
+
+  const cta = renderPill(`CLAIM MY ${day1Entries} ENTRIES`, submit, {
+    loading: c.isSubmittingEmail,
+    disabled: !canSubmit(),
   });
+  form.appendChild(cta);
+  stack.appendChild(form);
+
+  input.addEventListener('input', refreshCta);
   input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && canSubmit()) void c.submitEmail(input.value.trim());
+    if (e.key === 'Enter' && canSubmit()) submit();
   });
 
   // Legal footer
