@@ -1,5 +1,50 @@
 # Changelog
 
+## [2.3.3] - 2026-08-05
+
+Load-experience defects found testing the SDK inside a real publisher app
+(ported from the Flutter SDK's 2.3.3).
+
+### Fixed
+- **The drawer no longer sits on a loading state for seconds.** It auto-opens
+  ahead of its sequential network calls (registerDevice → getActiveGiveaway →
+  claim). When the browser already has a cached giveaway AND a persisted
+  streak, the real dashboard now paints IMMEDIATELY from that cache and the
+  fresh response reconciles in place — reusing the same no-replay guards the
+  celebration staging already used, so the celebration still fires exactly
+  once (the come-back bar now accepts a late-arriving toast rather than
+  missing it, and a one-shot marker keeps it from playing twice). The
+  email-capture gate is unchanged: an unconsented user NEVER sees a cached
+  dashboard. A cache-rendered dashboard also survives a subsequent network
+  failure instead of collapsing to the empty state.
+- **Cold start shows a skeleton, not a spinner.** With nothing cached to paint,
+  the loading view is now a pulsing block-out of the real layout (grab handle,
+  header, prize card, three streak tiles, come-back bar, CTA pill) in the
+  drawer's own gunmetal instead of a centered spinner and "Loading…". One
+  shared pulse keeps every block in phase, and `prefers-reduced-motion` stills
+  it.
+- **The prize image arrives with the card instead of popping in after it.**
+  The publisher's `prizeImageUrl` (and `branding.logoUrl`) are now pulled into
+  the browser's image cache as soon as the SDK learns the giveaway config — at
+  registration, on every giveaway refresh, and once more when the experience
+  mounts — so the card normally paints its art on its first frame. Already
+  warmed URLs are no-ops; a failed one is dropped so the next refresh retries;
+  non-DOM/SSR hosts are a safe no-op. A cold URL fades in over ~200ms against
+  the card's deep charcoal rather than flashing, and a broken one falls back
+  to the bundled cash hero.
+- **Email consent is cached on submit.** A successful email submit now sets the
+  SDK's cached `emailConsentStatus` immediately instead of waiting for the next
+  `getActiveGiveaway`, so the auto-open engine's unregistered-impression cap
+  can't read stale consent regardless of check ordering.
+
+### Tests
+- 22 new: cache-first render (painted without waiting on the network, calm
+  frame with no celebration artifacts, cold cache → skeleton, unconsented user
+  → email capture, no stomping of fresher truth, offline survival), the
+  late-arriving come-back toast firing exactly once, and image prewarming
+  (warm once, no-op on repeat, retry after failure, `decode()`-less fallback,
+  safe when `Image` is undefined) plus the hero's fade/warm/fallback paths.
+
 ## [2.3.0] - 2026-08-04
 
 - **Winner prize-claim flow (Joe's stepped design)** — when the backend marks

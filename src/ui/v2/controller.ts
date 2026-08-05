@@ -4,6 +4,7 @@ import {
   Giveaway,
   PrizeClaimBlock,
   SDKConfig,
+  StreakState,
   SubmitEmailRequest,
   SubmitEmailResponse,
   WINRError,
@@ -14,6 +15,7 @@ import { WINRAPI } from '../../network/api';
 import { LocalStorageProvider } from '../../storage/local-storage';
 import { logger } from '../../services/logger';
 import { analyticsAdapter } from '../../services/analytics';
+import { prewarmImage } from './effects';
 import { ladderEntries } from './v2-theme';
 
 /**
@@ -70,6 +72,12 @@ export interface V2ControllerDeps {
   /** Warm-start data cached by WINR from device registration. */
   cachedGiveaway?: Giveaway | null;
   cachedSdkConfig?: SDKConfig | null;
+  /**
+   * Backend "claimed today" as of device registration — the warm-start truth
+   * the cache-first render paints with (see {@link
+   * V2ExperienceController.hydrateFromCache}).
+   */
+  cachedClaimedToday?: boolean;
   /** Lets WINR keep its instance caches (giveaway, claim state, RTD) in sync. */
   onGiveawayRefreshed?: (response: GetActiveGiveawayResponse) => void;
   /**
@@ -82,6 +90,23 @@ export interface V2ControllerDeps {
 /** Non-PII "email submitted" flag key — shared with the auto-open engine. */
 export function emailSubmittedStorageKey(bundleId: string): string {
   return `${WINR_CONSTANTS.STORAGE_KEYS.EMAIL_SUBMITTED}_${bundleId}`;
+}
+
+/**
+ * Whether a persisted `lastClaimedDate` (JSON round-trips to a string) falls
+ * on today's LOCAL calendar day — the cache-first render's fallback for
+ * "already claimed" when the registration handshake hasn't reported one.
+ */
+function isToday(value: Date | string | undefined): boolean {
+  if (!value) return false;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return false;
+  const now = new Date();
+  return (
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate()
+  );
 }
 
 export class V2ExperienceController {
@@ -261,6 +286,95 @@ export class V2ExperienceController {
     return submitted && this.deps.hasRegisteredUuid();
   }
 
+  // ─── Cache-first render ───
+
+  /**
+   * True once the dashboard has been painted from CACHED values, before any
+   * network response landed. Read by the dashboard render (a cache frame has
+   * no staged grant, so it must not pin the stats to N-1 or fire a tile
+   * celebration) and used as a guard so a non-authoritative failure doesn't
+   * replace a live dashboard with a loading/empty screen. Cleared the moment
+   * fresh truth arrives.
+   */
+  public hydratedFromCache = false;
+
+  private get streakStateKey(): string {
+    return WINR_CONSTANTS.STORAGE_KEYS.STREAK_STATE;
+  }
+
+  /**
+   * Paints the dashboard IMMEDIATELY from cached state (giveaway config +
+   * persisted streak), skipping the loading phase entirely.
+   *
+   * The drawer used to sit on a skeleton for as long as the sequential
+   * registerDevice → getActiveGiveaway → claim round-trips took, even when
+   * every value it needed was already on the device. Everything here is a
+   * SYNCHRONOUS local read, so the caller can paint the result as the
+   * experience's very first frame; {@link load} then reconciles in place with
+   * the same no-replay guards the celebration staging already uses (the
+   * reveal flags are untouched, so a staged celebration still fires exactly
+   * once).
+   *
+   * Deliberately does NOT `transition()` — the caller (the experience root)
+   * paints the returned state as its first render, so there is no
+   * loading-then-dashboard double paint.
+   *
+   * Returns false (leaving the skeleton up) when anything is missing or when
+   * a fresh response has already resolved the phase — a first-ever open, an
+   * unconsented user who must see email capture first, or a cold cache all
+   * take the genuine loading path.
+   */
+  public hydrateFromCache(): boolean {
+    if (this.state.kind !== 'loading') return false; // never stomp fresher truth
+
+    const giveaway = this.deps.cachedGiveaway ?? this.readCachedGiveaway();
+    if (!giveaway) return false;
+
+    // Day 1 / unconsented users must land on email capture, NEVER a cached
+    // dashboard. This gate is the whole reason the cache path is safe.
+    if (!this.hasEmailConsent) return false;
+
+    const streak = this.readCachedStreakState();
+    if (!streak || typeof streak.currentDay !== 'number') return false;
+
+    this.giveaway = giveaway;
+    this.streakDay = streak.currentDay;
+    if (typeof streak.totalEntriesEarned === 'number') {
+      this.totalEntries = streak.totalEntriesEarned;
+    }
+    this.claimedToday = this.deps.cachedClaimedToday ?? isToday(streak.lastClaimedDate);
+    this.hydratedFromCache = true;
+    this.state = { kind: 'dashboard' };
+    return true;
+  }
+
+  private readCachedGiveaway(): Giveaway | null {
+    const cached = this.deps.storage.getItem(this.giveawayCacheKey);
+    if (!cached) return null;
+    try {
+      return JSON.parse(cached) as Giveaway;
+    } catch {
+      this.deps.storage.removeItem(this.giveawayCacheKey);
+      return null;
+    }
+  }
+
+  private readCachedStreakState(): Partial<StreakState> | null {
+    const cached = this.deps.storage.getItem(this.streakStateKey);
+    if (!cached) return null;
+    try {
+      return JSON.parse(cached) as Partial<StreakState>;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Warms the publisher's remote art (prize hero + logo) — see prewarmImage. */
+  public prewarmPublisherArt(): void {
+    prewarmImage(this.giveaway?.prizeImageUrl);
+    prewarmImage(this.sdkConfig?.branding?.logoUrl);
+  }
+
   // ─── State machine ───
 
   private transition(state: V2State): void {
@@ -272,6 +386,9 @@ export class V2ExperienceController {
     let pendingPrizeClaim: PrizeClaimBlock | null = null;
     try {
       const response = await this.deps.api.getActiveGiveaway();
+      // Fresh truth has landed — everything below overwrites the cache-first
+      // frame, so the dashboard renders normally again from here on.
+      this.hydratedFromCache = false;
       this.deps.onGiveawayRefreshed?.(response);
 
       // RTD: an opted-out person never sees the experience content.
@@ -316,6 +433,10 @@ export class V2ExperienceController {
       if (response.giveaway) {
         this.deps.storage.setItem(this.giveawayCacheKey, JSON.stringify(response.giveaway));
       }
+
+      // Keep the prize art (and logo) warm across a prize change mid-session —
+      // the giveaway refresh is the moment we learn the new URLs.
+      this.prewarmPublisherArt();
     } catch (error) {
       // Offline fallback: use cached giveaway.
       if (!this.giveaway) {
@@ -333,6 +454,9 @@ export class V2ExperienceController {
         this.transition({ kind: 'empty' });
         return;
       }
+      // NOTE: a cache-first render always leaves `this.giveaway` set, so a
+      // network hiccup after the dashboard is already painted can never
+      // replace it with the empty state — it just keeps showing cached truth.
     }
 
     // Winner prize claim takes precedence over the email gate and the

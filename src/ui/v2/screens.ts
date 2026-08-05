@@ -179,12 +179,48 @@ export function renderLegalLinks(rulesUrl?: string, showPoweredBy = false): HTML
 
 // ─── Loading / empty states ───
 
+/**
+ * Cold start (nothing cached to paint from): a SKELETON of the dashboard
+ * rather than a spinner.
+ *
+ * The drawer auto-opens before its sequential network calls resolve
+ * (registerDevice → getActiveGiveaway → claim). A bare spinner made that wait
+ * read as "nothing is here yet"; blocking out the real layout — header, prize
+ * card, streak tiles, come-back bar, pill — in the drawer's own gunmetal
+ * reads as the content arriving, at identical latency. ONE shared pulse
+ * animation keeps every block in phase so it reads as a single surface
+ * breathing rather than a field of blinking rectangles. The warm path never
+ * gets here at all: a cached giveaway + streak paints the real dashboard
+ * immediately (see V2ExperienceController.hydrateFromCache).
+ */
 export function renderLoading(): HTMLElement {
-  const screen = el('div', 'wv2-screen');
-  const center = el('div', 'wv2-center-state');
-  center.appendChild(el('span', 'wv2-spinner'));
-  center.appendChild(el('div', 'wv2-loading-text', 'Loading…'));
-  screen.appendChild(center);
+  const screen = el('div', 'wv2-screen wv2-skeleton');
+  const pulse = el('div', 'wv2-sk-pulse');
+
+  pulse.appendChild(el('div', 'wv2-grabber'));
+
+  // Header: "?" circle • logo • "X" circle.
+  const header = el('div', 'wv2-sk-header');
+  header.appendChild(el('div', 'wv2-sk-block wv2-sk-circle'));
+  header.appendChild(el('div', 'wv2-sk-block wv2-sk-logo'));
+  header.appendChild(el('div', 'wv2-sk-block wv2-sk-circle'));
+  pulse.appendChild(header);
+
+  // Prize card.
+  pulse.appendChild(el('div', 'wv2-sk-block wv2-sk-card'));
+
+  // Streak rail: three tiles.
+  const rail = el('div', 'wv2-sk-rail');
+  for (let i = 0; i < 3; i++) rail.appendChild(el('div', 'wv2-sk-block wv2-sk-tile'));
+  pulse.appendChild(rail);
+
+  // Come-back bar (full-bleed) + CTA pill.
+  pulse.appendChild(el('div', 'wv2-sk-block wv2-sk-bar'));
+  const pillWrap = el('div', 'wv2-sk-pill-wrap');
+  pillWrap.appendChild(el('div', 'wv2-sk-block wv2-sk-pill'));
+  pulse.appendChild(pillWrap);
+
+  screen.appendChild(pulse);
   return screen;
 }
 
@@ -336,6 +372,14 @@ export function renderDashboard(
   // reads as motion, never as a flash of raw post-claim state.
   const preReveal = !c.claimRevealed && (c.pendingRevealGrant !== null || !c.claimedToday);
 
+  // CACHE-FIRST FRAME: painted from cached values before any network response,
+  // so there is no staged grant behind it. It must show the cached numbers
+  // AS-IS (nothing pinned to N-1 for a celebration that hasn't been staged)
+  // while today's tile rests calm — `ready`, so no check, no confetti and no
+  // burst GIF fire here and the real celebration still plays exactly once when
+  // the claim lands.
+  const cacheFrame = c.hydratedFromCache && !c.pendingRevealGrant && !c.claimRevealed;
+
   const screen = el('div', 'wv2-screen');
 
   const top = el('div', 'wv2-dash-stack');
@@ -357,8 +401,8 @@ export function renderDashboard(
     body.appendChild(renderWinnerBanner(onWinnerTap));
   }
 
-  body.appendChild(renderPrizeCard(c, preReveal));
-  body.appendChild(renderStreakRail(c, preReveal));
+  body.appendChild(renderPrizeCard(c, preReveal && !cacheFrame));
+  body.appendChild(renderStreakRail(c, preReveal || cacheFrame));
   body.appendChild(renderComeBackBar(c));
 
   const footer = el('div', 'wv2-dash-footer');
@@ -430,8 +474,12 @@ export function renderDashboard(
     // since mount (.wv2-toast-start — never the pitch first on a celebration
     // open); after the ~2.5s hold it slides ONCE to the come-back pitch, the
     // bar's final resting state.
-    const comeback = screen.querySelector('.wv2-comeback');
+    const comeback = screen.querySelector('.wv2-comeback') as HTMLElement | null;
     if (comeback) {
+      // Usually a no-op (the toast was seeded at mount). It matters when the
+      // dashboard was painted from CACHE before the claim was staged: the
+      // celebration arrived late, and the toast has to start now — once.
+      startComeBackToast(comeback);
       window.setTimeout(() => {
         // Teardown-safe: no-op if the dashboard was dismissed mid-hold.
         if (!comeback.isConnected) return;
@@ -534,10 +582,7 @@ function renderPrizeCard(c: V2ExperienceController, preReveal = false): HTMLElem
   const card = el('div', 'wv2-prize-card');
 
   // Full-bleed hero art.
-  const hero = el('img', 'wv2-prize-hero');
-  hero.src = giveaway?.prizeImageUrl || V2_IMAGES.cashHero;
-  hero.alt = '';
-  card.appendChild(hero);
+  card.appendChild(renderPrizeHero(giveaway?.prizeImageUrl));
 
   // Solid black stats strip inside the top edge: accent title + white sub.
   const strip = el('div', 'wv2-stats-strip');
@@ -581,6 +626,51 @@ function renderPrizeCard(c: V2ExperienceController, preReveal = false): HTMLElem
   }
   card.appendChild(headline);
   return card;
+}
+
+/**
+ * The prize card's full-bleed hero.
+ *
+ * The publisher's `prizeImageUrl` is normally already decoded by
+ * {@link prewarmImage} (warmed the moment the SDK learned the giveaway
+ * config), in which case the <img> reports `complete` synchronously and
+ * paints with the rest of the card — no fade, no placeholder beat. A COLD URL
+ * fades in over ~200ms against the card's deep-charcoal background (never a
+ * blank/white flash), and a broken one falls back to the bundled cash hero.
+ */
+export function renderPrizeHero(prizeImageUrl?: string | null): HTMLImageElement {
+  const hero = el('img', 'wv2-prize-hero');
+  hero.alt = '';
+
+  if (!prizeImageUrl) {
+    hero.src = V2_IMAGES.cashHero; // bundled data URI — always instant
+    return hero;
+  }
+
+  hero.src = prizeImageUrl;
+  // Prewarmed: assigning a src that is already in the browser's list of
+  // available images resolves SYNCHRONOUSLY, so the bytes are here and the
+  // hero paints with the rest of the card — no fade, no placeholder beat.
+  if (hero.complete && hero.naturalWidth > 0) return hero;
+
+  hero.classList.add('wv2-img-fade');
+  let settled = false;
+  const onLoad = (): void => {
+    if (settled) return;
+    settled = true;
+    hero.classList.add('wv2-img-ready');
+  };
+  const onError = (): void => {
+    if (settled) return;
+    settled = true;
+    // Broken publisher URL — swap in the bundled cash hero, unfaded. The
+    // load handler stands down so the swap can't re-trigger the fade.
+    hero.classList.remove('wv2-img-fade', 'wv2-img-ready');
+    hero.src = V2_IMAGES.cashHero;
+  };
+  hero.addEventListener('load', onLoad);
+  hero.addEventListener('error', onError, { once: true });
+  return hero;
 }
 
 // ─── Streak rail (STREAK STEP + MILESTONE tiles) ───
@@ -787,6 +877,26 @@ function attachRailScrolling(rail: HTMLElement): void {
 
 // ─── Confirmation ("come back tomorrow") bar ───
 
+/**
+ * ONE-SHOT toast starter for the come-back bar.
+ *
+ * The toast used to be seeded only at render time, from
+ * `pendingRevealGrant && !claimRevealed`. Now that the dashboard can be
+ * painted from CACHE before the claim is staged, the bar can mount before
+ * there is anything to celebrate — and a celebration staged a moment later
+ * would have been silently dropped. This lets the toast arrive LATE, while
+ * the `data-toast-played` marker guarantees it plays exactly once: seeded at
+ * mount OR arriving late, never twice.
+ *
+ * Returns true if this call is what started the toast.
+ */
+export function startComeBackToast(bar: HTMLElement): boolean {
+  if (bar.dataset['toastPlayed'] === '1') return false;
+  bar.dataset['toastPlayed'] = '1';
+  bar.classList.add('wv2-toast-start');
+  return true;
+}
+
 function renderComeBackBar(c: V2ExperienceController): HTMLElement {
   // On a CELEBRATION open the toast ("YOU'RE ON A ROLL!") is the bar's FIRST
   // visible state — never the pitch first — and it slides ONCE to the pitch
@@ -797,7 +907,7 @@ function renderComeBackBar(c: V2ExperienceController): HTMLElement {
     : c.ladderValue(c.streakDay);
 
   const bar = el('div', 'wv2-comeback');
-  if (c.pendingRevealGrant && !c.claimRevealed) bar.classList.add('wv2-toast-start');
+  if (c.pendingRevealGrant && !c.claimRevealed) startComeBackToast(bar);
 
   // Come-back pitch (the resting state). "Come back tomorrow"/"Come back
   // again" is BOLD, the rest regular — per Joe's banner lockup.

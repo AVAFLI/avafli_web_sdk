@@ -59,6 +59,19 @@ export class WINRV2Experience {
         this.options.onComplete?.(grant);
       };
 
+      // One more chance to have the prize art decoded before the card paints
+      // — normally already warm (the SDK warms it at registration/refresh),
+      // but a drawer opened before that landed still benefits.
+      this.controller.prewarmPublisherArt();
+
+      // Cache-first render: when a cached giveaway + persisted streak exist
+      // (and the user has consented), paint the REAL dashboard as the very
+      // first frame instead of sitting on the skeleton for the sequential
+      // registerDevice → getActiveGiveaway → claim round-trips. load() then
+      // reconciles in place. Synchronous, and it mutates state without
+      // transitioning, so the renderState() below is still the only paint.
+      this.controller.hydrateFromCache();
+
       this.renderState(this.controller.state);
       void this.controller.load();
     });

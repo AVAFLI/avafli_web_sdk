@@ -20,6 +20,7 @@ import { NetworkClient } from './network/client';
 import { WINRAPI, createWINRAPI } from './network/api';
 import { WINRV2Experience } from './ui/v2/root';
 import { V2ExperienceController, emailSubmittedStorageKey } from './ui/v2/controller';
+import { prewarmImage } from './ui/v2/effects';
 import { StreakEngine } from './domain/streak-engine';
 import { LocalStorageProvider } from './storage/local-storage';
 import { SessionStorageProvider } from './storage/session-storage';
@@ -165,6 +166,11 @@ export class WINR {
       store.setItem(WINR_CONSTANTS.STORAGE_KEYS.UUID, response.uuid);
       logger.info('Adopted existing account — streak unified across devices');
     }
+    // The cached consent flag is otherwise only refreshed by getActiveGiveaway.
+    // Set it here too so the auto-open engine's impression-cap check reads the
+    // truth it just created rather than depending on the once-per-day mark
+    // being evaluated first.
+    WINR.instance!.currentEmailConsentStatus = true;
     return response;
   }
 
@@ -481,6 +487,7 @@ export class WINR {
       },
       cachedGiveaway: this.currentGiveaway,
       cachedSdkConfig: this.getCurrentSDKConfig(),
+      cachedClaimedToday: this.currentClaimedToday,
       onGiveawayRefreshed: (response) => this.onGiveawayResponse(response),
       resolveSdkConfig: () => this.getCurrentSDKConfig(),
     });
@@ -528,6 +535,21 @@ export class WINR {
         monthlyCurrent: response.monthlyCurrent ?? existing?.monthlyCurrent ?? 0,
       } as StreakState);
     }
+
+    this.prewarmPublisherArt();
+  }
+
+  /**
+   * Pulls the publisher's remote art (prize hero + logo) into the browser's
+   * image cache as soon as the SDK learns the giveaway config — at
+   * registration AND on every giveaway refresh — so the drawer paints the
+   * prize card complete on its first frame instead of the art popping in
+   * after everything else. Fire-and-forget; failures just fall back to
+   * loading at display time (see prewarmImage).
+   */
+  private prewarmPublisherArt(): void {
+    prewarmImage(this.currentGiveaway?.prizeImageUrl);
+    prewarmImage(this.getCurrentSDKConfig().branding?.logoUrl);
   }
 
   // ─── Auto-present (V2 experience: open once per day) ───
@@ -902,6 +924,10 @@ export class WINR {
       if (response.sdkConfig) {
         this.serverSDKConfig = response.sdkConfig;
       }
+
+      // Registration is the EARLIEST moment the SDK knows the prize art /
+      // logo URLs — start the download now, long before the drawer opens.
+      this.prewarmPublisherArt();
 
       // Per-user backend truth used by the auto-open engine (impression cap,
       // RTD suppression) before the first getActiveGiveaway round-trip.

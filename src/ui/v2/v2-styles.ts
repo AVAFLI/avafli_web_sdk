@@ -210,7 +210,17 @@ img { display: block; }
   border-radius: 10px; overflow: hidden;
   background: ${c.deepCharcoal};
 }
-.wv2-prize-hero { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+/* The hero carries the card's own deep charcoal so a cold/erroring remote
+   image never flashes blank or white behind it. */
+.wv2-prize-hero {
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+  background: ${c.deepCharcoal};
+}
+/* Applied ONLY when the bytes weren't already warm (see renderPrizeHero):
+   a short fade instead of a hard pop. A prewarmed image never gets this
+   class, so it paints with the rest of the card. */
+.wv2-prize-hero.wv2-img-fade { opacity: 0; transition: opacity 200ms ease-out; }
+.wv2-prize-hero.wv2-img-fade.wv2-img-ready { opacity: 1; }
 .wv2-stats-strip { position: absolute; top: 0; left: 0; right: 0; display: flex; height: 46px; background: #000; }
 .wv2-stat { flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px; }
 .wv2-stat .wv2-ic-flame { width: 18px; height: 22px; color: var(--wv2-accent); flex: none; }
@@ -806,9 +816,32 @@ img { display: block; }
   align-items: center; justify-content: center; gap: 12px;
   padding: 24px; text-align: center;
 }
-.wv2-loading-text { font-size: 14px; color: ${c.textTertiary}; }
 .wv2-empty-title { font-size: 20px; font-weight: 700; color: #fff; }
 .wv2-empty-sub { font-size: 14px; color: ${c.textTertiary}; }
 .wv2-empty-cta { width: 220px; margin-top: 12px; }
+
+/* Cold-start SKELETON — a pulsing block-out of the real dashboard layout in
+   the drawer's own gunmetal, replacing the old spinner + "Loading…".
+   ONE shared pulse on the wrapper (not per block) so the whole thing reads as
+   a single surface breathing rather than a field of blinking rectangles. */
+.wv2-skeleton { overflow: hidden; }
+.wv2-sk-pulse {
+  display: flex; flex-direction: column; gap: 15px;
+  animation: wv2-sk-breathe 900ms ease-in-out infinite alternate;
+}
+@keyframes wv2-sk-breathe { from { opacity: 0.45; } to { opacity: 0.85; } }
+@media (prefers-reduced-motion: reduce) {
+  .wv2-sk-pulse { animation: none; opacity: 0.65; }
+}
+.wv2-sk-block { background: rgba(255,255,255,0.08); border-radius: 6px; flex: none; }
+.wv2-sk-header { display: flex; align-items: center; justify-content: space-between; padding: 0 20px; }
+.wv2-sk-circle { width: 36px; height: 36px; border-radius: 50%; }
+.wv2-sk-logo { width: 140px; height: 34px; }
+.wv2-sk-card { height: 200px; margin: 15px 22px 0; border-radius: 10px; }
+.wv2-sk-rail { display: flex; justify-content: space-between; padding: 0 22px; }
+.wv2-sk-tile { width: 106px; height: 134px; border-radius: 10px; }
+.wv2-sk-bar { height: 71px; border-radius: 0; }
+.wv2-sk-pill-wrap { padding: 0 30px; }
+.wv2-sk-pill { height: 54px; border-radius: 27px; }
 `;
 }
