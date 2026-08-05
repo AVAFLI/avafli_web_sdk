@@ -94,12 +94,21 @@ export interface V2ControllerDeps {
 export interface EmailCaptureConsent {
   /** "I confirm I am 18 years of age or older" — required to submit. */
   ageConfirmed: boolean;
-  /** Email/marketing consent — pre-checked, and NEVER blocks entry. */
-  emailConsent: boolean;
+  /**
+   * Consent for the publisher to send MARKETING email — pre-checked, and
+   * NEVER blocks entry. It does not govern winner contact: if this person is
+   * drawn, they are contacted either way (operational necessity).
+   */
+  marketingConsent: boolean;
 }
 
-/** Fallback copy when the server supplies no `emailConsentText` override. */
-export const DEFAULT_EMAIL_CONSENT_TEXT = 'Get notified about prizes and rewards';
+/**
+ * Fallback copy when the server supplies no `emailConsentText` override. The
+ * backend normally sends a publisher-named string ("I agree to receive
+ * marketing emails from {PublisherName}"); the SDK never interpolates a
+ * publisher name itself.
+ */
+export const DEFAULT_MARKETING_CONSENT_TEXT = 'I agree to receive marketing emails from this app';
 
 /** Non-PII "email submitted" flag key — shared with the auto-open engine. */
 export function emailSubmittedStorageKey(bundleId: string): string {
@@ -281,15 +290,16 @@ export class V2ExperienceController {
   }
 
   /**
-   * Label for the capture screen's email-consent checkbox. Prefers the nested
-   * per-screen override, then the flat legacy field, then the SDK default.
+   * Label for the capture screen's marketing-consent checkbox. Prefers the
+   * nested per-screen override, then the flat legacy field, then the SDK
+   * default. The config KEY stays `emailConsentText` for wire compatibility.
    */
-  public get emailConsentText(): string {
+  public get marketingConsentText(): string {
     const copy = this.sdkConfig?.copy;
     return (
       copy?.emailCapture?.emailConsentText ||
       copy?.emailConsentText ||
-      DEFAULT_EMAIL_CONSENT_TEXT
+      DEFAULT_MARKETING_CONSENT_TEXT
     );
   }
 
@@ -753,8 +763,8 @@ export class V2ExperienceController {
   /**
    * Capture-screen submit. `consent` carries BOTH checkboxes exactly as the
    * user left them — the age gate (which the CTA already required) and the
-   * pre-checked email consent (which the user may have turned off without
-   * losing their entry).
+   * pre-checked MARKETING consent (which the user may have turned off without
+   * losing their entry, or their winner contact).
    */
   public async submitEmail(email: string, consent: EmailCaptureConsent): Promise<void> {
     if (!email || this.isSubmittingEmail) return;
@@ -770,12 +780,12 @@ export class V2ExperienceController {
       // Cross-device streak unification: if this email already belonged to an
       // existing user under this publisher, submitEmailAndAdopt switches the
       // session to that canonical user's credentials.
+      // `ageConfirmed` is ALWAYS sent — the backend keys off it to detect a
+      // 2.4.0+ client.
       await this.deps.submitEmailAndAdopt({
         email,
         ageConfirmed: consent.ageConfirmed,
-        emailConsent: consent.emailConsent,
-        // Legacy field, still sent for older backends — same choice.
-        marketingConsent: consent.emailConsent,
+        marketingConsent: consent.marketingConsent,
       });
       analyticsAdapter.track('winr_email_captured');
       logger.info('Email submitted to backend');

@@ -6,28 +6,34 @@ Consent capture on the email screen, matching the iOS, Android and Flutter
 SDKs.
 
 ### Added
-- **Email-consent checkbox on the capture screen.** A second checkbox sits
-  directly below the 18+ age gate, PRE-CHECKED, reading "Get notified about
-  prizes and rewards" (server-overridable via
-  `sdkConfig.copy.emailCapture.emailConsentText`, or the flat legacy
-  `sdkConfig.copy.emailConsentText`). It is styled by the same code path as
-  the age row, so the two rows are identical. It does NOT gate entry: the CTA
-  is still enabled on (age confirmed AND valid email) alone, and a user who
-  opts out of marketing email still claims their entries.
+- **Marketing-consent checkbox on the capture screen.** A second checkbox sits
+  directly below the 18+ age gate, PRE-CHECKED, covering ONE thing: the
+  publisher using the address for MARKETING email. It reads "I agree to
+  receive marketing emails from this app" by default; in practice the backend
+  supplies a publisher-named string via
+  `sdkConfig.copy.emailCapture.emailConsentText` (or the flat legacy
+  `sdkConfig.copy.emailConsentText`), and the SDK renders it verbatim — it
+  never interpolates a publisher name itself. The row is built by the same
+  code path as the age row, so the two are identical.
+  **Declining it costs the user nothing:** the CTA is still enabled on (age
+  confirmed AND valid email) alone, the entry is claimed as normal, and
+  winner contact is unaffected — if this person is drawn, they are contacted
+  either way. No checkbox gates that.
 
 ### Changed
 - **Age confirmation is now transmitted and stored server-side.** `submitEmail`
-  sends `{ email, ageConfirmed, emailConsent }` carrying the real state of
+  sends `{ email, ageConfirmed, marketingConsent }` carrying the real state of
   both checkboxes — the age gate's value used to be discarded on the client.
-  The legacy `marketingConsent` field is still sent (mirroring `emailConsent`)
-  for older backends.
+  `ageConfirmed` is always sent; the backend keys off it to detect a 2.4.0+
+  client.
 
 ### Tests
-- 5 new: the age gate renders unchecked and email consent renders pre-checked
-  directly below it with identical styling, the copy override precedence
-  (nested → flat → default), the CTA gating being untouched by the consent box
-  (including unchecking it after enabling the CTA), and the submitted payload
-  carrying the real `ageConfirmed`/`emailConsent` values in both directions.
+- 5 new: the age gate renders unchecked and marketing consent renders
+  pre-checked directly below it with identical styling, the copy override
+  precedence (nested → flat → default), the CTA gating being untouched by the
+  consent box (including unchecking it after enabling the CTA), and the
+  submitted payload carrying the real `ageConfirmed`/`marketingConsent` values
+  in both directions with no stray keys.
 
 ## [2.3.3] - 2026-08-05
 

@@ -201,7 +201,7 @@ describe('V2 Day 2+ reveal flow', () => {
 
     const submitPromise = controller.submitEmail('ada@example.com', {
       ageConfirmed: true,
-      emailConsent: true,
+      marketingConsent: true,
     });
     await vi.advanceTimersByTimeAsync(0);
 

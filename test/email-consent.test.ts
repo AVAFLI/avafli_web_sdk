@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi } from 'vitest';
 import {
-  DEFAULT_EMAIL_CONSENT_TEXT,
+  DEFAULT_MARKETING_CONSENT_TEXT,
   V2ControllerDeps,
   V2ExperienceController,
 } from '../src/ui/v2/controller';
@@ -14,9 +14,10 @@ import { LocalStorageProvider } from '../src/storage/local-storage';
  * Capture-screen consent (2.4.0).
  *
  * The capture screen carries TWO checkboxes: the 18+ age gate (unchecked by
- * default, gates the CTA) and email/marketing consent (PRE-CHECKED, and never
- * a gate — unchecking it must still let the user enter). Both values travel
- * to `submitEmail` as `ageConfirmed` / `emailConsent`.
+ * default, gates the CTA) and MARKETING consent (PRE-CHECKED, and never a
+ * gate — unchecking it must still let the user enter, and never affects
+ * winner contact). Both values travel to `submitEmail` as `ageConfirmed` /
+ * `marketingConsent`.
  */
 
 const GIVEAWAY: Giveaway = {
@@ -73,7 +74,7 @@ function makeController(sdkConfig?: SDKConfig): {
   return { controller, submitEmailAndAdopt };
 }
 
-/** [age gate, email consent] — the capture screen's two consent rows, in order. */
+/** [age gate, marketing consent] — the capture screen's two rows, in order. */
 function consentRows(capture: HTMLElement): HTMLButtonElement[] {
   return Array.from(capture.querySelectorAll<HTMLButtonElement>('.wv2-age-row'));
 }
@@ -91,7 +92,7 @@ function typeEmail(capture: HTMLElement, value: string): void {
 }
 
 describe('capture screen consent checkboxes', () => {
-  it('renders the age gate UNCHECKED and email consent PRE-CHECKED, below it', () => {
+  it('renders the age gate UNCHECKED and marketing consent PRE-CHECKED, below it', () => {
     const { controller } = makeController();
     const capture = renderCapture(controller);
     const [age, consent] = consentRows(capture);
@@ -100,7 +101,7 @@ describe('capture screen consent checkboxes', () => {
     expect(age!.textContent).toContain('18 years of age or older');
     expect(age!.getAttribute('aria-checked')).toBe('false');
 
-    expect(consent!.textContent).toContain(DEFAULT_EMAIL_CONSENT_TEXT);
+    expect(consent!.textContent).toContain(DEFAULT_MARKETING_CONSENT_TEXT);
     expect(consent!.getAttribute('aria-checked')).toBe('true');
 
     // Same class => same box size, check treatment, spacing and text style.
@@ -110,11 +111,11 @@ describe('capture screen consent checkboxes', () => {
   });
 
   it('prefers the nested copy override, then the flat one, over the default', () => {
-    expect(makeController().controller.emailConsentText).toBe(DEFAULT_EMAIL_CONSENT_TEXT);
+    expect(makeController().controller.marketingConsentText).toBe(DEFAULT_MARKETING_CONSENT_TEXT);
 
     expect(
       makeController({ copy: { emailConsentText: 'Flat consent copy' } }).controller
-        .emailConsentText
+        .marketingConsentText
     ).toBe('Flat consent copy');
 
     expect(
@@ -123,11 +124,11 @@ describe('capture screen consent checkboxes', () => {
           emailConsentText: 'Flat consent copy',
           emailCapture: { emailConsentText: 'Nested consent copy' },
         },
-      }).controller.emailConsentText
+      }).controller.marketingConsentText
     ).toBe('Nested consent copy');
   });
 
-  it('the CTA is gated on the age gate + a valid email ONLY — never on email consent', () => {
+  it('the CTA is gated on the age gate + a valid email ONLY — never on marketing consent', () => {
     const { controller } = makeController();
     const capture = renderCapture(controller);
     const [age, consent] = consentRows(capture);
@@ -151,7 +152,7 @@ describe('capture screen consent checkboxes', () => {
     expect(cta(capture).disabled).toBe(true);
   });
 
-  it('submits the REAL checkbox states as ageConfirmed / emailConsent', async () => {
+  it('submits the REAL checkbox states as ageConfirmed / marketingConsent', async () => {
     const { controller, submitEmailAndAdopt } = makeController();
     const capture = renderCapture(controller);
     const [age] = consentRows(capture);
@@ -164,12 +165,16 @@ describe('capture screen consent checkboxes', () => {
     expect(submitEmailAndAdopt).toHaveBeenCalledWith({
       email: 'ada@example.com',
       ageConfirmed: true,
-      emailConsent: true,
       marketingConsent: true,
     });
+    // The payload key is `marketingConsent` — the interim `emailConsent`
+    // name is gone from the wire entirely.
+    const payload = submitEmailAndAdopt.mock.calls[0]![0] as Record<string, unknown>;
+    expect(Object.keys(payload).sort()).toEqual(['ageConfirmed', 'email', 'marketingConsent']);
+    expect('emailConsent' in payload).toBe(false);
   });
 
-  it('carries emailConsent: false when the user unchecks it', async () => {
+  it('carries marketingConsent: false when the user unchecks it — entry unaffected', async () => {
     const { controller, submitEmailAndAdopt } = makeController();
     const capture = renderCapture(controller);
     const [age, consent] = consentRows(capture);
@@ -183,7 +188,6 @@ describe('capture screen consent checkboxes', () => {
     expect(submitEmailAndAdopt).toHaveBeenCalledWith({
       email: 'ada@example.com',
       ageConfirmed: true,
-      emailConsent: false,
       marketingConsent: false,
     });
   });

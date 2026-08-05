@@ -227,6 +227,12 @@ export interface SDKCopy {
     submitButton?: string;
     rulesPrefix?: string;
     rulesLinkText?: string;
+    /**
+     * Label for the MARKETING-consent checkbox. The backend supplies a
+     * publisher-named string ("I agree to receive marketing emails from
+     * {PublisherName}"); the SDK renders it verbatim. Key name kept for wire
+     * compatibility.
+     */
     emailConsentText?: string;
   };
   streakDashboard?: {
@@ -447,15 +453,15 @@ export interface SubmitEmailRequest {
   email: string;
   /**
    * The capture screen's age-gate checkbox ("I confirm I am 18 years of age or
-   * older"), as the user left it. Stored server-side.
+   * older"), as the user left it. Stored server-side, and the flag the backend
+   * keys off to detect a 2.4.0+ client — always sent.
    */
   ageConfirmed?: boolean;
   /**
-   * The capture screen's email/marketing-consent checkbox — pre-checked, and
-   * unchecking it does NOT block entry.
+   * The capture screen's MARKETING-consent checkbox — pre-checked, and
+   * unchecking it does NOT block entry. Marketing email only: winner contact
+   * is unaffected.
    */
-  emailConsent?: boolean;
-  /** Legacy alias of {@link emailConsent}, kept for older backends. */
   marketingConsent?: boolean;
   publisherUserId?: string;
 }

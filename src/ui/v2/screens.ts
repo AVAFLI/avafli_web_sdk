@@ -311,9 +311,11 @@ export function renderCapture(c: V2ExperienceController, logoUrl?: string | null
 
   // Two consent checkboxes, built by the same helper so they are identical in
   // every visual respect. The age gate starts UNCHECKED (affirmative action
-  // required) and gates the CTA; email consent starts CHECKED and never does.
+  // required) and gates the CTA; MARKETING consent starts CHECKED and never
+  // does — declining it costs the user neither their entry nor, if they are
+  // drawn, their winner contact.
   let isAdult = false;
-  let wantsEmail = true;
+  let wantsMarketing = true;
 
   const canSubmit = (): boolean =>
     isAdult && input.value.includes('@') && input.value.includes('.');
@@ -330,13 +332,16 @@ export function renderCapture(c: V2ExperienceController, logoUrl?: string | null
     })
   );
   form.appendChild(
-    renderConsentRow(c.emailConsentText, true, (checked) => {
-      wantsEmail = checked;
+    renderConsentRow(c.marketingConsentText, true, (checked) => {
+      wantsMarketing = checked;
     })
   );
 
   const submit = (): void => {
-    void c.submitEmail(input.value.trim(), { ageConfirmed: isAdult, emailConsent: wantsEmail });
+    void c.submitEmail(input.value.trim(), {
+      ageConfirmed: isAdult,
+      marketingConsent: wantsMarketing,
+    });
   };
 
   const cta = renderPill(`CLAIM MY ${day1Entries} ENTRIES`, submit, {

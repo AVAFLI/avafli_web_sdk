@@ -187,7 +187,7 @@ img { display: block; }
 .wv2-email-input::placeholder { color: rgba(29,35,48,0.45); }
 
 /* Consent checkbox row — shared by BOTH capture-screen checkboxes (the 18+
-   age gate and the email/marketing consent below it), so they stay
+   age gate and the marketing consent below it), so they stay
    pixel-identical. See renderConsentRow(). */
 .wv2-age-row { display: flex; align-items: center; gap: 10px; color: #fff; text-align: left; }
 .wv2-age-row .wv2-ic { width: 20px; height: 20px; flex: none; }
