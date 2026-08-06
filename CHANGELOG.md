@@ -1,5 +1,29 @@
 # Changelog
 
+## [2.5.0] - 2026-08-06
+
+### Breaking
+
+`WINR.deleteUserData()` is **removed**. Use `WINR.optOut()`. The old call
+hard-deleted entry records — the evidence a drawing was fair — left no
+tombstone, and never cleaned prize-claim PII. `optOut()` is identity-wide and
+complete.
+
+### Added
+
+Browser perimeter defence. The SDK now attaches a risk-scored reCAPTCHA
+Enterprise token to device registration, closing the gap where a browser has no
+hardware anchor and a script can drive signup freely.
+
+It is **score-based**: no challenge, no puzzle, nothing the user interacts with.
+The floating reCAPTCHA badge is suppressed and the required attribution appears
+instead as one line in the existing legal footer.
+
+It **never blocks the experience**. A publisher Content-Security-Policy that
+forbids Google, an offline first load or a slow network all degrade to sending
+no token, and registration proceeds; the backend decides what to do about that.
+Enforcement is off by default while the score distribution is measured.
+
 ## [2.4.0] - 2026-08-05
 
 Consent capture on the email screen, matching the iOS, Android and Flutter
