@@ -442,13 +442,6 @@ export interface ClaimDailyEntriesResponse {
   lifetimeCount?: number;
 }
 
-export interface ClaimBonusEntriesResponse {
-  /** Bonus entries granted */
-  bonusEntries: number;
-  /** Total entries */
-  totalEntries: number;
-}
-
 export interface SubmitEmailRequest {
   email: string;
   /**

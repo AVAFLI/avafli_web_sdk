@@ -5,7 +5,6 @@ import {
   RefreshTokenResponse,
   GetActiveGiveawayResponse,
   ClaimDailyEntriesResponse,
-  ClaimBonusEntriesResponse,
   SubmitEmailRequest,
   SubmitEmailResponse,
   SubmitUserProfileRequest,
@@ -52,13 +51,6 @@ export class WINRAPI {
    */
   public async claimDailyEntries(): Promise<ClaimDailyEntriesResponse> {
     return this.client.post<ClaimDailyEntriesResponse>('/claimDailyEntries', {});
-  }
-
-  /**
-   * Claim bonus entries (from rewarded video)
-   */
-  public async claimBonusEntries(): Promise<ClaimBonusEntriesResponse> {
-    return this.client.post<ClaimBonusEntriesResponse>('/claimBonusEntries', {});
   }
 
   /**
