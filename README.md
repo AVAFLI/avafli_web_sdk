@@ -191,15 +191,28 @@ await WINR.configure({
 - `winr_push_notifications_enabled` — Browser notification permission granted
 - `winr_user_data_deleted` — User data deletion completed
 
-## GDPR / Delete User Data
+## GDPR / CCPA
 
-Support GDPR/CCPA deletion requests:
+Handle erasure requests with `optOut()`:
 
-```typescript
-await WINR.deleteUserData();
+```javascript
+await WINR.optOut();
 ```
 
-This permanently removes all user data, entries, preferences, and consent records from WINR servers.
+This is the complete Right-to-be-Forgotten path. It removes the person's personal
+information everywhere it is held — including prize-claim records, which carry name,
+address and phone — links their devices together so one call covers all of them, and
+permanently silences the experience on the device so it survives a reinstall.
+
+De-identified entry records are deliberately retained. They are the evidence that a
+drawing was fair and that a prize went to a real eligible person, which a sweepstakes
+operator must be able to show; GDPR Art. 17(3) exempts data needed for legal claims.
+The person is erased, the proof is kept.
+
+> A previous `deleteUserData()` method was removed in 2.5.0. It hard-deleted entry
+> records, which both destroyed that evidence and — because it left no tombstone —
+> allowed delete-and-re-register to farm unlimited entries. Use `optOut()`.
+
 
 ## API Reference
 
@@ -212,7 +225,6 @@ This permanently removes all user data, entries, preferences, and consent record
 | `WINR.isAvailable` | `boolean` | Whether the experience is currently available (eligible to auto-open) |
 | `WINR.refreshConfig()` | `Promise<void>` | Re-fetch the giveaway/SDK config from the backend |
 | `WINR.registerForPushNotifications()` | `Promise<void>` | Request browser notification permission |
-| `WINR.deleteUserData()` | `Promise<void>` | Permanently delete all user data |
 
 For detailed API documentation, see the [WINR Docs](https://avafli-website.web.app/sdk/web).
 

@@ -11,7 +11,6 @@ import {
   SubmitUserProfileResponse,
   SubmitPrizeClaimRequest,
   SubmitPrizeClaimResponse,
-  DeleteUserDataResponse,
 } from '../types';
 import { NetworkClient } from './client';
 
@@ -85,10 +84,6 @@ export class WINRAPI {
   /**
    * Delete all user data (GDPR compliance)
    */
-  public async deleteUserData(): Promise<DeleteUserDataResponse> {
-    return this.client.post<DeleteUserDataResponse>('/deleteUserData', {});
-  }
-
   /**
    * Health check endpoint
    */

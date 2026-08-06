@@ -10,7 +10,6 @@ import {
   SubmitEmailRequest,
   SubmitEmailResponse,
   SubmitUserProfileRequest,
-  DeleteUserDataResponse,
   Giveaway,
   StreakState,
   SDKConfig,
@@ -716,40 +715,17 @@ export class WINR {
   }
 
   /**
-   * Delete all user data (GDPR compliance)
+   * Right-to-be-Forgotten (GDPR/CCPA)
+   *
+   * `deleteUserData()` was REMOVED. It called a backend hard-delete that wiped the
+   * user's entries, leaving no tombstone — so delete -> re-register -> claim again
+   * the same day farmed unlimited entries. It also destroyed the records proving the
+   * drawing was fair, and left prize-claim PII orphaned.
+   *
+   * Use `optOut()` instead. It is the correct erasure: identity-wide, PII scrubbed
+   * everywhere including prize claims, tombstoned so it survives a reinstall, and
+   * the experience stays permanently silenced on the device.
    */
-  public static async deleteUserData(): Promise<void> {
-    if (!WINR.ensureConfigured()) return;
-    
-    try {
-      // Call API to delete server-side data
-      await WINR.instance!.client.delete<DeleteUserDataResponse>('/deleteUserData');
-      
-      // Clear local + session (sensitive) storage
-      WINR.instance!.storage.clear();
-      WINR.instance!.secureStorage.clear();
-      
-      // Reset internal state
-      WINR.instance!.currentUser = null;
-      WINR.instance!.currentGiveaway = null;
-      WINR.instance!.deviceFingerprint = null;
-      
-      analyticsAdapter.track('winr_user_data_deleted');
-      logger.info('User data deleted successfully');
-      
-    } catch (error) {
-      const winrError = error instanceof WINRError 
-        ? error 
-        : new WINRError(
-            WINRErrorCode.NetworkError,
-            'Failed to delete user data',
-            error instanceof Error ? error : undefined
-          );
-      
-      logger.error('Failed to delete user data:', winrError);
-      throw winrError;
-    }
-  }
 
   /**
    * Register for push notifications

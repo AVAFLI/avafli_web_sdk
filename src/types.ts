@@ -486,10 +486,6 @@ export interface SubmitUserProfileResponse {
   success: boolean;
 }
 
-export interface DeleteUserDataResponse {
-  success: boolean;
-}
-
 // ─── Error Types ───
 
 export enum WINRErrorCode {
