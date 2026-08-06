@@ -154,6 +154,7 @@ img { display: block; }
 .wv2-legal-row a:hover { text-decoration: underline; }
 .wv2-legal-dot { width: 4px; height: 4px; border-radius: 50%; background: ${c.textSecondary}; }
 .wv2-powered { font-size: 12px; color: ${c.textTertiary}; }
+.wv2-recaptcha-notice { font-size: 10px; color: ${c.textTertiary}; opacity: 0.75; margin-top: 4px; text-align: center; line-height: 1.35; }
 
 /* ═══ New-user capture ("VISIT. EARN. WIN.") ═══ */
 

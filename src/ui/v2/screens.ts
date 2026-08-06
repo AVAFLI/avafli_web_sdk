@@ -171,6 +171,12 @@ export function renderLegalLinks(rulesUrl?: string, showPoweredBy = false): HTML
   row.appendChild(el('span', 'wv2-legal-dot'));
   row.appendChild(privacy);
   wrap.appendChild(row);
+  // Required attribution. The reCAPTCHA badge is hidden (see perimeter.ts) — Google
+  // allows that only if this notice is shown in the flow instead, so the two must
+  // stay together: remove one and the other becomes non-compliant.
+  const recaptcha = el('div', 'wv2-recaptcha-notice');
+  recaptcha.textContent = 'Protected by reCAPTCHA — Google Privacy Policy and Terms apply';
+  wrap.appendChild(recaptcha);
   if (showPoweredBy) {
     wrap.appendChild(el('div', 'wv2-powered', 'Powered by © WINR Media'));
   }

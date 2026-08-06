@@ -65,7 +65,7 @@ await WINR.configure({
 ### npm
 
 ```bash
-npm install winr-web-sdk@^2.4.0
+npm install winr-web-sdk@^2.5.0
 ```
 
 ```typescript

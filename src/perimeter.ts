@@ -20,6 +20,7 @@
 
 const SITE_KEY = '6Lc5NHgtAAAAAJT6dO3XqcOEL_dDXzO5GvVvC5L_';
 const SCRIPT_ID = 'winr-recaptcha';
+const BADGE_STYLE_ID = 'winr-recaptcha-badge';
 const LOAD_TIMEOUT_MS = 4000;
 const EXECUTE_TIMEOUT_MS = 4000;
 
@@ -55,6 +56,23 @@ function loadScript(): Promise<boolean> {
       existing.addEventListener('load', () => resolve(true));
       existing.addEventListener('error', () => resolve(false));
       return;
+    }
+
+    // Hide the floating reCAPTCHA badge.
+    //
+    // Score-based reCAPTCHA never challenges anyone — no puzzle, no interruption —
+    // but it does inject a fixed-position Google badge into the corner of the host
+    // page. Inside a publisher's app that is an uninvited third-party overlay they
+    // did not ask for, and it can sit on top of their own UI.
+    //
+    // Google permits hiding it PROVIDED the attribution appears in the flow instead,
+    // which renderLegalLinks() now does on the capture screen. That is the trade:
+    // the badge goes, the required notice stays visible.
+    if (!document.getElementById(BADGE_STYLE_ID)) {
+      const style = document.createElement('style');
+      style.id = BADGE_STYLE_ID;
+      style.textContent = '.grecaptcha-badge{visibility:hidden!important}';
+      document.head.appendChild(style);
     }
 
     const script = document.createElement('script');
