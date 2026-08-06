@@ -13,6 +13,7 @@ import {
   SubmitPrizeClaimResponse,
 } from '../types';
 import { NetworkClient } from './client';
+import { getPerimeterToken } from '../perimeter';
 
 /**
  * WINR API client with typed endpoints
@@ -24,9 +25,16 @@ export class WINRAPI {
    * Register device and get initial auth tokens
    */
   public async registerDevice(data: RegisterDeviceRequest): Promise<RegisterDeviceResponse> {
-    return this.client.post<RegisterDeviceResponse>('/registerDevice', data, {
-      requiresAuth: false,
-    });
+    // Browser perimeter token. Undefined whenever reCAPTCHA is unavailable — a
+    // publisher CSP that blocks Google, an offline first load, a slow network —
+    // and registration proceeds regardless. The backend grades its absence; the
+    // SDK never withholds the experience over it.
+    const perimeterToken = await getPerimeterToken('register');
+    return this.client.post<RegisterDeviceResponse>(
+      '/registerDevice',
+      perimeterToken ? { ...data, perimeterToken } : data,
+      { requiresAuth: false },
+    );
   }
 
   /**
