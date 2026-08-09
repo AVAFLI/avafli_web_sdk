@@ -321,7 +321,7 @@ export function renderCapture(c: V2ExperienceController, logoUrl?: string | null
   // does — declining it costs the user neither their entry nor, if they are
   // drawn, their winner contact.
   let isAdult = false;
-  let wantsMarketing = true;
+  let wantsMarketing = false;
 
   const canSubmit = (): boolean =>
     isAdult && input.value.includes('@') && input.value.includes('.');
@@ -338,7 +338,9 @@ export function renderCapture(c: V2ExperienceController, logoUrl?: string | null
     })
   );
   form.appendChild(
-    renderConsentRow(c.marketingConsentText, true, (checked) => {
+    // Unchecked by default: consent must be an affirmative act (pre-ticked boxes
+    // are invalid under GDPR and disfavored by US state regulators).
+    renderConsentRow(c.marketingConsentText, false, (checked) => {
       wantsMarketing = checked;
     })
   );

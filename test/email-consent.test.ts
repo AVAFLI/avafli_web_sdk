@@ -14,7 +14,8 @@ import { LocalStorageProvider } from '../src/storage/local-storage';
  * Capture-screen consent (2.4.0).
  *
  * The capture screen carries TWO checkboxes: the 18+ age gate (unchecked by
- * default, gates the CTA) and MARKETING consent (PRE-CHECKED, and never a
+ * default, gates the CTA) and MARKETING consent (UNCHECKED — consent must be an
+ * affirmative act; pre-ticked boxes are invalid under GDPR — and never a
  * gate — unchecking it must still let the user enter, and never affects
  * winner contact). Both values travel to `submitEmail` as `ageConfirmed` /
  * `marketingConsent`.
@@ -92,7 +93,10 @@ function typeEmail(capture: HTMLElement, value: string): void {
 }
 
 describe('capture screen consent checkboxes', () => {
-  it('renders the age gate UNCHECKED and marketing consent PRE-CHECKED, below it', () => {
+  it('renders BOTH the age gate and marketing consent UNCHECKED, in that order', () => {
+    // Marketing was pre-checked until Aug 2026. Changed on governance review:
+    // consent must be an affirmative act (pre-ticked boxes are invalid under
+    // GDPR and disfavored by US state regulators).
     const { controller } = makeController();
     const capture = renderCapture(controller);
     const [age, consent] = consentRows(capture);
@@ -102,7 +106,7 @@ describe('capture screen consent checkboxes', () => {
     expect(age!.getAttribute('aria-checked')).toBe('false');
 
     expect(consent!.textContent).toContain(DEFAULT_MARKETING_CONSENT_TEXT);
-    expect(consent!.getAttribute('aria-checked')).toBe('true');
+    expect(consent!.getAttribute('aria-checked')).toBe('false');
 
     // Same class => same box size, check treatment, spacing and text style.
     expect(consent!.className).toBe(age!.className);
@@ -141,9 +145,10 @@ describe('capture screen consent checkboxes', () => {
     age!.dispatchEvent(new Event('click'));
     expect(cta(capture).disabled).toBe(false);
 
-    // Opting OUT of marketing email must not cost the user their entry.
+    // Marketing consent must not gate the CTA in either state: leaving it
+    // unchecked costs nothing, and checking it changes nothing about entry.
     consent!.dispatchEvent(new Event('click'));
-    expect(consent!.getAttribute('aria-checked')).toBe('false');
+    expect(consent!.getAttribute('aria-checked')).toBe('true');
     expect(cta(capture).disabled).toBe(false);
     expect(cta(capture).classList.contains('wv2-pill-dim')).toBe(false);
 
@@ -152,7 +157,7 @@ describe('capture screen consent checkboxes', () => {
     expect(cta(capture).disabled).toBe(true);
   });
 
-  it('submits the REAL checkbox states as ageConfirmed / marketingConsent', async () => {
+  it('an untouched marketing box submits FALSE — silence is not consent', async () => {
     const { controller, submitEmailAndAdopt } = makeController();
     const capture = renderCapture(controller);
     const [age] = consentRows(capture);
@@ -165,7 +170,7 @@ describe('capture screen consent checkboxes', () => {
     expect(submitEmailAndAdopt).toHaveBeenCalledWith({
       email: 'ada@example.com',
       ageConfirmed: true,
-      marketingConsent: true,
+      marketingConsent: false,
     });
     // The payload key is `marketingConsent` — the interim `emailConsent`
     // name is gone from the wire entirely.
@@ -174,21 +179,21 @@ describe('capture screen consent checkboxes', () => {
     expect('emailConsent' in payload).toBe(false);
   });
 
-  it('carries marketingConsent: false when the user unchecks it — entry unaffected', async () => {
+  it('carries marketingConsent: true only after the user affirmatively checks it', async () => {
     const { controller, submitEmailAndAdopt } = makeController();
     const capture = renderCapture(controller);
     const [age, consent] = consentRows(capture);
 
     typeEmail(capture, 'ada@example.com');
     age!.dispatchEvent(new Event('click'));
-    consent!.dispatchEvent(new Event('click'));
+    consent!.dispatchEvent(new Event('click'));   // the affirmative act
     cta(capture).dispatchEvent(new Event('click'));
     await vi.waitFor(() => expect(submitEmailAndAdopt).toHaveBeenCalled());
 
     expect(submitEmailAndAdopt).toHaveBeenCalledWith({
       email: 'ada@example.com',
       ageConfirmed: true,
-      marketingConsent: false,
+      marketingConsent: true,
     });
   });
 });
