@@ -1,5 +1,25 @@
 # Changelog
 
+## 2.5.1 — 2026-08-10
+
+Consent correctness and cross-device security.
+
+- **Marketing consent checkbox starts UNCHECKED** — consent is an affirmative
+  act (pre-ticked boxes are invalid under GDPR and disfavored by US state
+  regulators). Declining still blocks nothing.
+- **Email pre-fill**: pass your signed-in user's email via `WINRUser.email` and
+  the capture screen shows it read-only — the address the user consents for is
+  always one they proved to you. Malformed values fall back to the editable
+  field.
+- **Guest sessions**: no account system, or the user is signed out? Use the
+  guest sentinel (or omit the user on web). The SDK mints a stable per-install
+  `winr_guest_…` id for attribution; re-configure with the real user later and
+  the streak carries over.
+- **Verified adoption**: typing an email that already belongs to an existing
+  WINR account now requires a 6-digit code sent to that inbox before the
+  streak transfers to the new device. Fresh signups and pre-filled partner
+  emails never see it.
+
 ## [2.5.0] - 2026-08-06
 
 ### Breaking
