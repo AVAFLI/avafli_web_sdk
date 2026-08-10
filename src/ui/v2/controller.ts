@@ -68,7 +68,7 @@ export interface V2ControllerDeps {
   /** Whether the registration handshake produced a user_uid. */
   hasRegisteredUuid: () => boolean;
   /** Host-app-provided identity — prefills the winner claim form. */
-  userPrefill?: { firstName?: string; lastName?: string; phone?: string };
+  userPrefill?: { firstName?: string; lastName?: string; phone?: string; email?: string };
   /** Warm-start data cached by WINR from device registration. */
   cachedGiveaway?: Giveaway | null;
   cachedSdkConfig?: SDKConfig | null;
@@ -294,6 +294,18 @@ export class V2ExperienceController {
    * nested per-screen override, then the flat legacy field, then the SDK
    * default. The config KEY stays `emailConsentText` for wire compatibility.
    */
+  /**
+   * Partner-authenticated email for the capture screen's read-only pre-fill.
+   * Shape-checked here so a partner bug degrades to the editable field rather
+   * than locking a garbage value; the server revalidates regardless.
+   */
+  public get prefilledEmail(): string | null {
+    const raw = this.deps.userPrefill?.email?.trim().toLowerCase() ?? '';
+    return raw.includes('@') && raw.includes('.') && raw.length >= 6 && raw.length <= 254
+      ? raw
+      : null;
+  }
+
   public get marketingConsentText(): string {
     const copy = this.sdkConfig?.copy;
     return (

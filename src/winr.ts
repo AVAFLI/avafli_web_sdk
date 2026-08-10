@@ -483,6 +483,7 @@ export class WINR {
         firstName: this.config.user.firstName,
         lastName: this.config.user.lastName,
         ...(this.config.user.phone ? { phone: this.config.user.phone } : {}),
+        ...(this.config.user.email ? { email: this.config.user.email } : {}),
       },
       cachedGiveaway: this.currentGiveaway,
       cachedSdkConfig: this.getCurrentSDKConfig(),

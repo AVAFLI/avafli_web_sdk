@@ -312,7 +312,22 @@ export function renderCapture(c: V2ExperienceController, logoUrl?: string | null
   input.autocomplete = 'email';
   input.setAttribute('autocapitalize', 'none');
   input.setAttribute('autocorrect', 'off');
-  field.appendChild(input);
+  // Partner-authenticated pre-fill: shown READ-ONLY so the user sees exactly
+  // which address they are consenting for but cannot swap in someone else's
+  // (accounts merge across devices by email). readOnly, not disabled — a
+  // disabled input is skipped by screen readers and excluded from form
+  // semantics; this one must stay perceivable.
+  const lockedEmail = c.prefilledEmail;
+  if (lockedEmail) {
+    input.value = lockedEmail;
+    input.readOnly = true;
+    input.setAttribute('aria-label', 'Email provided by this app');
+    input.classList.add('wv2-email-locked');
+    field.appendChild(input);
+    field.appendChild(icon(lockIcon, 'wv2-ic-lock'));
+  } else {
+    field.appendChild(input);
+  }
   form.appendChild(field);
 
   // Two consent checkboxes, built by the same helper so they are identical in

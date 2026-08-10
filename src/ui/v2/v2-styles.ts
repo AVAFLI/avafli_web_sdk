@@ -181,6 +181,8 @@ img { display: block; }
   border: 2px solid rgba(255,255,255,0.75);
 }
 .wv2-email-field .wv2-ic { width: 22px; height: 18px; color: rgba(29,35,48,0.6); flex: none; }
+.wv2-email-field .wv2-ic-lock { width: 14px; height: 14px; color: rgba(29,35,48,0.45); flex: none; }
+.wv2-email-locked { pointer-events: none; }
 .wv2-email-input {
   flex: 1; min-width: 0; border: none; outline: none; background: transparent;
   font-family: ${V2_INTER}; font-size: 16px; color: ${c.gunmetal};

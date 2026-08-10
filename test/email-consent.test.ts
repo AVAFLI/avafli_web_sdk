@@ -45,7 +45,10 @@ function fakeStorage(): LocalStorageProvider {
   } as unknown as LocalStorageProvider;
 }
 
-function makeController(sdkConfig?: SDKConfig): {
+function makeController(
+  sdkConfig?: SDKConfig,
+  userPrefill?: { firstName?: string; lastName?: string; email?: string }
+): {
   controller: V2ExperienceController;
   submitEmailAndAdopt: ReturnType<typeof vi.fn>;
 } {
@@ -68,6 +71,7 @@ function makeController(sdkConfig?: SDKConfig): {
     bundleId: 'com.test',
     submitEmailAndAdopt,
     hasRegisteredUuid: () => true,
+    ...(userPrefill ? { userPrefill } : {}),
   };
   const controller = new V2ExperienceController(deps);
   controller.giveaway = GIVEAWAY;
@@ -195,5 +199,50 @@ describe('capture screen consent checkboxes', () => {
       ageConfirmed: true,
       marketingConsent: true,
     });
+  });
+});
+
+describe('partner-supplied email pre-fill', () => {
+  const emailInput = (capture: HTMLElement): HTMLInputElement =>
+    capture.querySelector('.wv2-email-input') as HTMLInputElement;
+
+  it('renders the partner email READ-ONLY, normalized, and submits it', async () => {
+    const { controller, submitEmailAndAdopt } = makeController(undefined, {
+      email: '  Ada@Example.COM ',
+    });
+    const capture = renderCapture(controller);
+    const input = emailInput(capture);
+
+    // Visible (informed consent) but not editable, and normalized like the
+    // server will store it.
+    expect(input.value).toBe('ada@example.com');
+    expect(input.readOnly).toBe(true);
+
+    const [age] = consentRows(capture);
+    age!.dispatchEvent(new Event('click'));
+    expect(cta(capture).disabled).toBe(false);   // locked email already satisfies the gate
+
+    cta(capture).dispatchEvent(new Event('click'));
+    await vi.waitFor(() => expect(submitEmailAndAdopt).toHaveBeenCalled());
+    expect(submitEmailAndAdopt).toHaveBeenCalledWith({
+      email: 'ada@example.com',
+      ageConfirmed: true,
+      marketingConsent: false,
+    });
+  });
+
+  it('a malformed partner email degrades to the editable field', () => {
+    // A partner bug must not lock garbage into a read-only field.
+    const { controller } = makeController(undefined, { email: 'not-an-email' });
+    const capture = renderCapture(controller);
+    const input = emailInput(capture);
+    expect(input.readOnly).toBe(false);
+    expect(input.value).toBe('');
+  });
+
+  it('no partner email → the field is editable, unchanged', () => {
+    const { controller } = makeController();
+    const input = emailInput(renderCapture(controller));
+    expect(input.readOnly).toBe(false);
   });
 });
