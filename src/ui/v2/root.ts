@@ -8,8 +8,10 @@ import {
   renderClaimSteps,
   renderDashboard,
   renderEmpty,
+  renderGeoBlocked,
   renderHowItWorks,
   renderLoading,
+  renderSessionExpired,
   renderWinnerModal,
   renderWinnerSplash,
 } from './screens';
@@ -191,6 +193,12 @@ export class WINRV2Experience {
         break;
       case 'empty':
         this.sheet.appendChild(renderEmpty(() => this.dismiss()));
+        break;
+      case 'geoBlocked':
+        this.sheet.appendChild(renderGeoBlocked(() => this.dismiss()));
+        break;
+      case 'sessionExpired':
+        this.sheet.appendChild(renderSessionExpired(() => c.retryLoad()));
         break;
       case 'codeEntry':
         this.sheet.appendChild(renderCodeEntry(c, logoUrl));

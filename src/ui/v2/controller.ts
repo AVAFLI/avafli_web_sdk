@@ -8,9 +8,11 @@ import {
   SubmitEmailRequest,
   SubmitEmailResponse,
   WINRError,
+  WINRErrorCode,
   WINR_CONSTANTS,
 } from '../../types';
 import { CLAIM_COUNTRY, PrizeClaimForm, emptyClaimForm, isClaimFormValid } from './claim';
+import { WINRV2Strings, isGeoBlockedError } from './strings';
 import { WINRAPI } from '../../network/api';
 import { LocalStorageProvider } from '../../storage/local-storage';
 import { logger } from '../../services/logger';
@@ -46,6 +48,10 @@ export type V2State =
   | { kind: 'codeEntry'; email: string; consent: EmailCaptureConsent }
   | { kind: 'dashboard' }
   | { kind: 'howItWorks' }
+  /** Backend geo-fence rejected this user — dedicated screen, never 'empty'. */
+  | { kind: 'geoBlocked' }
+  /** Token refresh failed (AuthenticationRequired) — dedicated RETRY screen. */
+  | { kind: 'sessionExpired' }
   /**
    * This person is the drawn winner and hasn't submitted their claim yet —
    * the drawer shows the winner splash → claim form → confirmation flow
@@ -144,6 +150,31 @@ export class V2ExperienceController {
   public streakDay = 1;
   public totalEntries = 0;
   public isSubmittingEmail = false;
+
+  // ─── User-facing failure surfaces (Master Field List "User Message (UI)") ───
+
+  /**
+   * The email submit itself failed — rendered inline on the capture screen
+   * (below the CTA) so the user can retry instead of being silently marched
+   * forward as if the submit succeeded.
+   */
+  public emailSubmitError: string | null = null;
+
+  /**
+   * Transient dashboard notice ("You've already entered today…"). Set ONLY
+   * when a claim attempt was rejected as already-claimed while local state
+   * thought today was unclaimed (the cross-device race) — never on a normal
+   * open where claimedToday was already known. The dashboard render consumes
+   * it and auto-dismisses after a few seconds.
+   */
+  public dashboardNotice: string | null = null;
+
+  /**
+   * The auto-claim failed in transit — the dashboard shows UNCLAIMED plus a
+   * persistent, retryable notice instead of fabricating success or failing
+   * silently. Cleared by a successful retry.
+   */
+  public claimFailedNotice = false;
 
   // ─── In-place reveal flow (every day — there is no celebration modal) ───
   //
@@ -490,6 +521,17 @@ export class V2ExperienceController {
       // the giveaway refresh is the moment we learn the new URLs.
       this.prewarmPublisherArt();
     } catch (error) {
+      // Session expired: the 401 → token-refresh path failed. This is an
+      // authoritative auth failure, not a transient blip — collapsing it into
+      // the generic empty state ("Nothing to see here yet") hid the real
+      // problem. Render the dedicated retryable state instead.
+      if (error instanceof WINRError && error.code === WINRErrorCode.AuthenticationRequired) {
+        logger.warn('Session expired (token refresh failed) — showing retry state');
+        this.hydratedFromCache = false;
+        this.transition({ kind: 'sessionExpired' });
+        return;
+      }
+
       // Offline fallback: use cached giveaway.
       if (!this.giveaway) {
         const cached = this.deps.storage.getItem(this.giveawayCacheKey);
@@ -604,6 +646,7 @@ export class V2ExperienceController {
       if (response.monthlyMilestone) bonus += response.monthlyMilestone.bonusEntries;
 
       this.claimedToday = true;
+      this.claimFailedNotice = false;
       this.streakDay = response.streakDay;
       this.totalEntries = response.totalEntries;
       this.pendingRevealGrant = { baseEntries: response.entries, bonusEntries: bonus };
@@ -639,12 +682,32 @@ export class V2ExperienceController {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
 
+      // Geo-fence rejection: dedicated screen, never a silent settle. Roll
+      // back the predicted celebration first — nothing was granted.
+      if (isGeoBlockedError(message)) {
+        logger.info('Claim geo-blocked — showing location state');
+        this.claimedToday = false;
+        this.cancelAutoReveal();
+        this.pendingRevealGrant = null;
+        this.preClaimTotalEntries = null;
+        if (this.preRevealSnapshot) {
+          this.streakDay = this.preRevealSnapshot.streakDay;
+          this.totalEntries = this.preRevealSnapshot.totalEntries;
+          this.preRevealSnapshot = null;
+        }
+        this.transition({ kind: 'geoBlocked' });
+        return;
+      }
+
       if (/already claimed|already entered/i.test(message)) {
         // Another device claimed between the status fetch and our claim. Not
         // news worth celebrating twice: drop the predicted grant (cancelling
         // the reveal if it hasn't fired) and pull authoritative state ONCE.
+        // Local state thought today was UNCLAIMED (that's why a claim ran) —
+        // tell the user what happened instead of silently flipping state.
         logger.info('Already claimed today — updating local state');
         this.claimedToday = true;
+        this.dashboardNotice = WINRV2Strings.alreadyEnteredToday;
         this.cancelAutoReveal();
         this.pendingRevealGrant = null;
         this.preClaimTotalEntries = null;
@@ -665,10 +728,12 @@ export class V2ExperienceController {
         return;
       }
 
-      // Other failures are SILENT by design: settle back to the pre-claim
-      // server truth quietly. Never fake a local success.
+      // Other failures settle back to the pre-claim server truth. Never fake
+      // a local success — and never fail silently either: the dashboard gets
+      // a retryable "couldn't record today's entry" notice.
       logger.info('Auto-claim declined:', error);
       this.claimedToday = false;
+      this.claimFailedNotice = true;
       this.cancelAutoReveal();
       this.pendingRevealGrant = null;
       this.preClaimTotalEntries = null;
@@ -704,6 +769,7 @@ export class V2ExperienceController {
       if (response.monthlyMilestone) bonus += response.monthlyMilestone.bonusEntries;
 
       this.claimedToday = true;
+      this.claimFailedNotice = false;
       this.streakDay = response.streakDay;
       this.totalEntries = response.totalEntries;
 
@@ -747,13 +813,25 @@ export class V2ExperienceController {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
 
+      // Geo-fence rejection: dedicated screen, never the generic dashboard.
+      if (isGeoBlockedError(message)) {
+        logger.info('Claim geo-blocked — showing location state');
+        this.claimedToday = false;
+        this.transition({ kind: 'geoBlocked' });
+        return;
+      }
+
       // "Already claimed" means the user already got their entries today
       // (another device beat us between the status fetch and the claim). This
       // isn't news worth celebrating — show the dashboard in its claimed state,
-      // then re-load ONCE to pull the authoritative streak/total.
+      // then re-load ONCE to pull the authoritative streak/total. Local state
+      // did NOT know (a claim only runs when claimedToday was false), so tell
+      // the user what happened via a transient dashboard notice — a normal
+      // open with claimedToday already known never takes this path.
       if (/already claimed|already entered/i.test(message)) {
         logger.info('Already claimed today — updating local state');
         this.claimedToday = true;
+        this.dashboardNotice = WINRV2Strings.alreadyEnteredToday;
         this.transition({ kind: 'dashboard' });
         if (!this.didResyncAfterAlreadyClaimed) {
           this.didResyncAfterAlreadyClaimed = true;
@@ -763,14 +841,28 @@ export class V2ExperienceController {
         return;
       }
 
-      // Auto-claim failures are SILENT by design: the dashboard simply shows
-      // the unclaimed state. Never fake a local success for an auto-claim.
+      // Transport/other failure: the dashboard shows the honest UNCLAIMED
+      // state plus a retryable notice. Never fake a local success for an
+      // auto-claim — and never swallow the failure silently.
       logger.info('Auto-claim declined:', error);
       this.claimedToday = false;
+      this.claimFailedNotice = true;
       this.transition({ kind: 'dashboard' });
     } finally {
       this.isClaiming = false;
     }
+  }
+
+  /**
+   * Retry affordance for the claim-failure notice: re-attempts the claim.
+   * Success re-enters the dashboard with the reveal staged from the claim
+   * response (the celebration the failed attempt owed the user); another
+   * failure re-arms the notice.
+   */
+  public async retryClaim(): Promise<void> {
+    if (this.isClaiming || this.claimedToday) return;
+    this.claimFailedNotice = false;
+    await this.autoClaim();
   }
 
   // ─── Email capture ───
@@ -784,12 +876,8 @@ export class V2ExperienceController {
   public async submitEmail(email: string, consent: EmailCaptureConsent): Promise<void> {
     if (!email || this.isSubmittingEmail) return;
     this.isSubmittingEmail = true;
+    this.emailSubmitError = null;
     this.onChange?.(this.state); // re-render the CTA into its loading state
-
-    // NOTE: We deliberately do NOT persist the raw email locally (PII-High).
-    // The backend stores it encrypted; registration state is derived from the
-    // non-PII "submitted" flag + the handshake user_uid.
-    this.deps.storage.setItem(this.emailSubmittedKey, 'true');
 
     try {
       // Cross-device streak unification: if this email already belonged to an
@@ -805,6 +893,13 @@ export class V2ExperienceController {
       analyticsAdapter.track('winr_email_captured');
       logger.info('Email submitted to backend');
 
+      // NOTE: We deliberately do NOT persist the raw email locally (PII-High).
+      // The backend stores it encrypted; registration state is derived from
+      // the non-PII "submitted" flag + the handshake user_uid. Set only on a
+      // CONFIRMED submit — a failed one must leave the email gate closed so
+      // the user can retry, not be marched forward as if it succeeded.
+      this.deps.storage.setItem(this.emailSubmittedKey, 'true');
+
       // The typed address matches an EXISTING account: the merge is parked
       // until the person proves the inbox is theirs. Kept in memory only —
       // the raw address is PII and is never persisted locally.
@@ -814,7 +909,19 @@ export class V2ExperienceController {
         return;
       }
     } catch (error) {
-      logger.error('Email submit to backend failed (will retry later):', error);
+      logger.error('Email submit to backend failed:', error);
+      this.isSubmittingEmail = false;
+      const message = error instanceof Error ? error.message : String(error);
+      if (isGeoBlockedError(message)) {
+        // submitEmail is geo-fenced backend-side — show the dedicated state.
+        this.transition({ kind: 'geoBlocked' });
+        return;
+      }
+      // Stay on the capture screen with an inline error so the user can
+      // retry; the old behavior swallowed this and proceeded as success.
+      this.emailSubmitError = WINRV2Strings.emailSubmitFailed;
+      this.onChange?.(this.state);
+      return;
     }
 
     // Re-load so the (possibly switched) canonical user's authoritative
@@ -850,10 +957,16 @@ export class V2ExperienceController {
       analyticsAdapter.track('winr_adoption_verified');
       await this.load();
     } catch (error) {
-      this.codeError =
-        error instanceof Error && /code|expired|attempts/i.test(error.message)
-          ? error.message
-          : "That code didn't match. Check the email and try again.";
+      // NEVER render raw backend text — map the failure to fixed copy
+      // (Master Field List; see WINRV2Strings).
+      const message = error instanceof Error ? error.message : String(error);
+      if (/expired/i.test(message)) {
+        this.codeError = WINRV2Strings.codeExpired;
+      } else if (/attempts/i.test(message)) {
+        this.codeError = WINRV2Strings.codeTooManyAttempts;
+      } else {
+        this.codeError = WINRV2Strings.codeIncorrect;
+      }
       logger.warn('Adoption code check failed:', error);
       this.onChange?.(this.state);
     } finally {
@@ -862,15 +975,39 @@ export class V2ExperienceController {
     }
   }
 
-  /** Request a fresh code by re-submitting the same email. */
+  /**
+   * Request a fresh code by re-submitting the same email. The code screen
+   * STAYS UP throughout — a failed resend surfaces in the code-error slot
+   * instead of dumping the user back on email capture with no explanation.
+   */
   public async resendVerificationCode(): Promise<void> {
-    if (this.state.kind !== 'codeEntry') return;
+    if (this.state.kind !== 'codeEntry' || this.isVerifyingCode) return;
     const { email, consent } = this.state;
-    this.transition({ kind: 'emailCapture' });
-    // Re-submitting the ORIGINAL consent values is idempotent (same person,
-    // same choices) and re-triggers the OTP send. Fabricating values here
-    // would overwrite the marketing choice the person actually made.
-    await this.submitEmail(email, consent);
+    this.codeError = null;
+    this.onChange?.(this.state);
+    try {
+      // Re-submitting the ORIGINAL consent values is idempotent (same person,
+      // same choices) and re-triggers the OTP send. Fabricating values here
+      // would overwrite the marketing choice the person actually made.
+      const submitRes = (await this.deps.submitEmailAndAdopt({
+        email,
+        ageConfirmed: consent.ageConfirmed,
+        marketingConsent: consent.marketingConsent,
+      })) as { verificationRequired?: boolean } | undefined;
+      if (submitRes?.verificationRequired) {
+        // Fresh code sent — stay on the code screen, ready for input.
+        this.onChange?.(this.state);
+        return;
+      }
+      // Verification is no longer required (e.g. the merge already
+      // completed) — proceed exactly like a plain successful submit.
+      this.deps.storage.setItem(this.emailSubmittedKey, 'true');
+      await this.load();
+    } catch (error) {
+      logger.warn('Resend verification code failed:', error);
+      this.codeError = WINRV2Strings.codeResendFailed;
+      this.onChange?.(this.state);
+    }
   }
 
   // ─── Winner prize claim ───
@@ -951,11 +1088,18 @@ export class V2ExperienceController {
         return;
       }
       logger.error('Prize claim submit failed:', error);
-      this.claimSubmitError = 'Something went wrong. Please check your connection and try again.';
+      this.claimSubmitError = WINRV2Strings.claimSubmitFailed;
     }
   }
 
   // ─── Navigation ───
+
+  /** RETRY on the session-expired screen — re-runs the load (the network
+   *  client re-attempts the token refresh on the next 401). */
+  public retryLoad(): void {
+    this.transition({ kind: 'loading' });
+    void this.load();
+  }
 
   public showHowItWorks(): void {
     this.previousState = this.state;

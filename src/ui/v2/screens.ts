@@ -29,6 +29,7 @@ import {
   uploadIcon,
 } from './icons';
 import { V2ExperienceController } from './controller';
+import { WINRV2Strings } from './strings';
 import {
   CLAIM_COUNTRY,
   PrizeClaimForm,
@@ -38,6 +39,8 @@ import {
   isClaimFormValid,
   isStep1Valid,
   isStep2Valid,
+  isValidClaimName,
+  isValidClaimPhone,
   monthYearDisplay,
 } from './claim';
 import {
@@ -75,6 +78,28 @@ function icon(svg: string, className: string): HTMLElement {
   const wrap = el('span', className);
   wrap.innerHTML = svg;
   return wrap;
+}
+
+// ─── Inline field errors ───
+
+/**
+ * The ONE inline field-error element (red ~13px, `.wv2-field-error`) — every
+ * per-field validation message in the experience goes through here so they
+ * are identical by construction. Hidden until given a message.
+ */
+function renderFieldError(): HTMLElement {
+  return el('div', 'wv2-field-error');
+}
+
+/** Show `message` in a field-error slot, or hide the slot with null. */
+function setFieldError(node: HTMLElement, message: string | null): void {
+  if (message) {
+    node.textContent = message;
+    node.classList.add('wv2-visible');
+  } else {
+    node.textContent = '';
+    node.classList.remove('wv2-visible');
+  }
 }
 
 // ─── Drawer chrome ───
@@ -242,6 +267,39 @@ export function renderEmpty(onClose: () => void): HTMLElement {
   return screen;
 }
 
+/**
+ * Geo-fence rejection — a DEDICATED state (Master Field List), never the
+ * generic empty screen: the user needs to know eligibility, not "check back
+ * soon".
+ */
+export function renderGeoBlocked(onClose: () => void): HTMLElement {
+  const screen = el('div', 'wv2-screen');
+  const center = el('div', 'wv2-center-state');
+  center.appendChild(el('div', 'wv2-empty-title', WINRV2Strings.geoBlockedTitle));
+  center.appendChild(el('div', 'wv2-empty-sub wv2-state-body', WINRV2Strings.geoBlockedBody));
+  const cta = el('div', 'wv2-empty-cta');
+  cta.appendChild(renderPill('CLOSE', onClose));
+  center.appendChild(cta);
+  screen.appendChild(center);
+  return screen;
+}
+
+/**
+ * Token refresh failed (session expired) — a DEDICATED retryable state
+ * instead of collapsing into "Nothing to see here yet". RETRY re-runs the
+ * load (which re-attempts the token refresh on the next 401).
+ */
+export function renderSessionExpired(onRetry: () => void): HTMLElement {
+  const screen = el('div', 'wv2-screen');
+  const center = el('div', 'wv2-center-state');
+  center.appendChild(el('div', 'wv2-empty-title wv2-state-body', WINRV2Strings.sessionExpired));
+  const cta = el('div', 'wv2-empty-cta');
+  cta.appendChild(renderPill(WINRV2Strings.retry, onRetry));
+  center.appendChild(cta);
+  screen.appendChild(center);
+  return screen;
+}
+
 // ─── New-user capture ("VISIT. EARN. WIN.") ───
 
 /**
@@ -330,6 +388,19 @@ export function renderCapture(c: V2ExperienceController, logoUrl?: string | null
   }
   form.appendChild(field);
 
+  // Inline "Please enter a valid email address." — shown only after the
+  // field is TOUCHED (blurred once with a non-empty invalid value) or after
+  // a submit attempt; never while the user is typing their first characters.
+  // Once showing, it live-clears the moment the address becomes valid.
+  const emailError = renderFieldError();
+  form.appendChild(emailError);
+
+  const isValidEmail = (): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.value.trim());
+  let showEmailError = false;
+  const syncEmailError = (): void => {
+    setFieldError(emailError, showEmailError && !isValidEmail() ? WINRV2Strings.emailInvalid : null);
+  };
+
   // Two consent checkboxes, built by the same helper so they are identical in
   // every visual respect. The age gate starts UNCHECKED (affirmative action
   // required) and gates the CTA; MARKETING consent starts CHECKED and never
@@ -338,8 +409,7 @@ export function renderCapture(c: V2ExperienceController, logoUrl?: string | null
   let isAdult = false;
   let wantsMarketing = false;
 
-  const canSubmit = (): boolean =>
-    isAdult && input.value.includes('@') && input.value.includes('.');
+  const canSubmit = (): boolean => isAdult && isValidEmail();
 
   const refreshCta = (): void => {
     cta.disabled = !canSubmit() || c.isSubmittingEmail;
@@ -371,12 +441,44 @@ export function renderCapture(c: V2ExperienceController, logoUrl?: string | null
     loading: c.isSubmittingEmail,
     disabled: !canSubmit(),
   });
-  form.appendChild(cta);
+  // The dimming alone told users nothing (the audit's core finding) — a tap
+  // on the dimmed CTA counts as a submit attempt and surfaces WHY. The
+  // disabled pill lets the click through to this wrapper via CSS
+  // (pointer-events: none on :disabled).
+  const ctaWrap = el('div', 'wv2-cta-catch');
+  ctaWrap.appendChild(cta);
+  ctaWrap.addEventListener('click', () => {
+    if (!cta.disabled || c.isSubmittingEmail) return;
+    showEmailError = true;
+    syncEmailError();
+  });
+  form.appendChild(ctaWrap);
+
+  // The email submit itself failed (controller kept us on this screen) —
+  // same field-error component, below the CTA, until the retry succeeds.
+  const submitError = renderFieldError();
+  setFieldError(submitError, c.emailSubmitError);
+  form.appendChild(submitError);
+
   stack.appendChild(form);
 
-  input.addEventListener('input', refreshCta);
+  input.addEventListener('input', () => {
+    refreshCta();
+    syncEmailError();
+  });
+  input.addEventListener('blur', () => {
+    if (input.value.trim() !== '' && !isValidEmail()) showEmailError = true;
+    syncEmailError();
+  });
   input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && canSubmit()) submit();
+    if (e.key !== 'Enter') return;
+    if (canSubmit()) {
+      submit();
+    } else {
+      // An Enter press is a submit attempt — explain instead of ignoring.
+      showEmailError = true;
+      syncEmailError();
+    }
   });
 
   // Legal footer
@@ -465,6 +567,40 @@ export function renderDashboard(
   if (c.giveaway?.latestWinner) {
     body.appendChild(renderWinnerBanner(onWinnerTap));
   }
+
+  // ─── Non-blocking dashboard notices (Master Field List) ───
+  // Two kinds share the slot above the prize card:
+  //  - claim-failure notice (persistent, retryable): the auto-claim didn't
+  //    land, the dashboard shows honest UNCLAIMED state, and tapping the
+  //    notice (or its RETRY) re-attempts the claim.
+  //  - transient notice ("You've already entered today…"): one-shot, fades
+  //    out on its own after a few seconds.
+  const noticeSlot = el('div', 'wv2-notice-slot');
+  body.appendChild(noticeSlot);
+  const syncNotices = (): void => {
+    noticeSlot.innerHTML = '';
+    if (c.claimFailedNotice) {
+      const notice = el('button', 'wv2-dash-notice wv2-dash-notice-retry');
+      notice.type = 'button';
+      notice.appendChild(el('span', 'wv2-dash-notice-text', WINRV2Strings.claimRecordFailed));
+      notice.appendChild(el('span', 'wv2-dash-notice-action', WINRV2Strings.retry));
+      notice.addEventListener('click', () => void c.retryClaim());
+      noticeSlot.appendChild(notice);
+      return;
+    }
+    const transient = c.dashboardNotice;
+    if (transient) {
+      c.dashboardNotice = null; // one-shot — never replays on a later open
+      const notice = el('div', 'wv2-dash-notice', transient);
+      noticeSlot.appendChild(notice);
+      window.setTimeout(() => {
+        if (!notice.isConnected) return;
+        notice.classList.add('wv2-notice-fade');
+        window.setTimeout(() => notice.remove(), 450);
+      }, 6000);
+    }
+  };
+  syncNotices();
 
   body.appendChild(renderPrizeCard(c, preReveal && !cacheFrame));
   body.appendChild(renderStreakRail(c, preReveal || cacheFrame));
@@ -565,6 +701,10 @@ export function renderDashboard(
   // on-screen streak label + total in place, with no second celebration.
   c.onRevealReconcile = (): void => {
     if (!screen.isConnected || !c.claimRevealed) return;
+    // The background claim may have FAILED after the celebration played —
+    // surface the retryable notice in place (honest failure, no silent
+    // fabricated success) alongside the quiet totals settle below.
+    syncNotices();
     const streakNum = screen.querySelector('.wv2-stat-streak');
     if (streakNum) streakNum.textContent = `${c.streakDay} ${noun} STREAK`;
     const totalNum = screen.querySelector('.wv2-stat-total');
@@ -1327,6 +1467,13 @@ export function renderClaimSteps(
     ctaTitle?: string;
     ctaEnabled?: () => boolean;
     onCTA: (cta: HTMLButtonElement) => void;
+    /**
+     * Called when the user taps the CTA while it is dimmed/disabled — the
+     * page's chance to SAY WHY (inline field errors) instead of a dead
+     * button. The disabled pill lets the click through to the wrapper via
+     * CSS (pointer-events: none on :disabled).
+     */
+    onBlockedCTA?: () => void;
     footer?: HTMLElement;
   }
 
@@ -1360,6 +1507,11 @@ export function renderClaimSteps(
     const cta = renderPill(options.ctaTitle ?? 'CONTINUE', () => options.onCTA(cta), {
       disabled: !enabled(),
     });
+    if (options.onBlockedCTA) {
+      ctaWrap.addEventListener('click', () => {
+        if (cta.disabled) options.onBlockedCTA!();
+      });
+    }
     ctaWrap.appendChild(cta);
     stack.appendChild(ctaWrap);
 
@@ -1429,6 +1581,24 @@ export function renderClaimSteps(
 
   const renderStep1 = (): HTMLElement => {
     const fields = el('div', 'wv2-step-fields');
+
+    // Per-field inline errors (Master Field List): armed by a CONTINUE
+    // attempt on the dimmed CTA, then live — each message clears the moment
+    // its field becomes valid. The dimming alone explained nothing.
+    let showErrors = false;
+    const firstErr = renderFieldError();
+    const lastErr = renderFieldError();
+    const phoneErr = renderFieldError();
+    const syncErrors = (): void => {
+      if (!showErrors) return;
+      setFieldError(
+        firstErr,
+        isValidClaimName(form.firstName) ? null : WINRV2Strings.firstNameInvalid
+      );
+      setFieldError(lastErr, isValidClaimName(form.lastName) ? null : WINRV2Strings.lastNameInvalid);
+      setFieldError(phoneErr, isValidClaimPhone(form.phone) ? null : WINRV2Strings.phoneInvalid);
+    };
+
     const { page, refresh } = buildPage(
       {
         title: 'TELL US ABOUT YOURSELF',
@@ -1436,20 +1606,36 @@ export function renderClaimSteps(
           "We'll use this information to verify your prize and personalize your winner announcement.",
         ctaEnabled: () => isStep1Valid(form),
         onCTA: () => go(2),
+        onBlockedCTA: () => {
+          showErrors = true;
+          syncErrors();
+        },
       },
       fields
     );
-    fields.appendChild(
-      stepField({ label: 'First Name', key: 'firstName', refresh, autocomplete: 'given-name' })
-    );
-    fields.appendChild(
-      stepField({
-        label: 'Last Name (we will only show your last initial)',
-        key: 'lastName',
-        refresh,
-        autocomplete: 'family-name',
-      })
-    );
+    const refreshAll = (): void => {
+      refresh();
+      syncErrors();
+    };
+
+    const first = stepField({
+      label: 'First Name',
+      key: 'firstName',
+      refresh: refreshAll,
+      autocomplete: 'given-name',
+    });
+    first.appendChild(firstErr);
+    fields.appendChild(first);
+
+    const last = stepField({
+      label: 'Last Name (we will only show your last initial)',
+      key: 'lastName',
+      refresh: refreshAll,
+      autocomplete: 'family-name',
+    });
+    last.appendChild(lastErr);
+    fields.appendChild(last);
+
     // The winning email lives server-side (the SDK never stores the raw
     // address) and the claim is keyed to the account — shown locked, masked
     // by the backend for recognition.
@@ -1459,16 +1645,17 @@ export function renderClaimSteps(
         value: claim.maskedEmail || 'On file with your winning entry',
       })
     );
-    fields.appendChild(
-      stepField({
-        label: 'Phone Number (optional)',
-        key: 'phone',
-        refresh,
-        type: 'tel',
-        autocomplete: 'tel',
-        inputmode: 'tel',
-      })
-    );
+
+    const phone = stepField({
+      label: 'Phone Number (optional)',
+      key: 'phone',
+      refresh: refreshAll,
+      type: 'tel',
+      autocomplete: 'tel',
+      inputmode: 'tel',
+    });
+    phone.appendChild(phoneErr);
+    fields.appendChild(phone);
     return page;
   };
 

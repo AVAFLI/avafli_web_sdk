@@ -1,5 +1,27 @@
 # Changelog
 
+## 2.6.0 — 2026-08-10
+
+User-facing error messaging per the Master Field List; honest failure states —
+no fabricated claim success; fixed raw backend strings on the code screen.
+
+- **All V2 copy centralized** in `src/ui/v2/strings.ts` (`WINRV2Strings`) —
+  one surface for copy review and future localization.
+- **Inline validation messages** (shown alongside the existing CTA dimming,
+  which alone explained nothing): invalid email on the capture screen; first
+  name / last name / optional 10-digit phone on the winner claim form.
+- **Dedicated failure states**: geo-blocked ("Not available in your
+  location") and session-expired (with RETRY) instead of the generic
+  "Nothing to see here yet".
+- **Honest claim failures**: a failed auto-claim shows the dashboard
+  UNCLAIMED with a retryable notice; a cross-device "already entered today"
+  rejection shows a transient explanatory notice.
+- **Code screen fixes**: backend error text is never rendered raw (fixed
+  strings for expired / too-many-attempts / mismatch); a failed resend stays
+  on the code screen with an inline error.
+- **Email submit failures are no longer swallowed**: the capture screen stays
+  up with an inline error and the user can retry.
+
 ## 2.5.1 — 2026-08-10
 
 Consent correctness and cross-device security.

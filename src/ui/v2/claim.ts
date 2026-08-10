@@ -58,6 +58,17 @@ export function isValidZip(zip: string): boolean {
 }
 
 /**
+ * First/last name: non-empty after trim, at most 50 characters, and only
+ * letters (any script, combining marks included), spaces, apostrophes,
+ * hyphens, and periods — per the Master Field List validation rule.
+ */
+export function isValidClaimName(name: string): boolean {
+  const trimmed = name.trim();
+  if (trimmed === '' || trimmed.length > 50) return false;
+  return /^[\p{L}\p{M}\s.'’-]+$/u.test(trimmed);
+}
+
+/**
  * Optional phone: empty is fine; otherwise must strip to a 10-digit US number
  * (a leading 1 / +1 is tolerated), mirroring the backend's validatePhone.
  */
@@ -71,13 +82,13 @@ export function isValidClaimPhone(phone: string): boolean {
 // Per-step validity (stepped flow)
 
 /**
- * Step 1 "TELL US ABOUT YOURSELF": first + last name (email is server-side);
- * the optional phone must be empty or a valid US number.
+ * Step 1 "TELL US ABOUT YOURSELF": valid first + last name (email is
+ * server-side); the optional phone must be empty or a valid US number.
  */
 export function isStep1Valid(form: PrizeClaimForm): boolean {
   return (
-    form.firstName.trim() !== '' &&
-    form.lastName.trim() !== '' &&
+    isValidClaimName(form.firstName) &&
+    isValidClaimName(form.lastName) &&
     isValidClaimPhone(form.phone)
   );
 }

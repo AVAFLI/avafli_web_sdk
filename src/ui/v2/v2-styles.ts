@@ -138,8 +138,18 @@ img { display: block; }
 }
 .wv2-pill:not(:disabled):hover { filter: brightness(1.07); }
 .wv2-pill:not(:disabled):active { filter: brightness(0.93); }
-.wv2-pill:disabled { cursor: default; }
+/* pointer-events: none lets a tap on a dimmed CTA reach its wrapper, which
+   answers with the inline field errors explaining WHY it is dimmed. */
+.wv2-pill:disabled { cursor: default; pointer-events: none; }
 .wv2-pill.wv2-pill-dim { opacity: 0.5; }
+
+/* Inline field-level validation error — same red/size family as
+   .wv2-code-error, left-aligned under its field (see renderFieldError). */
+.wv2-field-error {
+  display: none; color: #ff6b63; font-size: 13px; font-weight: 600;
+  line-height: 1.4; text-align: left; padding: 0 4px;
+}
+.wv2-field-error.wv2-visible { display: block; }
 .wv2-spinner {
   width: 22px; height: 22px; border-radius: 50%;
   border: 3px solid rgba(255,255,255,0.35); border-top-color: #fff;
@@ -216,6 +226,29 @@ img { display: block; }
 
 .wv2-dash-stack { display: flex; flex-direction: column; gap: 15px; padding-top: 15px; }
 .wv2-dash-body { display: flex; flex-direction: column; gap: 15px; }
+
+/* Non-blocking dashboard notices (already-entered / claim-failed + RETRY).
+   The slot collapses to nothing when empty so the layout is untouched. */
+.wv2-notice-slot { display: contents; }
+.wv2-dash-notice {
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  margin: 0 22px; padding: 10px 14px;
+  border: none; border-radius: 10px;
+  background: rgba(255,255,255,0.08);
+  font-family: inherit; font-size: 13px; line-height: 1.4; color: #fff;
+  text-align: left; transition: opacity 0.4s ease;
+}
+button.wv2-dash-notice { cursor: pointer; }
+.wv2-dash-notice-retry {
+  border: 1px solid rgba(255,107,99,0.55);
+  background: rgba(255,107,99,0.12);
+}
+.wv2-dash-notice-text { flex: 1; min-width: 0; }
+.wv2-dash-notice-action {
+  flex: none; font-weight: 800; letter-spacing: 0.5px; color: #ff6b63;
+  text-decoration: underline; text-underline-offset: 3px;
+}
+.wv2-notice-fade { opacity: 0; }
 
 /* Prize card (Joe's Aug-2026 dark full-bleed revision): the art fills the
    whole card, a solid black stats strip sits inside the top edge, and the
@@ -835,6 +868,8 @@ img { display: block; }
 .wv2-empty-title { font-size: 20px; font-weight: 700; color: #fff; }
 .wv2-empty-sub { font-size: 14px; color: ${c.textTertiary}; }
 .wv2-empty-cta { width: 220px; margin-top: 12px; }
+/* Longer body copy on the dedicated failure states (geo / session expired). */
+.wv2-state-body { max-width: 40ch; line-height: 1.5; }
 
 /* Cold-start SKELETON — a pulsing block-out of the real dashboard layout in
    the drawer's own gunmetal, replacing the old spinner + "Loading…".
