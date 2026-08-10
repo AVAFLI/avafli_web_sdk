@@ -3,6 +3,7 @@ import { logger } from '../../services/logger';
 import { V2ExperienceController, V2State } from './controller';
 import {
   renderCapture,
+  renderCodeEntry,
   renderClaimConfirmation,
   renderClaimSteps,
   renderDashboard,
@@ -190,6 +191,9 @@ export class WINRV2Experience {
         break;
       case 'empty':
         this.sheet.appendChild(renderEmpty(() => this.dismiss()));
+        break;
+      case 'codeEntry':
+        this.sheet.appendChild(renderCodeEntry(c, logoUrl));
         break;
       case 'emailCapture':
         this.sheet.appendChild(renderCapture(c, logoUrl));

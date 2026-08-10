@@ -43,6 +43,7 @@ export type V2State =
   | { kind: 'loading' }
   | { kind: 'empty' } // no active giveaway / opted out / fatal error
   | { kind: 'emailCapture' }
+  | { kind: 'codeEntry'; email: string; consent: EmailCaptureConsent }
   | { kind: 'dashboard' }
   | { kind: 'howItWorks' }
   /**
@@ -69,6 +70,8 @@ export interface V2ControllerDeps {
   hasRegisteredUuid: () => boolean;
   /** Host-app-provided identity — prefills the winner claim form. */
   userPrefill?: { firstName?: string; lastName?: string; phone?: string; email?: string };
+  /** Completes a verification-gated adoption (6-digit email OTP). */
+  verifyAdoptionCode?: (request: { code: string }) => Promise<unknown>;
   /** Warm-start data cached by WINR from device registration. */
   cachedGiveaway?: Giveaway | null;
   cachedSdkConfig?: SDKConfig | null;
@@ -794,13 +797,22 @@ export class V2ExperienceController {
       // session to that canonical user's credentials.
       // `ageConfirmed` is ALWAYS sent — the backend keys off it to detect a
       // 2.4.0+ client.
-      await this.deps.submitEmailAndAdopt({
+      const submitRes = (await this.deps.submitEmailAndAdopt({
         email,
         ageConfirmed: consent.ageConfirmed,
         marketingConsent: consent.marketingConsent,
-      });
+      })) as { verificationRequired?: boolean } | undefined;
       analyticsAdapter.track('winr_email_captured');
       logger.info('Email submitted to backend');
+
+      // The typed address matches an EXISTING account: the merge is parked
+      // until the person proves the inbox is theirs. Kept in memory only —
+      // the raw address is PII and is never persisted locally.
+      if (submitRes?.verificationRequired) {
+        this.isSubmittingEmail = false;
+        this.transition({ kind: 'codeEntry', email, consent });
+        return;
+      }
     } catch (error) {
       logger.error('Email submit to backend failed (will retry later):', error);
     }
@@ -819,6 +831,46 @@ export class V2ExperienceController {
       // CTA must come out of its spinner state.
       if (this.state.kind === 'emailCapture') this.onChange?.(this.state);
     }
+  }
+
+  /** True while a 6-digit code is being checked. */
+  public isVerifyingCode = false;
+  /** Last code-check failure, shown inline on the code screen. */
+  public codeError: string | null = null;
+
+  /** Submit the 6-digit adoption code; on approval the merge completes and the
+   *  normal reload takes the (now canonical) user to the dashboard. */
+  public async submitVerificationCode(code: string): Promise<void> {
+    if (this.state.kind !== 'codeEntry' || this.isVerifyingCode) return;
+    this.isVerifyingCode = true;
+    this.codeError = null;
+    this.onChange?.(this.state);
+    try {
+      await this.deps.verifyAdoptionCode?.({ code });
+      analyticsAdapter.track('winr_adoption_verified');
+      await this.load();
+    } catch (error) {
+      this.codeError =
+        error instanceof Error && /code|expired|attempts/i.test(error.message)
+          ? error.message
+          : "That code didn't match. Check the email and try again.";
+      logger.warn('Adoption code check failed:', error);
+      this.onChange?.(this.state);
+    } finally {
+      this.isVerifyingCode = false;
+      if (this.state.kind === 'codeEntry') this.onChange?.(this.state);
+    }
+  }
+
+  /** Request a fresh code by re-submitting the same email. */
+  public async resendVerificationCode(): Promise<void> {
+    if (this.state.kind !== 'codeEntry') return;
+    const { email, consent } = this.state;
+    this.transition({ kind: 'emailCapture' });
+    // Re-submitting the ORIGINAL consent values is idempotent (same person,
+    // same choices) and re-triggers the OTP send. Fabricating values here
+    // would overwrite the marketing choice the person actually made.
+    await this.submitEmail(email, consent);
   }
 
   // ─── Winner prize claim ───

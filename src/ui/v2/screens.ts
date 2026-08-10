@@ -1999,3 +1999,75 @@ export function renderWinnerModal(winner: GiveawayWinner, onDismiss: () => void)
   layer.appendChild(card);
   return layer;
 }
+
+/**
+ * Verification code entry — shown when the typed email matches an EXISTING
+ * account and the OTP gate is on. One input, autocomplete="one-time-code" so
+ * mobile keyboards offer the code from the mail app; auto-submits at 6 digits.
+ */
+export function renderCodeEntry(c: V2ExperienceController, logoUrl?: string | null): HTMLElement {
+  if (c.state.kind !== 'codeEntry') return el('div');
+  const email = c.state.email;
+
+  const root = el('div', 'wv2-screen wv2-capture');
+  const stack = el('div', 'wv2-capture-stack');
+  stack.appendChild(
+    renderHeader({
+      logoUrl,
+      onInfo: () => c.showHowItWorks(),
+      onClose: () => c.requestDismiss(),
+    })
+  );
+
+  const titles = el('div', 'wv2-capture-titles');
+  const h = el('div', 'wv2-capture-title');
+  h.textContent = 'CHECK YOUR EMAIL';
+  const sub = el('div', 'wv2-capture-sub');
+  sub.textContent = `This email is already part of a WINR streak. Enter the 6-digit code we sent to ${email} to pick it up on this device.`;
+  titles.appendChild(h);
+  titles.appendChild(sub);
+  stack.appendChild(titles);
+
+  const form = el('div', 'wv2-capture-form');
+  const field = el('div', 'wv2-email-field');
+  const input = el('input', 'wv2-email-input wv2-code-input');
+  input.type = 'text';
+  input.inputMode = 'numeric';
+  input.autocomplete = 'one-time-code';
+  input.placeholder = '••••••';
+  input.maxLength = 6;
+  field.appendChild(input);
+  form.appendChild(field);
+
+  if (c.codeError) {
+    const err = el('div', 'wv2-code-error');
+    err.textContent = c.codeError;
+    form.appendChild(err);
+  }
+
+  const cta = document.createElement('button');
+  cta.className = 'wv2-pill';
+  cta.textContent = c.isVerifyingCode ? 'CHECKING…' : 'VERIFY';
+  cta.disabled = c.isVerifyingCode;
+  const submit = (): void => {
+    const code = input.value.replace(/\D/g, '');
+    if (code.length === 6) void c.submitVerificationCode(code);
+  };
+  cta.addEventListener('click', submit);
+  input.addEventListener('input', () => {
+    input.value = input.value.replace(/\D/g, '').slice(0, 6);
+    if (input.value.length === 6) submit();   // auto-submit on the sixth digit
+  });
+  form.appendChild(cta);
+
+  const resend = document.createElement('button');
+  resend.className = 'wv2-legal-link wv2-code-resend';
+  resend.textContent = "Didn't get it? Send a new code";
+  resend.addEventListener('click', () => void c.resendVerificationCode());
+  form.appendChild(resend);
+
+  stack.appendChild(form);
+  root.appendChild(stack);
+  setTimeout(() => input.focus(), 50);
+  return root;
+}

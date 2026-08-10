@@ -497,6 +497,8 @@ export class WINR {
       bundleId: this.config.bundleId,
       submitEmailAndAdopt: (request) =>
         WINR.submitEmailAndAdopt({ ...request, publisherUserId: this.resolvedUser.id }),
+      verifyAdoptionCode: (request) =>
+        this.client.post('/verifyAdoptionCode', request),
       hasRegisteredUuid: () =>
         this.secureStorage.getItem(WINR_CONSTANTS.STORAGE_KEYS.UUID) !== null,
       userPrefill: {
