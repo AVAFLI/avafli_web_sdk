@@ -60,6 +60,24 @@ await WINR.configure({
 </script>
 ```
 
+### Guest / logged-out users
+
+No account system, or the user isn't signed in? Simply omit `user`:
+
+```typescript
+await WINR.configure({
+  apiKey: 'winr_live_…',
+  bundleId: 'com.example.myapp',
+  // no user — guest session
+});
+```
+
+The SDK mints a stable per-install guest id (`winr_guest_…`) for attribution —
+never fabricate placeholder ids yourself. The experience is fully functional
+for guests. When the user signs in, call `configure` again with the real user:
+attribution upgrades in place and the streak carries over automatically.
+
+
 ## Installation
 
 ### npm

@@ -26,8 +26,16 @@ export interface WINRConfiguration {
   apiKey: string;
   /** Application bundle/package identifier */
   bundleId: string;
-  /** Current user — required */
-  user: WINRUser;
+  /**
+   * Current user. OMIT for a guest session (logged out / no account system) —
+   * the SDK mints a stable per-install guest id (`winr_guest_…`) and uses it
+   * for attribution, so there is always a real identifier without your
+   * integration fabricating one. The experience is fully functional for
+   * guests; when your user signs in, call configure again with the real user
+   * and attribution upgrades in place (the streak is device-anchored and
+   * unaffected).
+   */
+  user?: WINRUser;
   /** SDK configuration options */
   options?: WINROptions;
   /** Custom branding configuration */
@@ -648,6 +656,7 @@ export const WINR_CONSTANTS = {
     // Auto-present persistence (suffixed with the bundleId at the call site so
     // multiple publisher integrations on one origin don't cross-contaminate).
     LAST_AUTO_PRESENT: 'winr_last_auto_present',
+    GUEST_ID: 'winr_guest_id',
     UNREGISTERED_IMPRESSIONS: 'winr_unregistered_impressions',
     OPTED_OUT: 'winr_opted_out',
   },

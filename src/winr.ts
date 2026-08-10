@@ -263,7 +263,24 @@ export class WINR {
         );
       }
 
-      if (!config.user || !config.user.id || !config.user.firstName || !config.user.lastName) {
+      // Guest session: no user supplied. Mint (or re-load) the stable guest id
+      // so attribution always carries a real identifier — bundle-scoped, same
+      // persistence as the auto-open marks.
+      if (!config.user) {
+        // The WINR instance doesn't exist yet (it's constructed from this
+        // config), so mint through a standalone provider — same class, same
+        // backing store as the instance will use.
+        const guestStore = new LocalStorageProvider();
+        const guestKey = `${WINR_CONSTANTS.STORAGE_KEYS.GUEST_ID}_${config.bundleId}`;
+        let guestId = guestStore.getItem(guestKey);
+        if (!guestId) {
+          guestId = `winr_guest_${crypto.randomUUID()}`;
+          guestStore.setItem(guestKey, guestId);
+        }
+        config = { ...config, user: { id: guestId, firstName: '', lastName: '' } };
+      }
+
+      if (!config.user || !config.user.id) {
         throw new WINRError(
           WINRErrorCode.InvalidConfiguration,
           'User with id, firstName, and lastName is required'
@@ -271,7 +288,10 @@ export class WINR {
       }
 
       // Validate name characters/length (first_name / last_name per spec).
-      if (!NAME_REGEX.test(config.user.firstName) || !NAME_REGEX.test(config.user.lastName)) {
+      // Guests have deliberately empty names — nothing to validate.
+      const isGuestSession = config.user.id.startsWith('winr_guest_');
+      if (!isGuestSession &&
+          (!NAME_REGEX.test(config.user.firstName) || !NAME_REGEX.test(config.user.lastName))) {
         throw new WINRError(
           WINRErrorCode.InvalidConfiguration,
           'First and last name may only contain letters, spaces, hyphens, or apostrophes (max 50 chars)'
@@ -476,14 +496,14 @@ export class WINR {
       storage: this.storage,
       bundleId: this.config.bundleId,
       submitEmailAndAdopt: (request) =>
-        WINR.submitEmailAndAdopt({ ...request, publisherUserId: this.config.user.id }),
+        WINR.submitEmailAndAdopt({ ...request, publisherUserId: this.resolvedUser.id }),
       hasRegisteredUuid: () =>
         this.secureStorage.getItem(WINR_CONSTANTS.STORAGE_KEYS.UUID) !== null,
       userPrefill: {
-        firstName: this.config.user.firstName,
-        lastName: this.config.user.lastName,
-        ...(this.config.user.phone ? { phone: this.config.user.phone } : {}),
-        ...(this.config.user.email ? { email: this.config.user.email } : {}),
+        firstName: this.resolvedUser.firstName,
+        lastName: this.resolvedUser.lastName,
+        ...(this.resolvedUser.phone ? { phone: this.resolvedUser.phone } : {}),
+        ...(this.resolvedUser.email ? { email: this.resolvedUser.email } : {}),
       },
       cachedGiveaway: this.currentGiveaway,
       cachedSdkConfig: this.getCurrentSDKConfig(),
@@ -553,6 +573,17 @@ export class WINR {
   }
 
   // ─── Auto-present (V2 experience: open once per day) ───
+
+  /**
+   * The configured user. configure() always resolves one — a supplied user or
+   * the minted guest — before storing config, so this never throws in practice;
+   * the throw documents the invariant rather than handling a real path.
+   */
+  private get resolvedUser(): WINRUser {
+    const u = this.config.user;
+    if (!u) throw new WINRError(WINRErrorCode.InvalidConfiguration, 'configure() has not run');
+    return u;
+  }
 
   private get lastAutoPresentKey(): string {
     return `${WINR_CONSTANTS.STORAGE_KEYS.LAST_AUTO_PRESENT}_${this.config.bundleId}`;
