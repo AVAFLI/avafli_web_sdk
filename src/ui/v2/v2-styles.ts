@@ -184,8 +184,15 @@ img { display: block; }
 .wv2-email-field .wv2-ic-lock { width: 14px; height: 14px; color: rgba(29,35,48,0.45); flex: none; }
 .wv2-email-locked { pointer-events: none; }
 .wv2-code-input { text-align: center; letter-spacing: 0.5em; font-size: 22px; font-weight: 700; }
+.wv2-code-sub { font-size: 14px; line-height: 1.55; color: rgba(255,255,255,0.75); padding: 0 8px; max-width: 42ch; margin: 0 auto; }
+.wv2-capture:has(.wv2-code-legal) { display: flex; flex-direction: column; }
 .wv2-code-error { color: #ff6b63; font-size: 13px; text-align: center; }
-.wv2-code-resend { background: none; border: none; cursor: pointer; margin-top: 4px; }
+.wv2-code-resend { background: none; border: none; cursor: pointer; margin-top: 6px; font-size: 14px; color: rgba(255,255,255,0.65); font-family: inherit; }
+.wv2-code-resend-action { color: #7fb0ff; text-decoration: underline; text-underline-offset: 3px; font-weight: 700; }
+.wv2-code-resend:hover .wv2-code-resend-action { color: #a9c9ff; }
+/* Pin the legal footer to the sheet bottom so the screen doesn't trail off into
+   a void — same treatment as the capture screen. */
+.wv2-code-legal { margin-top: auto; padding: 18px 22px 24px; text-align: center; }
 .wv2-email-input {
   flex: 1; min-width: 0; border: none; outline: none; background: transparent;
   font-family: ${V2_INTER}; font-size: 16px; color: ${c.gunmetal};

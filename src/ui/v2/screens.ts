@@ -2022,7 +2022,7 @@ export function renderCodeEntry(c: V2ExperienceController, logoUrl?: string | nu
   const titles = el('div', 'wv2-capture-titles');
   const h = el('div', 'wv2-capture-title');
   h.textContent = 'CHECK YOUR EMAIL';
-  const sub = el('div', 'wv2-capture-sub');
+  const sub = el('div', 'wv2-code-sub');
   sub.textContent = `This email is already part of a WINR streak. Enter the 6-digit code we sent to ${email} to pick it up on this device.`;
   titles.appendChild(h);
   titles.appendChild(sub);
@@ -2060,14 +2060,28 @@ export function renderCodeEntry(c: V2ExperienceController, logoUrl?: string | nu
   });
   form.appendChild(cta);
 
+  // Two-tone: the question reads as copy, the underlined action reads as a
+  // control — without the underline, nothing on a touch screen says "tappable".
   const resend = document.createElement('button');
-  resend.className = 'wv2-legal-link wv2-code-resend';
-  resend.textContent = "Didn't get it? Send a new code";
+  resend.className = 'wv2-code-resend';
+  const q = document.createElement('span');
+  q.textContent = "Didn't get it? ";
+  const action = document.createElement('span');
+  action.className = 'wv2-code-resend-action';
+  action.textContent = 'Send a new code';
+  resend.appendChild(q);
+  resend.appendChild(action);
   resend.addEventListener('click', () => void c.resendVerificationCode());
   form.appendChild(resend);
 
   stack.appendChild(form);
+
+  // Same legal footer as the capture screen — the code screen is one step of
+  // the same consent flow, and without it the sheet trails off into a void.
+  const legal = el('div', 'wv2-code-legal');
+  legal.appendChild(renderLegalLinks(c.rulesUrl, true));
   root.appendChild(stack);
+  root.appendChild(legal);
   setTimeout(() => input.focus(), 50);
   return root;
 }
