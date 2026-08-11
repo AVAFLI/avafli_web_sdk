@@ -283,15 +283,16 @@ export class WINR {
       if (!config.user || !config.user.id) {
         throw new WINRError(
           WINRErrorCode.InvalidConfiguration,
-          'User with id, firstName, and lastName is required'
+          'User with an id is required'
         );
       }
 
-      // Validate name characters/length (first_name / last_name per spec).
-      // Guests have deliberately empty names — nothing to validate.
-      const isGuestSession = config.user.id.startsWith('winr_guest_');
-      if (!isGuestSession &&
-          (!NAME_REGEX.test(config.user.firstName) || !NAME_REGEX.test(config.user.lastName))) {
+      // Validate name characters/length (first_name / last_name per spec), but
+      // ONLY if a name was supplied — firstName/lastName are optional; pass just
+      // the identity data you have and the SDK captures the name at prize-claim.
+      // Guests likewise have deliberately empty names — nothing to validate.
+      if ((config.user.firstName && !NAME_REGEX.test(config.user.firstName)) ||
+          (config.user.lastName && !NAME_REGEX.test(config.user.lastName))) {
         throw new WINRError(
           WINRErrorCode.InvalidConfiguration,
           'First and last name may only contain letters, spaces, hyphens, or apostrophes (max 50 chars)'

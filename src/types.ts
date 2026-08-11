@@ -56,12 +56,12 @@ export interface WINRBranding {
 }
 
 export interface WINRUser {
-  /** User ID */
+  /** User ID (the only required field) */
   id: string;
-  /** First name */
-  firstName: string;
-  /** Last name */
-  lastName: string;
+  /** First name (optional — the SDK collects it at prize-claim if missing) */
+  firstName?: string;
+  /** Last name (optional — the SDK collects it at prize-claim if missing) */
+  lastName?: string;
   /** Phone number */
   phone?: string;
   /**
@@ -638,7 +638,7 @@ export interface PresentationOptions {
 // ─── Constants ───
 
 export const WINR_CONSTANTS = {
-  SDK_VERSION: '2.6.2',
+  SDK_VERSION: '2.6.3',
   PLATFORM_OS: 'Web',
   getApiBaseUrl: (_environment: 'production' = 'production'): string => {
     return 'https://us-central1-winr-9c11f.cloudfunctions.net';
