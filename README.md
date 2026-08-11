@@ -13,11 +13,15 @@ WINR lets you add daily-entry sweepstakes and prize experiences to your app in u
 
 **Key capabilities:**
 - **Daily entry sweepstakes** — Users earn entries every day they engage
-- **Auto-open experience** — Opens automatically on the first visit of each day; entries are granted automatically the moment it opens
+- **Auto-open experience** — Opens automatically on the first visit of each day; entries climb a +10/day ladder and are granted the moment it opens
 - **Celebration on open** — Returning users open straight into the celebration: today's tile checks off with a confetti burst, the total counts up and pops, and a "YOU'RE ON A ROLL!" toast leads the bar — no button to press, no modal. Day 1 keeps the one-time "You're in!" welcome modal
+- **Email capture** — The SDK captures an email through its own opt-in screen, with an UNCHECKED-by-default marketing-consent tick and a publisher-configurable age gate
+- **Cross-device verified adoption** — When a typed email matches an existing account, the SDK confirms a 6-digit code before merging the streak across devices
+- **Soft email verification** — A brand-new typed email shows a persistent, dismissible "Verify your email" chip; it never blocks play, only prize-draw eligibility
+- **Winner claim flow** — "WE HAVE A WINNER!" splash and a guided prize-claim flow (name, shipping address incl. DC, optional photo/story, claim number)
 - **Responsive V2 design** — Bottom drawer on mobile (<768px), centered modal card on desktop (≥768px)
 - **Publisher branding** — Logo, primary color, and prize image configured from the WINR dashboard
-- **GDPR/CCPA compliant** — Built-in consent flows and user data deletion
+- **GDPR/CCPA compliant** — Built-in consent flows, RTD opt-out via `optOut()`, and an in-app "Privacy choices → delete my data"
 - **Analytics forwarding** — Route SDK events to your existing analytics stack
 - **Shadow DOM isolation** — Styles never leak into your page; fonts and imagery are bundled (no CDN fetches)
 
@@ -108,7 +112,7 @@ attribution upgrades in place and the streak carries over automatically.
 ### npm
 
 ```bash
-npm install winr-web-sdk@^2.5.0
+npm install winr-web-sdk@^2.7.0
 ```
 
 ```typescript
@@ -186,13 +190,22 @@ There is no manual launch API — the WINR experience is exclusively SDK-driven.
 
 Entries are claimed silently the moment the experience opens. On day 1 the "You're in!" celebration modal is the reveal (its GOT IT closes the experience). On day 2+ there is no modal and nothing to press: the celebration is the dashboard's first visible frame — today's tile checks off with a confetti burst, the streak label advances, the total counts up and pops, and the bar leads with a "YOU'RE ON A ROLL!" toast before settling into the come-back message. The pill reads GOT IT throughout and closes the experience.
 
+## Email Capture & Verification
+
+Email is captured inside the SDK's own opt-in screen (see the identity section above). The screen shows a publisher-configurable **age gate** — an affirmative tick that gates the CTA — and a **marketing-consent** checkbox that is **unchecked by default** and never gates entry (declining it costs neither the entry nor, if drawn, winner contact).
+
+Two verification paths run from that screen:
+
+- **Cross-device verified adoption.** When the typed email matches an existing WINR account (from another device or install), the SDK asks for a **6-digit code** emailed to that address before the two identities are merged — so a streak follows the person across devices without letting anyone attach to someone else's record.
+- **Soft email verification (2.7.0).** A brand-new, never-before-seen typed email surfaces a persistent, dismissible **"Verify your email"** chip on the dashboard. It **never blocks play** — the user keeps earning entries — it only affects prize-draw eligibility until the address is confirmed.
+
 ## Winner Experience
 
 When one of your users is drawn as a giveaway winner, the experience automatically opens on a winner splash instead of the dashboard, then walks them through a 4-step prize-claim form with progress dots (name, shipping address, optional photo and story) plus a review-and-agree screen, ending in a confirmation with their claim number on a keepsake OFFICIAL WINNER card. This requires no integration work — the flow appears only for the drawn winner and disappears once their claim is submitted. The winning email is never re-entered; a backend-masked address is displayed for recognition and the claim is keyed to the account server-side.
 
 ## Push Notifications
 
-Streak reminder pushes are primarily a mobile-SDK feature. On the web, `WINR.registerForPushNotifications()` requests the browser's notification permission where supported; otherwise the SDK focuses on in-app engagement through the daily auto-open experience itself.
+Streak reminder pushes are a mobile-SDK feature. On the web, `WINR.registerForPushNotifications()` is a **logged no-op unless web push is configured** — functional web push needs a VAPID application-server key and a service worker, which this build does not ship. It is also gated on `enablePushReminders`. Web engagement runs through the daily auto-open experience itself, not browser notifications.
 
 ## Customization
 
@@ -235,7 +248,6 @@ await WINR.configure({
 - `winr_email_captured` — User completed the email/consent capture
 - `winr_daily_entry_claimed` — Daily entries awarded (auto-claimed on open)
 - `winr_modal_dismissed` — User closed the WINR experience
-- `winr_push_notifications_enabled` — Browser notification permission granted
 - `winr_user_data_deleted` — User data deletion completed
 
 ## GDPR / CCPA
@@ -256,10 +268,8 @@ drawing was fair and that a prize went to a real eligible person, which a sweeps
 operator must be able to show; GDPR Art. 17(3) exempts data needed for legal claims.
 The person is erased, the proof is kept.
 
-> A previous `deleteUserData()` method was removed in 2.5.0. It hard-deleted entry
-> records, which both destroyed that evidence and — because it left no tombstone —
-> allowed delete-and-re-register to farm unlimited entries. Use `optOut()`.
-
+Users can also self-serve without any code from you: the experience's
+**Privacy choices → delete my data** flow runs the same erasure as `optOut()`.
 
 ## API Reference
 
@@ -271,7 +281,7 @@ The person is erased, the proof is kept.
 | `WINR.dismiss()` | `void` | Programmatically close the auto-opened experience |
 | `WINR.isAvailable` | `boolean` | Whether the experience is currently available (eligible to auto-open) |
 | `WINR.refreshConfig()` | `Promise<void>` | Re-fetch the giveaway/SDK config from the backend |
-| `WINR.registerForPushNotifications()` | `Promise<void>` | Request browser notification permission |
+| `WINR.registerForPushNotifications()` | `Promise<void>` | Logged no-op on web unless web push (VAPID + service worker) is configured; gated on `enablePushReminders` |
 
 For detailed API documentation, see the [WINR Docs](https://avafli-website.web.app/sdk/web).
 
