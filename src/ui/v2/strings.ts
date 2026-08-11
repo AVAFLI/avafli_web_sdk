@@ -19,6 +19,17 @@ export const WINRV2Strings = {
   /** RESEND failed — shown in the code-error slot; the code screen stays up. */
   codeResendFailed: "Couldn't send a new code. Check your connection and try again.",
 
+  // ─── Soft email verification (persistent dashboard chip → code screen) ───
+  /** The persistent, non-blocking chip on the streak dashboard. */
+  verifyEmailChip: 'Verify your email',
+  /** Header on the reused 6-digit code screen for email verification. */
+  verifyEmailTitle: 'Verify your email',
+  /** Subtitle on that screen. */
+  verifyEmailSubtitle:
+    "Enter the 6-digit code we sent to your inbox so you're eligible to win.",
+  /** Transient dashboard confirmation after a successful verify. */
+  emailVerified: 'Email verified ✓',
+
   // ─── Winner claim form, step 1 ───
   firstNameInvalid: 'Please enter a valid first name.',
   lastNameInvalid: 'Please enter a valid last name.',

@@ -500,6 +500,10 @@ export class WINR {
         WINR.submitEmailAndAdopt({ ...request, publisherUserId: this.resolvedUser.id }),
       verifyAdoptionCode: (request) =>
         this.client.post('/verifyAdoptionCode', request),
+      confirmEmailVerification: (request) =>
+        this.client.post('/confirmEmailVerification', request),
+      resendEmailVerification: () =>
+        this.client.post('/resendEmailVerification', {}),
       optOut: () => WINR.optOutFromExperience(),
       hasRegisteredUuid: () =>
         this.secureStorage.getItem(WINR_CONSTANTS.STORAGE_KEYS.UUID) !== null,

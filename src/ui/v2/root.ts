@@ -4,6 +4,7 @@ import { V2ExperienceController, V2State } from './controller';
 import {
   renderCapture,
   renderCodeEntry,
+  renderEmailVerify,
   renderClaimConfirmation,
   renderClaimSteps,
   renderDashboard,
@@ -202,6 +203,9 @@ export class WINRV2Experience {
         break;
       case 'codeEntry':
         this.sheet.appendChild(renderCodeEntry(c, logoUrl));
+        break;
+      case 'emailVerify':
+        this.sheet.appendChild(renderEmailVerify(c, logoUrl));
         break;
       case 'emailCapture':
         this.sheet.appendChild(renderCapture(c, logoUrl));

@@ -46,6 +46,13 @@ export type V2State =
   | { kind: 'empty' } // no active giveaway / opted out / fatal error
   | { kind: 'emailCapture' }
   | { kind: 'codeEntry'; email: string; consent: EmailCaptureConsent }
+  /**
+   * Soft email-verification screen — the SAME 6-digit code component as
+   * `codeEntry`, reached by tapping the persistent "Verify your email" chip on
+   * the dashboard. Fully dismissible (a back/cancel returns to the dashboard);
+   * it gates nothing.
+   */
+  | { kind: 'emailVerify' }
   | { kind: 'dashboard' }
   | { kind: 'howItWorks' }
   /** Backend geo-fence rejected this user — dedicated screen, never 'empty'. */
@@ -78,6 +85,15 @@ export interface V2ControllerDeps {
   userPrefill?: { firstName?: string; lastName?: string; phone?: string; email?: string };
   /** Completes a verification-gated adoption (6-digit email OTP). */
   verifyAdoptionCode?: (request: { code: string }) => Promise<unknown>;
+  /**
+   * Confirms a soft email verification (6-digit code for a newly-typed email).
+   * Same request/response envelope as {@link verifyAdoptionCode}; returns
+   * `{ verified: true }` on success, throws expired/attempts/mismatch on
+   * failure.
+   */
+  confirmEmailVerification?: (request: { code: string }) => Promise<unknown>;
+  /** Re-sends the soft email-verification code. Returns `{ sent: boolean }`. */
+  resendEmailVerification?: () => Promise<unknown>;
   /**
    * Performs the RTD opt-out (the how-it-works screen's "Privacy choices" →
    * DELETE MY DATA flow). MUST reject on failure — unlike the public
@@ -157,6 +173,15 @@ export class V2ExperienceController {
   public streakDay = 1;
   public totalEntries = 0;
   public isSubmittingEmail = false;
+
+  /**
+   * Soft email-verification state. True ONLY when the backend explicitly
+   * reported `emailVerified === false` (a brand-new, unconfirmed email) — the
+   * dashboard shows the persistent "Verify your email" chip while it holds.
+   * NEVER gates daily play, auto-claim, or streak; it purely drives the UI
+   * affordance (draw eligibility is enforced server-side).
+   */
+  public unverified = false;
 
   // ─── User-facing failure surfaces (Master Field List "User Message (UI)") ───
 
@@ -520,6 +545,13 @@ export class V2ExperienceController {
 
       this.giveaway = response.giveaway;
       this.claimedToday = response.claimedToday === true;
+      // Soft verification: ONLY an explicit false means "unverified". Absent
+      // leaves whatever we already knew untouched (verified/partner/no-email).
+      if (response.emailVerified === false) {
+        this.unverified = true;
+      } else if (response.emailVerified === true) {
+        this.unverified = false;
+      }
       if (typeof response.streakDay === 'number') this.streakDay = response.streakDay;
       if (typeof response.totalEntries === 'number') this.totalEntries = response.totalEntries;
       if (this.deps.resolveSdkConfig) {
@@ -911,9 +943,18 @@ export class V2ExperienceController {
         email,
         ageConfirmed: consent.ageConfirmed,
         marketingConsent: consent.marketingConsent,
-      })) as { verificationRequired?: boolean } | undefined;
+      })) as { verificationRequired?: boolean; emailVerified?: boolean } | undefined;
       analyticsAdapter.track('winr_email_captured');
       logger.info('Email submitted to backend');
+
+      // A brand-new, unconfirmed email comes back with emailVerified === false —
+      // surface the persistent verify chip on the dashboard the user lands on.
+      // Only an explicit false flips it on (absent = verified/adopted/partner).
+      if (submitRes?.emailVerified === false) {
+        this.unverified = true;
+      } else if (submitRes?.emailVerified === true) {
+        this.unverified = false;
+      }
 
       // NOTE: We deliberately do NOT persist the raw email locally (PII-High).
       // The backend stores it encrypted; registration state is derived from
@@ -1029,6 +1070,79 @@ export class V2ExperienceController {
       logger.warn('Resend verification code failed:', error);
       this.codeError = WINRV2Strings.codeResendFailed;
       this.onChange?.(this.state);
+    }
+  }
+
+  // ─── Soft email verification (dashboard chip → reused code screen) ───
+  //
+  // Fully dismissible: this flow gates NOTHING. It reuses the exact 6-digit
+  // code component (and the same isVerifyingCode / codeError surfaces + fixed
+  // error copy) as the adoption OTP — the only differences are the callables
+  // it invokes, the header/subtitle copy, and a back/cancel to the dashboard.
+
+  /** Tap the "Verify your email" chip → open the reused code screen. */
+  public showEmailVerify(): void {
+    if (this.state.kind !== 'dashboard') return;
+    this.codeError = null;
+    this.transition({ kind: 'emailVerify' });
+  }
+
+  /** Back/cancel on the verify screen → return to the dashboard (no-op else). */
+  public cancelEmailVerify(): void {
+    if (this.state.kind !== 'emailVerify') return;
+    this.codeError = null;
+    this.transition({ kind: 'dashboard' });
+  }
+
+  /**
+   * Submit the 6-digit soft-verification code. On success the chip is cleared
+   * and a brief "Email verified ✓" confirmation shows on the dashboard;
+   * failures map to the SAME fixed copy as the adoption flow.
+   */
+  public async confirmEmailVerificationCode(code: string): Promise<void> {
+    if (this.state.kind !== 'emailVerify' || this.isVerifyingCode) return;
+    this.isVerifyingCode = true;
+    this.codeError = null;
+    this.onChange?.(this.state);
+    try {
+      await this.deps.confirmEmailVerification?.({ code });
+      analyticsAdapter.track('winr_email_verified');
+      this.unverified = false;
+      this.isVerifyingCode = false;
+      // Reuse the dashboard's transient-notice surface for the confirmation.
+      this.dashboardNotice = WINRV2Strings.emailVerified;
+      this.transition({ kind: 'dashboard' });
+    } catch (error) {
+      // NEVER render raw backend text — map to the fixed adoption copy.
+      const message = error instanceof Error ? error.message : String(error);
+      if (/expired/i.test(message)) {
+        this.codeError = WINRV2Strings.codeExpired;
+      } else if (/attempts/i.test(message)) {
+        this.codeError = WINRV2Strings.codeTooManyAttempts;
+      } else {
+        this.codeError = WINRV2Strings.codeIncorrect;
+      }
+      logger.warn('Email verification code check failed:', error);
+      this.isVerifyingCode = false;
+      if (this.state.kind === 'emailVerify') this.onChange?.(this.state);
+    }
+  }
+
+  /**
+   * Re-send the soft-verification code. The verify screen STAYS UP throughout;
+   * a failed resend surfaces in the code-error slot (consistent with the
+   * adoption resend fix).
+   */
+  public async resendEmailVerificationCode(): Promise<void> {
+    if (this.state.kind !== 'emailVerify' || this.isVerifyingCode) return;
+    this.codeError = null;
+    this.onChange?.(this.state);
+    try {
+      await this.deps.resendEmailVerification?.();
+    } catch (error) {
+      logger.warn('Resend email verification code failed:', error);
+      this.codeError = WINRV2Strings.codeResendFailed;
+      if (this.state.kind === 'emailVerify') this.onChange?.(this.state);
     }
   }
 

@@ -250,6 +250,20 @@ button.wv2-dash-notice { cursor: pointer; }
 }
 .wv2-notice-fade { opacity: 0; }
 
+/* Soft email-verification chip: subtle accent-tinted pill, self-sized and
+   centered so it reads as a gentle nudge, never a full-width error bar. */
+.wv2-verify-chip {
+  display: inline-flex; align-self: center; align-items: center; gap: 8px;
+  margin: 0 22px 4px; padding: 8px 14px;
+  border: 1px solid var(--wv2-accent-45); border-radius: 999px;
+  background: var(--wv2-accent-35);
+  font-family: inherit; font-size: 13px; font-weight: 700; letter-spacing: 0.2px;
+  color: #fff; cursor: pointer; transition: background 0.2s ease, border-color 0.2s ease;
+}
+.wv2-verify-chip:hover { background: var(--wv2-accent-55); border-color: var(--wv2-accent-75); }
+.wv2-verify-chip-ic { width: 16px; height: 13px; color: var(--wv2-accent); flex: none; display: inline-flex; }
+.wv2-verify-chip-ic svg { width: 100%; height: 100%; }
+
 /* Prize card (Joe's Aug-2026 dark full-bleed revision): the art fills the
    whole card, a solid black stats strip sits inside the top edge, and the
    prize headline rides the bottom over a black→transparent scrim. */

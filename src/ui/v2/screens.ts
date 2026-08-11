@@ -524,6 +524,21 @@ function renderPrizeStrip(giveaway: Giveaway | null): HTMLElement {
 /** How long the "YOU'RE ON A ROLL!" toast holds before its single slide to the pitch. */
 export const COMEBACK_TOAST_HOLD_MS = 2500;
 
+/**
+ * The persistent "Verify your email" chip (soft email verification). A subtle,
+ * accent-tinted pill with a mail icon — tappable, non-blocking, and it never
+ * covers the streak content. Shown on the dashboard while `c.unverified`.
+ */
+export function renderVerifyChip(onTap: () => void): HTMLButtonElement {
+  const chip = el('button', 'wv2-verify-chip');
+  chip.type = 'button';
+  chip.appendChild(icon(mailIcon, 'wv2-verify-chip-ic'));
+  chip.appendChild(el('span', 'wv2-verify-chip-text', WINRV2Strings.verifyEmailChip));
+  chip.setAttribute('aria-label', WINRV2Strings.verifyEmailChip);
+  chip.addEventListener('click', onTap);
+  return chip;
+}
+
 export function renderDashboard(
   c: V2ExperienceController,
   logoUrl: string | null | undefined,
@@ -601,6 +616,15 @@ export function renderDashboard(
     }
   };
   syncNotices();
+
+  // Soft email-verification nudge: a persistent, non-blocking pill shown while
+  // the backend reports this email as unverified. Sits near the top (under the
+  // header, above the prize card) so it reads as a gentle nudge — it never
+  // covers the streak content and never gates play. Tapping opens the reused
+  // 6-digit code screen.
+  if (c.unverified) {
+    body.appendChild(renderVerifyChip(() => c.showEmailVerify()));
+  }
 
   body.appendChild(renderPrizeCard(c, preReveal && !cacheFrame));
   body.appendChild(renderStreakRail(c, preReveal || cacheFrame));
@@ -2236,19 +2260,41 @@ export function renderWinnerModal(winner: GiveawayWinner, onDismiss: () => void)
 }
 
 /**
- * Verification code entry — shown when the typed email matches an EXISTING
- * account and the OTP gate is on. One input, autocomplete="one-time-code" so
- * mobile keyboards offer the code from the mail app; auto-submits at 6 digits.
+ * Config for the shared 6-digit code screen. The adoption OTP and the soft
+ * email-verification flow render the SAME component through here — only the
+ * copy, the submit/resend callables, and the presence of a back/cancel differ.
  */
-export function renderCodeEntry(c: V2ExperienceController, logoUrl?: string | null): HTMLElement {
-  if (c.state.kind !== 'codeEntry') return el('div');
-  const email = c.state.email;
+interface CodeScreenConfig {
+  title: string;
+  subtitle: string;
+  /** Called with the 6 collected digits (on the CTA tap and on auto-submit). */
+  onSubmit: (code: string) => void;
+  /** Called when the "Send a new code" action is tapped. */
+  onResend: () => void;
+  /**
+   * When set, the header shows a back chevron that dismisses the screen — the
+   * soft-verification flow is dismissible; the adoption gate is not.
+   */
+  onCancel?: () => void;
+}
 
+/**
+ * The ONE 6-digit code screen. One input, autocomplete="one-time-code" so
+ * mobile keyboards offer the code from the mail app; auto-submits at 6 digits.
+ * The verifying/error state comes from the controller (`isVerifyingCode`,
+ * `codeError`), so both flows share the same fixed error copy by construction.
+ */
+function renderCodeScreen(
+  c: V2ExperienceController,
+  cfg: CodeScreenConfig,
+  logoUrl?: string | null
+): HTMLElement {
   const root = el('div', 'wv2-screen wv2-capture');
   const stack = el('div', 'wv2-capture-stack');
   stack.appendChild(
     renderHeader({
       logoUrl,
+      ...(cfg.onCancel ? { showsBack: true, onBack: cfg.onCancel } : {}),
       onInfo: () => c.showHowItWorks(),
       onClose: () => c.requestDismiss(),
     })
@@ -2256,9 +2302,9 @@ export function renderCodeEntry(c: V2ExperienceController, logoUrl?: string | nu
 
   const titles = el('div', 'wv2-capture-titles');
   const h = el('div', 'wv2-capture-title');
-  h.textContent = 'CHECK YOUR EMAIL';
+  h.textContent = cfg.title;
   const sub = el('div', 'wv2-code-sub');
-  sub.textContent = `This email is already part of a WINR streak. Enter the 6-digit code we sent to ${email} to pick it up on this device.`;
+  sub.textContent = cfg.subtitle;
   titles.appendChild(h);
   titles.appendChild(sub);
   stack.appendChild(titles);
@@ -2286,7 +2332,7 @@ export function renderCodeEntry(c: V2ExperienceController, logoUrl?: string | nu
   cta.disabled = c.isVerifyingCode;
   const submit = (): void => {
     const code = input.value.replace(/\D/g, '');
-    if (code.length === 6) void c.submitVerificationCode(code);
+    if (code.length === 6) cfg.onSubmit(code);
   };
   cta.addEventListener('click', submit);
   input.addEventListener('input', () => {
@@ -2306,7 +2352,7 @@ export function renderCodeEntry(c: V2ExperienceController, logoUrl?: string | nu
   action.textContent = 'Send a new code';
   resend.appendChild(q);
   resend.appendChild(action);
-  resend.addEventListener('click', () => void c.resendVerificationCode());
+  resend.addEventListener('click', () => cfg.onResend());
   form.appendChild(resend);
 
   stack.appendChild(form);
@@ -2319,4 +2365,43 @@ export function renderCodeEntry(c: V2ExperienceController, logoUrl?: string | nu
   root.appendChild(legal);
   setTimeout(() => input.focus(), 50);
   return root;
+}
+
+/**
+ * Verification code entry — shown when the typed email matches an EXISTING
+ * account and the OTP gate is on. Reuses {@link renderCodeScreen}.
+ */
+export function renderCodeEntry(c: V2ExperienceController, logoUrl?: string | null): HTMLElement {
+  if (c.state.kind !== 'codeEntry') return el('div');
+  const email = c.state.email;
+  return renderCodeScreen(
+    c,
+    {
+      title: 'CHECK YOUR EMAIL',
+      subtitle: `This email is already part of a WINR streak. Enter the 6-digit code we sent to ${email} to pick it up on this device.`,
+      onSubmit: (code) => void c.submitVerificationCode(code),
+      onResend: () => void c.resendVerificationCode(),
+    },
+    logoUrl
+  );
+}
+
+/**
+ * Soft email-verification — the SAME 6-digit code screen as adoption, reached
+ * from the dashboard's "Verify your email" chip. Dismissible (a back chevron
+ * returns to the dashboard); it gates nothing.
+ */
+export function renderEmailVerify(c: V2ExperienceController, logoUrl?: string | null): HTMLElement {
+  if (c.state.kind !== 'emailVerify') return el('div');
+  return renderCodeScreen(
+    c,
+    {
+      title: WINRV2Strings.verifyEmailTitle,
+      subtitle: WINRV2Strings.verifyEmailSubtitle,
+      onSubmit: (code) => void c.confirmEmailVerificationCode(code),
+      onResend: () => void c.resendEmailVerificationCode(),
+      onCancel: () => c.cancelEmailVerify(),
+    },
+    logoUrl
+  );
 }

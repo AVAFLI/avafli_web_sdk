@@ -215,6 +215,15 @@ export interface RegisterDeviceResponse {
   giveaway: Giveaway | null;
   /** Whether user is returning */
   isReturningUser?: boolean;
+  /**
+   * Soft email-verification signal. `false` means this person typed a
+   * brand-new email that hasn't been confirmed yet — drives the persistent
+   * "Verify your email" chip. ABSENT/undefined for verified users,
+   * partner-passed emails, adoption-verified users, and users with no email:
+   * treat ONLY an explicit `false` as unverified. Never gates daily play —
+   * verification only affects prize-draw eligibility (enforced server-side).
+   */
+  emailVerified?: boolean;
   /** Whether user claimed today */
   claimedToday: boolean;
   /** Current streak day */
@@ -384,6 +393,12 @@ export interface GetActiveGiveawayResponse {
   /** Whether this user has confirmed an email + consent. Drives the email-capture
    * gate so a recognized user isn't asked to re-enter their email on reopen. */
   emailConsentStatus?: boolean;
+  /**
+   * Soft email-verification signal (see {@link RegisterDeviceResponse.emailVerified}).
+   * ONLY an explicit `false` means "unverified" and shows the verify chip;
+   * absent for verified/partner/adoption/no-email users. Never blocks play.
+   */
+  emailVerified?: boolean;
   /** Lifetime claim count */
   lifetimeCount?: number;
   /** True when this person has opted out (RTD) — never show the experience. */
@@ -490,6 +505,15 @@ export interface SubmitEmailResponse {
   uuid?: string;
   token?: string;
   refreshToken?: string;
+  /**
+   * Soft email-verification signal for the address just submitted (see
+   * {@link RegisterDeviceResponse.emailVerified}). `false` means the user
+   * typed a brand-new, unconfirmed email → show the verify chip. Absent for
+   * verified/partner/adoption users.
+   */
+  emailVerified?: boolean;
+  /** True when this submit triggered a verification email to be sent. */
+  emailVerificationSent?: boolean;
 }
 
 export interface SubmitUserProfileRequest {
@@ -638,7 +662,7 @@ export interface PresentationOptions {
 // ─── Constants ───
 
 export const WINR_CONSTANTS = {
-  SDK_VERSION: '2.6.3',
+  SDK_VERSION: '2.7.0',
   PLATFORM_OS: 'Web',
   getApiBaseUrl: (_environment: 'production' = 'production'): string => {
     return 'https://us-central1-winr-9c11f.cloudfunctions.net';
