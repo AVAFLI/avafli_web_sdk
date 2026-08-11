@@ -570,7 +570,35 @@ button.wv2-dash-notice { cursor: pointer; }
   font-size: 20px; font-weight: 700; letter-spacing: -0.6px; color: #fff;
   text-align: center; padding: 22px 40px 0;
 }
-.wv2-hiw-cta { padding: 20px 28px 30px; }
+.wv2-hiw-cta { padding: 20px 28px 0; }
+
+/* Muted privacy opt-out entry point + its confirmation dialog. */
+.wv2-privacy-link {
+  display: block; margin: 18px auto 30px; padding: 6px 10px;
+  background: none; border: none; cursor: pointer;
+  font-size: 12px; color: ${c.textTertiary}; text-decoration: underline;
+}
+.wv2-optout-card {
+  position: relative;
+  width: calc(100% - 48px); max-width: 340px;
+  border-radius: 20px;
+  background: ${c.deepCharcoal};
+  border: 1px solid rgba(255,255,255,0.12);
+  padding: 22px;
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+  text-align: center;
+  animation: wv2-modal-in 0.2s ease;
+}
+.wv2-optout-title { font-size: 18px; font-weight: 900; color: #fff; }
+.wv2-optout-body { font-size: 14px; color: rgba(255,255,255,0.75); }
+.wv2-optout-error { font-size: 13px; color: #ff6b63; }
+.wv2-optout-success { font-size: 18px; font-weight: 700; color: #fff; padding: 24px 0; }
+.wv2-pill-destructive { background: #ff6b63; margin-top: 4px; }
+.wv2-optout-cancel {
+  background: none; border: none; cursor: pointer; padding: 6px 10px;
+  font-size: 14px; color: ${c.textTertiary}; text-decoration: underline;
+}
+.wv2-optout-cancel:disabled { cursor: default; opacity: 0.5; }
 
 /* ═══ Winner prize-claim flow (splash → form → confirmation) ═══
    Ported from iOS WINRV2Claim.swift (Joe's Light variant, 1pt = 1px). */

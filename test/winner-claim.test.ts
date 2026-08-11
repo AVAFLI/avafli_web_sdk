@@ -8,6 +8,7 @@ import {
 } from '../src/types';
 import {
   PrizeClaimForm,
+  US_STATES,
   emptyClaimForm,
   hasAllConsents,
   isClaimFormValid,
@@ -336,5 +337,18 @@ describe('Winner prize-claim routing', () => {
     expect(controller.winnerClaimStep.kind).toBe('form');
     expect(controller.claimSubmitError).toMatch(/check your connection/i);
     expect(controller.isSubmittingClaim).toBe(false);
+  });
+});
+
+describe('claim state list', () => {
+  it('covers the 50 states plus the District of Columbia, alphabetically', () => {
+    // The official rules promise "50 states and the District of Columbia".
+    expect(US_STATES).toHaveLength(51);
+    expect(new Set(US_STATES).size).toBe(51);
+    expect(US_STATES).toContain('District of Columbia');
+    // Alphabetical placement: between Delaware and Florida.
+    expect(US_STATES.indexOf('District of Columbia')).toBe(US_STATES.indexOf('Delaware') + 1);
+    expect(US_STATES.indexOf('Florida')).toBe(US_STATES.indexOf('District of Columbia') + 1);
+    expect([...US_STATES].sort()).toEqual([...US_STATES]);
   });
 });

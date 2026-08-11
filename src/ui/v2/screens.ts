@@ -1231,8 +1231,56 @@ export function renderHowItWorks(c: V2ExperienceController, logoUrl?: string | n
   cta.appendChild(renderPill('GOT IT - START MY STREAK', () => c.hideHowItWorks()));
   scroll.appendChild(cta);
 
+  // Muted privacy opt-out entry point — deliberately quiet: present for
+  // those who look for it, invisible to the pitch.
+  const privacy = el('button', 'wv2-privacy-link', WINRV2Strings.privacyChoices);
+  privacy.addEventListener('click', () => c.showOptOutConfirmation());
+  scroll.appendChild(privacy);
+
   screen.appendChild(scroll);
+
+  if (c.optOutPhase !== 'idle') {
+    screen.appendChild(renderOptOutDialog(c));
+  }
   return screen;
+}
+
+/**
+ * The destructive "Delete my data & stop participating" confirmation (and
+ * its in-flight / failed / deleted states) — same scrim-plus-card treatment
+ * as the winners dialog, mounted inside the how-it-works screen.
+ */
+function renderOptOutDialog(c: V2ExperienceController): HTMLElement {
+  const layer = el('div', 'wv2-modal-layer');
+  const inFlight = c.optOutPhase === 'inFlight';
+
+  const dim = el('div', 'wv2-modal-dim');
+  dim.addEventListener('click', () => {
+    if (!inFlight) c.cancelOptOut();
+  });
+  layer.appendChild(dim);
+
+  const card = el('div', 'wv2-optout-card');
+  if (c.optOutPhase === 'done') {
+    card.appendChild(el('div', 'wv2-optout-success', WINRV2Strings.optOutSuccess));
+  } else {
+    card.appendChild(el('div', 'wv2-optout-title', WINRV2Strings.optOutTitle));
+    card.appendChild(el('div', 'wv2-optout-body', WINRV2Strings.optOutBody));
+    if (c.optOutPhase === 'failed' && c.optOutError) {
+      card.appendChild(el('div', 'wv2-optout-error', c.optOutError));
+    }
+    const confirm = renderPill(WINRV2Strings.optOutConfirm, () => void c.confirmOptOut(), {
+      loading: inFlight,
+    });
+    confirm.classList.add('wv2-pill-destructive');
+    card.appendChild(confirm);
+    const cancel = el('button', 'wv2-optout-cancel', WINRV2Strings.optOutCancel);
+    cancel.disabled = inFlight;
+    cancel.addEventListener('click', () => c.cancelOptOut());
+    card.appendChild(cancel);
+  }
+  layer.appendChild(card);
+  return layer;
 }
 
 // ═══ Winner prize-claim flow (splash → 4 steps + review → confirmation) ═══

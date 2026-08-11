@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.6.1 — 2026-08-11
+
+In-experience privacy opt-out (delete my data); District of Columbia added to
+the prize-claim form.
+
+- **Privacy choices** — the how-it-works ("?") screen gains a muted "Privacy
+  choices" link. It raises a destructive confirmation ("Delete my data & stop
+  participating"); confirming performs the RTD opt-out against `/optOut`,
+  shows "Your data has been deleted.", and dismisses the experience. Unlike
+  the public `WINR.optOut()` (which deliberately silences locally even when
+  the network call fails), the in-experience flow is honest: failure keeps
+  the confirmation up with "Something went wrong. Please check your
+  connection and try again." and marks nothing until the backend confirms.
+- **District of Columbia** — the prize-claim state list already carried DC;
+  it is now pinned by a regression test, per the official rules' "50 states
+  and the District of Columbia".
+- **Fixed** — `WINR_CONSTANTS.SDK_VERSION` (sent to the backend as
+  `sdkVersion`) was stuck at 2.4.0; now 2.6.1.
+
 ## 2.6.0 — 2026-08-10
 
 User-facing error messaging per the Master Field List; honest failure states —

@@ -78,6 +78,13 @@ export interface V2ControllerDeps {
   userPrefill?: { firstName?: string; lastName?: string; phone?: string; email?: string };
   /** Completes a verification-gated adoption (6-digit email OTP). */
   verifyAdoptionCode?: (request: { code: string }) => Promise<unknown>;
+  /**
+   * Performs the RTD opt-out (the how-it-works screen's "Privacy choices" →
+   * DELETE MY DATA flow). MUST reject on failure — unlike the public
+   * `WINR.optOut()`, the in-experience flow shows an honest error instead of
+   * pretending the deletion succeeded (wired to `WINR.optOutFromExperience`).
+   */
+  optOut?: () => Promise<void>;
   /** Warm-start data cached by WINR from device registration. */
   cachedGiveaway?: Giveaway | null;
   cachedSdkConfig?: SDKConfig | null;
@@ -1120,5 +1127,61 @@ export class V2ExperienceController {
   /** Close the whole experience (X buttons / GOT IT on the dashboard). */
   public requestDismiss(): void {
     this.onDismissRequest?.();
+  }
+
+  // ─── Privacy choices / RTD opt-out (how-it-works screen) ───
+  //
+  //     idle → confirming → inFlight → done → (dismiss whole experience)
+  //                     ↘ failed (inline error, retryable) ↗
+  //
+  // Failure NEVER pretends success — the confirmation stays up with the
+  // error and the destructive button remains available to retry.
+
+  /** How long "Your data has been deleted." holds before the dismiss. */
+  public static readonly OPT_OUT_SUCCESS_HOLD_MS = 1400;
+
+  /** Where the "Privacy choices" → delete-my-data flow currently is. */
+  public optOutPhase: 'idle' | 'confirming' | 'inFlight' | 'failed' | 'done' = 'idle';
+  /** Inline error on the confirmation (`optOutPhase === 'failed'`). */
+  public optOutError: string | null = null;
+
+  /** "Privacy choices" tapped — raise the destructive confirmation. */
+  public showOptOutConfirmation(): void {
+    if (this.optOutPhase !== 'idle') return;
+    this.optOutPhase = 'confirming';
+    this.onChange?.(this.state);
+  }
+
+  /** Cancel / tap-outside. A no-op while in flight or after the deletion. */
+  public cancelOptOut(): void {
+    if (this.optOutPhase !== 'confirming' && this.optOutPhase !== 'failed') return;
+    this.optOutPhase = 'idle';
+    this.optOutError = null;
+    this.onChange?.(this.state);
+  }
+
+  /**
+   * DELETE MY DATA tapped (initial attempt or retry after failure). Success
+   * shows "Your data has been deleted." briefly, then dismisses the WHOLE
+   * experience; failure keeps the confirmation up with the standard
+   * connection error and changes nothing locally.
+   */
+  public async confirmOptOut(): Promise<void> {
+    if (this.optOutPhase !== 'confirming' && this.optOutPhase !== 'failed') return;
+    this.optOutPhase = 'inFlight';
+    this.optOutError = null;
+    this.onChange?.(this.state);
+    try {
+      if (!this.deps.optOut) throw new Error('optOut dependency not wired');
+      await this.deps.optOut();
+      this.optOutPhase = 'done';
+      this.onChange?.(this.state);
+      setTimeout(() => this.requestDismiss(), V2ExperienceController.OPT_OUT_SUCCESS_HOLD_MS);
+    } catch (error) {
+      logger.error('Opt-out failed:', error);
+      this.optOutPhase = 'failed';
+      this.optOutError = WINRV2Strings.optOutFailed;
+      this.onChange?.(this.state);
+    }
   }
 }

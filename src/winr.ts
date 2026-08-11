@@ -499,6 +499,7 @@ export class WINR {
         WINR.submitEmailAndAdopt({ ...request, publisherUserId: this.resolvedUser.id }),
       verifyAdoptionCode: (request) =>
         this.client.post('/verifyAdoptionCode', request),
+      optOut: () => WINR.optOutFromExperience(),
       hasRegisteredUuid: () =>
         this.secureStorage.getItem(WINR_CONSTANTS.STORAGE_KEYS.UUID) !== null,
       userPrefill: {
@@ -746,6 +747,21 @@ export class WINR {
     WINR.instance!.markOptedOut();
     analyticsAdapter.track('winr_opted_out');
     logger.info('User opted out — experience permanently suppressed');
+  }
+
+  /**
+   * The in-experience RTD opt-out (how-it-works "Privacy choices" → DELETE
+   * MY DATA). Unlike the public {@link optOut}, a failed backend call THROWS
+   * and marks NOTHING locally — the experience shows an honest error and the
+   * user can retry; the deletion is only announced once the backend has
+   * actually tombstoned the person.
+   */
+  private static async optOutFromExperience(): Promise<void> {
+    if (!WINR.ensureConfigured()) throw new Error('WINR is not configured');
+    await WINR.instance!.client.post<{ success?: boolean }>('/optOut', {});
+    WINR.instance!.markOptedOut();
+    analyticsAdapter.track('winr_opted_out');
+    logger.info('User opted out via in-experience privacy choices — experience permanently suppressed');
   }
 
   /**

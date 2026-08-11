@@ -36,6 +36,22 @@ export const WINRV2Strings = {
   /** Auto-claim transport failure — dashboard shows UNCLAIMED plus this retryable notice. */
   claimRecordFailed: "We couldn't record today's entry. Check your connection and try again.",
 
+  // ─── Privacy choices (RTD opt-out, how-it-works screen) ───
+  /** Muted entry-point link at the bottom of the how-it-works screen. */
+  privacyChoices: 'Privacy choices',
+  optOutTitle: 'Delete my data & stop participating',
+  optOutBody:
+    'This permanently deletes your WINR data, ends your giveaway participation, and cannot be undone. You can also email info@avafli.com.',
+  optOutConfirm: 'DELETE MY DATA',
+  optOutCancel: 'Cancel',
+  /** Brief success state shown before the experience dismisses itself. */
+  optOutSuccess: 'Your data has been deleted.',
+  /**
+   * The opt-out call failed — the confirmation stays up and can retry. We
+   * never pretend the deletion succeeded.
+   */
+  optOutFailed: 'Something went wrong. Please check your connection and try again.',
+
   // ─── Dedicated failure states ───
   geoBlockedTitle: 'Not available in your location',
   geoBlockedBody:
