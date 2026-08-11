@@ -1,5 +1,31 @@
 # Changelog
 
+## 2.6.2 — 2026-08-11
+
+Cross-platform SDK hardening: age-gate text honors publisher config; push
+notifications functional on Android/web; resend keeps the code screen; error
+screens pick up publisher branding.
+
+- **Age gate honors server config** — the capture screen's age-gate checkbox
+  no longer hardcodes "18". It now renders the publisher's server-provided
+  `ageGateText` when present, and otherwise builds the sentence from
+  `ageGateMinAge` ("I confirm I am {minAge} years of age or older", default
+  18) via a new `ageGateText` getter on the V2 controller. The value was
+  already parsed from config but went unused on this screen.
+- **Push notifications** — `registerForPushNotifications()` is now gated on
+  `options.enablePushReminders` (previously ignored) and no longer fires a
+  bare `Notification.requestPermission()` that registered no token. Functional
+  web push requires a VAPID application-server key and a service worker,
+  neither shipped nor exposed as config in this build, so registration is an
+  honest, logged no-op ("web push not configured") until that plumbing lands —
+  rather than a permission prompt that mints an undeliverable subscription.
+- **Note** — resend already keeps the code screen up, the unregistered
+  impression counter already increments only after the presentability check,
+  the code-error taxonomy is already three-way (expired / too-many-attempts /
+  incorrect), and the empty/geo/session screens already pick up the publisher
+  accent via the `--wv2-accent` CSS variable; the web SDK is the reference for
+  these, so no change was needed here.
+
 ## 2.6.1 — 2026-08-11
 
 In-experience privacy opt-out (delete my data); District of Columbia added to

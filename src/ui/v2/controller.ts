@@ -356,6 +356,21 @@ export class V2ExperienceController {
     );
   }
 
+  /**
+   * Label for the capture screen's AGE-GATE checkbox. A compliance string, so
+   * it must never contradict the publisher's configured minimum age: prefer
+   * the server-provided `ageGateText` verbatim (nested per-screen, then flat
+   * legacy), and only when absent BUILD the sentence from `ageGateMinAge`
+   * (default 18) — never a hardcoded "18".
+   */
+  public get ageGateText(): string {
+    const copy = this.sdkConfig?.copy;
+    const serverText = copy?.emailCapture?.ageGateText || copy?.ageGateText;
+    if (serverText) return serverText;
+    const minAge = this.sdkConfig?.ageGateMinAge ?? 18;
+    return `I confirm I am ${minAge} years of age or older`;
+  }
+
   // ─── Email consent gate ───
 
   private get emailSubmittedKey(): string {

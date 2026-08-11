@@ -737,12 +737,15 @@ export class WINR {
   public static async optOut(): Promise<void> {
     if (!WINR.ensureConfigured()) return;
 
-    try {
-      await WINR.instance!.client.post<{ success?: boolean }>('/optOut', {});
-    } catch (error) {
-      // The local silence must stick even if the network call fails —
-      // the backend flag will catch up on the next registration.
-      logger.error(`optOut backend call failed: ${String(error)}`);
+    // A right-to-delete request MUST reach the backend. If the network call
+    // fails we throw and mark NOTHING locally — silencing the client on a
+    // failed erasure would drop the request forever (there is no later
+    // registration to "catch up", because the client is now silent). The
+    // caller surfaces the error and lets the user retry. Only on confirmed
+    // success do we suppress locally.
+    const res = await WINR.instance!.client.post<{ success?: boolean }>('/optOut', {});
+    if (res && res.success === false) {
+      throw new Error('opt-out was not accepted by the server');
     }
     WINR.instance!.markOptedOut();
     analyticsAdapter.track('winr_opted_out');
@@ -782,47 +785,28 @@ export class WINR {
    */
   public static async registerForPushNotifications(): Promise<void> {
     if (!WINR.ensureConfigured()) return;
-    
-    try {
-      if (!('Notification' in window)) {
-        throw new WINRError(
-          WINRErrorCode.InvalidState,
-          'Push notifications are not supported in this browser'
-        );
-      }
 
-      if (Notification.permission === 'denied') {
-        throw new WINRError(
-          WINRErrorCode.InvalidState,
-          'Push notifications are denied'
-        );
-      }
-
-      if (Notification.permission !== 'granted') {
-        const permission = await Notification.requestPermission();
-        if (permission !== 'granted') {
-          throw new WINRError(
-            WINRErrorCode.InvalidState,
-            'Push notification permission not granted'
-          );
-        }
-      }
-
-      analyticsAdapter.track('winr_push_notifications_enabled');
-      logger.info('Push notifications enabled');
-      
-    } catch (error) {
-      const winrError = error instanceof WINRError 
-        ? error 
-        : new WINRError(
-            WINRErrorCode.InvalidState,
-            'Failed to register for push notifications',
-            error instanceof Error ? error : undefined
-          );
-      
-      logger.error('Push notification registration failed:', winrError);
-      throw winrError;
+    // Gate on the publisher opt-in, exactly like the mobile SDKs: with
+    // `enablePushReminders` unset we never prompt for notification permission.
+    if (!WINR.instance!.config.options?.enablePushReminders) {
+      logger.debug(
+        'Push reminders not enabled (options.enablePushReminders) — skipping registration'
+      );
+      return;
     }
+
+    // HONEST NO-OP. Functional web push needs a VAPID application-server key
+    // AND a registered service worker to mint a PushSubscription the backend
+    // can deliver to — neither is shipped or exposed as config in this SDK
+    // build. The previous implementation only requested Notification
+    // permission and never called `api.registerPushToken`, so it produced a
+    // permission prompt but no registered token: the reminder could never
+    // actually be sent. Rather than fake it, we do nothing here (beyond
+    // respecting the opt-in flag) until VAPID + a service worker are wired up
+    // and the resulting subscription is POSTed via api.registerPushToken.
+    logger.info(
+      'web push not configured (no VAPID key / service worker) — push registration is a no-op'
+    );
   }
 
   // ─── Private Methods ───

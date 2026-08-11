@@ -417,7 +417,7 @@ export function renderCapture(c: V2ExperienceController, logoUrl?: string | null
   };
 
   form.appendChild(
-    renderConsentRow('I confirm I am 18 years of age or older', false, (checked) => {
+    renderConsentRow(c.ageGateText, false, (checked) => {
       isAdult = checked;
       refreshCta();
     })
