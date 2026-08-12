@@ -34,7 +34,7 @@ import { WINR } from 'winr-web-sdk';
 
 // 1. Configure the SDK
 await WINR.configure({
-  apiKey: 'YOUR_API_KEY',
+  apiKey: 'YOUR_API_KEY', // debug builds: use your winr_test_ sandbox key
   bundleId: 'com.example.myapp',
   user: {
     id: 'user_123',
@@ -56,7 +56,7 @@ await WINR.configure({
 <script>
   (async function () {
     await WINR.configure({
-      apiKey: 'YOUR_API_KEY',
+      apiKey: 'YOUR_API_KEY', // debug builds: use your winr_test_ sandbox key
       bundleId: 'com.example.myapp',
       user: { id: 'user_123', firstName: 'Jane', lastName: 'Doe' },
     });
