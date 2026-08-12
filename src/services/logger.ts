@@ -144,8 +144,10 @@ export class WINRLogger implements Logger {
    */
   public static fromEnvironment(): WINRLogger {
     try {
-      // Determine whether we are in a development build. Rollup replaces
-      // process.env.NODE_ENV at build time; production bundles are NOT 'development'.
+      // Determine whether we are in a development build. NOTE: nothing replaces
+      // process.env.NODE_ENV at build time (no @rollup/plugin-replace) — this is a
+      // RUNTIME check, and in browsers `process` is undefined, so shipped bundles
+      // always take the production path. Do not "optimize" this away.
       const isDevBuild =
         typeof process !== 'undefined' && process.env?.['NODE_ENV'] === 'development';
 

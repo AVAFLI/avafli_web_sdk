@@ -282,6 +282,7 @@ Users can also self-serve without any code from you: the experience's
 | `WINR.isAvailable` | `boolean` | Whether the experience is currently available (eligible to auto-open) |
 | `WINR.refreshConfig()` | `Promise<void>` | Re-fetch the giveaway/SDK config from the backend |
 | `WINR.registerForPushNotifications()` | `Promise<void>` | Logged no-op on web unless web push (VAPID + service worker) is configured; gated on `enablePushReminders` |
+| `WINR.optOut()` | `Promise<void>` | Right-to-delete: submits the user's opt-out and suppresses them permanently |
 
 For detailed API documentation, see the [WINR Docs](https://avafli-website.web.app/sdk/web).
 

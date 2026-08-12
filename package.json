@@ -29,7 +29,7 @@
     "lint:fix": "eslint src --ext .ts --fix",
     "assets": "node scripts/generate-assets.mjs",
     "demo": "npx -y http-server -c-1 -p 8787 .",
-    "prepare": "npm run build"
+    "prepare": "npm run clean && npm run type-check && npm run build:prod"
   },
   "keywords": [
     "winr",
