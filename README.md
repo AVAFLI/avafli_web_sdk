@@ -37,10 +37,13 @@ await WINR.configure({
   apiKey: 'YOUR_API_KEY', // debug builds: use your winr_test_ sandbox key
   bundleId: 'com.example.myapp',
   user: {
-    id: 'user_123',
+    id: 'user_123',            // only id is required — pass whatever identity you have
     firstName: 'Jane',
     lastName: 'Doe',
+    email: 'jane@example.com', // include it when you have it — pre-fills & locks the capture form (consent stays explicit)
   },
+  // Nobody signed in? omit `user` entirely — the SDK runs a stable guest session
+  debug: false, // true while integrating
 });
 
 // 2. That's it — the experience presents itself on the first visit of
