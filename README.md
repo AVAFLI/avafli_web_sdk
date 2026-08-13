@@ -221,7 +221,7 @@ Email is captured inside the SDK's own opt-in screen (see the identity section a
 Two verification paths run from that screen:
 
 - **Cross-device verified adoption.** When the typed email matches an existing WINR account (from another device or install), the SDK asks for a **6-digit code** emailed to that address before the two identities are merged — so a streak follows the person across devices without letting anyone attach to someone else's record.
-- **Soft email verification (2.8.0).** A brand-new, never-before-seen typed email surfaces a persistent, dismissible **"Verify your email"** chip on the dashboard. It **never blocks play** — the user keeps earning entries — it only affects prize-draw eligibility until the address is confirmed.
+- **Soft email verification (2.7.0+).** A brand-new, never-before-seen typed email surfaces a persistent, dismissible **"Verify your email"** chip on the dashboard. It **never blocks play** — the user keeps earning entries — it only affects prize-draw eligibility until the address is confirmed.
 
 ## Winner Experience
 
