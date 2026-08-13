@@ -1,5 +1,11 @@
 # Changelog
 
+
+## 2.8.0 — 2026-08-13
+
+- Self-heal for stale local capture state: when the server reports a fresh user for this device, the cached "email submitted" flag is cleared so the capture screen shows instead of a doomed auto-claim.
+- A claim refused with the email-required precondition now routes to the email capture screen instead of rendering as a connection error.
+- Published bundles are minified (the `prepare` script now runs the production build).
 ## 2.7.0 — 2026-08-11
 
 2.7.0 — "Verify your email" soft-verification: a persistent chip on the streak
