@@ -955,6 +955,13 @@ export class WINR {
 
       // Initialize streak state if needed
       if (!response.isReturningUser) {
+        // The server just created a FRESH user for this device, so any cached
+        // "email submitted" flag is provably stale (the previous account was
+        // deleted/reset server-side). Clear it so the capture screen shows
+        // instead of an auto-claim that the backend will refuse.
+        this.storage.removeItem(emailSubmittedStorageKey(this.config.bundleId));
+        this.currentEmailConsentStatus = false;
+
         const initialState: StreakState = {
           currentDay: response.streakDay,
           totalEntriesEarned: response.totalEntries,

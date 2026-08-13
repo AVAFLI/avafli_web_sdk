@@ -753,6 +753,23 @@ export class V2ExperienceController {
         return;
       }
 
+      if (/email confirmation is required/i.test(message)) {
+        // The server has no email for this user but our cached "email
+        // submitted" flag said otherwise — the local cache is stale (e.g. the
+        // account was deleted/reset server-side and this device re-registered
+        // fresh). Self-heal: drop the stale flag and route to email capture
+        // instead of surfacing a bogus connection error.
+        logger.info('Server requires email but local cache said captured — resetting to capture');
+        this.deps.storage.removeItem(this.emailSubmittedKey);
+        this.cancelAutoReveal();
+        this.pendingRevealGrant = null;
+        this.preClaimTotalEntries = null;
+        this.preRevealSnapshot = null;
+        this.isClaiming = false;
+        this.transition({ kind: 'emailCapture' });
+        return;
+      }
+
       if (/already claimed|already entered/i.test(message)) {
         // Another device claimed between the status fetch and our claim. Not
         // news worth celebrating twice: drop the predicted grant (cancelling
@@ -882,6 +899,23 @@ export class V2ExperienceController {
       // did NOT know (a claim only runs when claimedToday was false), so tell
       // the user what happened via a transient dashboard notice — a normal
       // open with claimedToday already known never takes this path.
+      if (/email confirmation is required/i.test(message)) {
+        // The server has no email for this user but our cached "email
+        // submitted" flag said otherwise — the local cache is stale (e.g. the
+        // account was deleted/reset server-side and this device re-registered
+        // fresh). Self-heal: drop the stale flag and route to email capture
+        // instead of surfacing a bogus connection error.
+        logger.info('Server requires email but local cache said captured — resetting to capture');
+        this.deps.storage.removeItem(this.emailSubmittedKey);
+        this.cancelAutoReveal();
+        this.pendingRevealGrant = null;
+        this.preClaimTotalEntries = null;
+        this.preRevealSnapshot = null;
+        this.isClaiming = false;
+        this.transition({ kind: 'emailCapture' });
+        return;
+      }
+
       if (/already claimed|already entered/i.test(message)) {
         logger.info('Already claimed today — updating local state');
         this.claimedToday = true;
