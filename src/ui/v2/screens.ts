@@ -43,6 +43,7 @@ import {
   isValidClaimPhone,
   monthYearDisplay,
 } from './claim';
+import { attachPlacesAutocomplete, stateNameFromShortCode } from './places-autocomplete';
 import {
   awardedAtDisplay,
   formatInt,
@@ -1779,9 +1780,13 @@ export function renderClaimSteps(
       },
       fields
     );
-    fields.appendChild(
-      stepField({ label: 'Street Address', key: 'street', refresh, autocomplete: 'address-line1' })
-    );
+    const streetField = stepField({
+      label: 'Street Address',
+      key: 'street',
+      refresh,
+      autocomplete: 'address-line1',
+    });
+    fields.appendChild(streetField);
     fields.appendChild(
       stepField({
         label: 'Apartment, Suite, etc. (optional)',
@@ -1790,9 +1795,13 @@ export function renderClaimSteps(
         autocomplete: 'address-line2',
       })
     );
-    fields.appendChild(
-      stepField({ label: 'City', key: 'city', refresh, autocomplete: 'address-level2' })
-    );
+    const cityField = stepField({
+      label: 'City',
+      key: 'city',
+      refresh,
+      autocomplete: 'address-level2',
+    });
+    fields.appendChild(cityField);
 
     // State picker + zip, side by side.
     const row = el('div', 'wv2-sf-row');
@@ -1830,6 +1839,40 @@ export function renderClaimSteps(
     fields.appendChild(
       lockedField({ label: 'Country', value: CLAIM_COUNTRY, dimmed: false, showsChevron: true })
     );
+
+    // Google Places autocomplete on the street field — ONLY when the server
+    // configured a key (sdkConfig.placesApiKey). A selection fills all four
+    // address fields; every field stays fully hand-editable afterward, and
+    // without a key (or on any Places failure) this step behaves exactly as
+    // the plain fields above.
+    attachPlacesAutocomplete({
+      apiKey: c.sdkConfig?.placesApiKey,
+      input: streetField.querySelector('input') as HTMLInputElement,
+      onAddress: (address) => {
+        const streetInput = streetField.querySelector('input') as HTMLInputElement;
+        const cityInput = cityField.querySelector('input') as HTMLInputElement;
+        const zipInput = zip.querySelector('input') as HTMLInputElement;
+        if (address.street) {
+          form.street = address.street;
+          streetInput.value = address.street;
+        }
+        if (address.city) {
+          form.city = address.city;
+          cityInput.value = address.city;
+        }
+        const stateName = stateNameFromShortCode(address.state);
+        if (stateName) {
+          form.state = stateName;
+          select.value = stateName;
+          select.classList.remove('wv2-placeholder');
+        }
+        // Zip is set even when Google omits it — a stale zip from a previous
+        // address would silently ship the prize to the wrong place.
+        form.zip = address.zip.replace(/\D/g, '').slice(0, 5);
+        zipInput.value = form.zip;
+        refresh();
+      },
+    });
     return page;
   };
 

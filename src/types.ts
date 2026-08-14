@@ -379,6 +379,12 @@ export interface SDKConfig {
   bonusEntriesEnabled?: boolean;
   /** Experience behavior (V2 auto-open flow). Absent → SDK defaults apply. */
   experience?: ExperienceConfig;
+  /**
+   * Google Places API (New) key enabling address autocomplete on the claim
+   * form's street field. OPTIONAL — absent means the address step renders
+   * exactly as plain fields (no Places calls are ever made).
+   */
+  placesApiKey?: string;
 }
 
 export interface RefreshTokenRequest {

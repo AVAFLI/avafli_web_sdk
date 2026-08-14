@@ -827,6 +827,25 @@ button.wv2-dash-notice { cursor: pointer; }
 .wv2-sf-chevron { width: 13px; height: 9px; color: rgba(255,255,255,0.7); flex: none; }
 .wv2-sf-select-wrap .wv2-sf-chevron { position: absolute; right: 25px; top: 50%; transform: translateY(-50%); pointer-events: none; }
 
+/* Places address-autocomplete dropdown (only when sdkConfig.placesApiKey is
+   set): anchored under the street field, same dark fill/border family as the
+   claim fields, with the required "powered by Google" attribution line. */
+.wv2-places-anchor { position: relative; }
+.wv2-places-dd {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 40;
+  background: #212832; border: 1px solid #3d424b; border-radius: 10px;
+  overflow: hidden; box-shadow: 0 10px 24px rgba(0,0,0,0.5);
+}
+.wv2-places-item {
+  padding: 13px 25px; font-size: 15px; color: #fff; cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.wv2-places-item:hover, .wv2-places-item.wv2-active { background: rgba(255,255,255,0.08); }
+.wv2-places-attrib {
+  padding: 6px 25px 9px; font-size: 11px; color: rgba(255,255,255,0.45);
+  text-align: right;
+}
+
 /* Step 3: 242px circular preview with accent ring + camera badge breaking
    the bottom-right edge, UPLOAD/TAKE PHOTO outline buttons. */
 .wv2-step3 { display: flex; flex-direction: column; align-items: center; padding-top: 26px; }

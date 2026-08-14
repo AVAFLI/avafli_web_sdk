@@ -25,6 +25,13 @@ cross-device adoption re-entry, and a conservative desktop layout.
   available, else copy-to-clipboard with a "Copied! Paste it in your post"
   toast. The share line includes the publisher's `shareUrl` — a new optional
   `sdkConfig` field.
+- **Address autocomplete (Google Places)** — when the server configures the
+  new optional `sdkConfig.placesApiKey`, the claim form's Street Address
+  field suggests US addresses as the winner types (debounced, keyboard-
+  navigable, "powered by Google" attribution) and a selection fills
+  street/city/state/zip — every field stays hand-editable. Plain `fetch`
+  against the Places API (New), no Google SDK; without a key, or on any
+  network/quota failure, the address step behaves exactly as plain fields.
 - **Privacy choices surface** — the how-it-works ("?") screen's Privacy
   choices link now opens a small surface (privacy-policy link + delete my
   data) instead of jumping straight to the delete confirmation; the existing
