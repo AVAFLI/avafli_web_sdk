@@ -1,6 +1,49 @@
 # Changelog
 
 
+## 2.9.0 — 2026-08-14
+
+Post-submit share step with real share actions, claim review slimmed to one
+optional promo-consent checkbox, in-experience privacy-choices surface,
+cross-device adoption re-entry, and a conservative desktop layout.
+
+- **Claim review simplified** — the "information is accurate" and "agree to
+  Official Rules" checkboxes are gone (rules and privacy policy remain as
+  plain links). Only the likeness/promotion checkbox remains: **optional**,
+  unchecked by default (affirmative-consent posture, Android parity), and it
+  never gates SUBMIT. Its state is always sent as an explicit
+  `promoConsentGranted` boolean.
+- **Share step moved after submit** — the claim flow is now 3 steps +
+  review/submit → share → confirmation. The claim is recorded before the
+  share step appears, and closing it changes nothing. The story typed on the
+  share step no longer rides `submitPrizeClaim`; it is attached via the new
+  authed `attachClaimStory` callable (`{story}` → `{saved}`), flushed on DONE
+  and on every dismissal path — fire-and-forget with one retry, at most once.
+- **Real share actions** — X opens a tweet intent with a prefilled line;
+  Facebook opens the sharer with the URL only (the platform disallows
+  prefilled text); Instagram/Snapchat/TikTok use the Web Share API when
+  available, else copy-to-clipboard with a "Copied! Paste it in your post"
+  toast. The share line includes the publisher's `shareUrl` — a new optional
+  `sdkConfig` field.
+- **Privacy choices surface** — the how-it-works ("?") screen's Privacy
+  choices link now opens a small surface (privacy-policy link + delete my
+  data) instead of jumping straight to the delete confirmation; the existing
+  destructive confirm is unchanged and fully reachable.
+- **Adoption re-entry** — a new optional `adoptionPending` on the register
+  response routes the next open to the 6-digit code screen (via the new
+  `restageAdoption` callable) with a "Pick up where you left off" subtitle;
+  re-entry resends go through `restageAdoption`; one-shot, cleared on
+  successful verification.
+- **Desktop layout (≥900px)** — conservative widening to a 600px card with a
+  modest type/spacing scale-up; below 900px nothing changed.
+- **Flat capture background** — the email capture screen drops its radial
+  accent glow and sits on the same flat gunmetal as the streak dashboard.
+- **Fixed** — the claim form's zip field clipped its digits (101px box minus
+  50px of padding); now flex-basis 118px with 16px padding.
+- **Note** — the cross-platform "keyboard-safe forms" item is not applicable
+  on web: the browser manages viewport insets and scroll-into-view for
+  focused fields, so no change was needed here.
+
 ## 2.8.0 — 2026-08-13
 
 - Self-heal for stale local capture state: when the server reports a fresh user for this device, the cached "email submitted" flag is cleared so the capture screen shows instead of a doomed auto-claim.

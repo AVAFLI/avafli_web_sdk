@@ -18,8 +18,8 @@ WINR lets you add daily-entry sweepstakes and prize experiences to your app in u
 - **Email capture** — The SDK captures an email through its own opt-in screen, with an UNCHECKED-by-default marketing-consent tick and a publisher-configurable age gate
 - **Cross-device verified adoption** — When a typed email matches an existing account, the SDK confirms a 6-digit code before merging the streak across devices
 - **Soft email verification** — A brand-new typed email shows a persistent, dismissible "Verify your email" chip; it never blocks play, only prize-draw eligibility
-- **Winner claim flow** — "WE HAVE A WINNER!" splash and a guided prize-claim flow (name, shipping address incl. DC, optional photo/story, claim number)
-- **Responsive V2 design** — Bottom drawer on mobile (<768px), centered modal card on desktop (≥768px)
+- **Winner claim flow** — "WE HAVE A WINNER!" splash and a guided prize-claim flow (name, shipping address incl. DC, optional photo), followed by a post-submit share step (optional story + real share actions) and a claim-number confirmation
+- **Responsive V2 design** — Bottom drawer on mobile (<768px), centered modal card on desktop (≥768px, widened with a modest type/spacing scale-up at ≥900px)
 - **Publisher branding** — Logo, primary color, and prize image configured from the WINR dashboard
 - **GDPR/CCPA compliant** — Built-in consent flows, RTD opt-out via `optOut()`, and an in-app "Privacy choices → delete my data"
 - **Analytics forwarding** — Route SDK events to your existing analytics stack
@@ -115,7 +115,7 @@ attribution upgrades in place and the streak carries over automatically.
 ### npm
 
 ```bash
-npm install winr-web-sdk@^2.8.0
+npm install winr-web-sdk@^2.9.0
 ```
 
 ```typescript
@@ -225,7 +225,11 @@ Two verification paths run from that screen:
 
 ## Winner Experience
 
-When one of your users is drawn as a giveaway winner, the experience automatically opens on a winner splash instead of the dashboard, then walks them through a 4-step prize-claim form with progress dots (name, shipping address, optional photo and story) plus a review-and-agree screen, ending in a confirmation with their claim number on a keepsake OFFICIAL WINNER card. This requires no integration work — the flow appears only for the drawn winner and disappears once their claim is submitted. The winning email is never re-entered; a backend-masked address is displayed for recognition and the claim is keyed to the account server-side.
+When one of your users is drawn as a giveaway winner, the experience automatically opens on a winner splash instead of the dashboard, then walks them through a 3-step prize-claim form with progress dots (name, shipping address, optional photo) plus a review screen, ending in a confirmation with their claim number on a keepsake OFFICIAL WINNER card. The review screen carries a single **optional** likeness/promotion checkbox — unchecked by default, it never gates SUBMIT; its state is reported to the backend as an explicit `promoConsentGranted` boolean (the Official Rules and privacy policy remain as plain links).
+
+After the claim is submitted — and never blocking it — a **share step** invites the winner to tell their story and share the news: X opens a prefilled tweet intent, Facebook opens the share dialog, and Instagram/Snapchat/TikTok use the Web Share API where available (falling back to copy-to-clipboard with a "Copied!" toast). The share line includes your publisher `shareUrl` when one is configured in the dashboard. Closing the share step changes nothing about the claim.
+
+This requires no integration work — the flow appears only for the drawn winner and disappears once their claim is submitted. The winning email is never re-entered; a backend-masked address is displayed for recognition and the claim is keyed to the account server-side.
 
 ## Push Notifications
 
@@ -292,8 +296,9 @@ drawing was fair and that a prize went to a real eligible person, which a sweeps
 operator must be able to show; GDPR Art. 17(3) exempts data needed for legal claims.
 The person is erased, the proof is kept.
 
-Users can also self-serve without any code from you: the experience's
-**Privacy choices → delete my data** flow runs the same erasure as `optOut()`.
+Users can also self-serve without any code from you: the how-it-works ("?")
+screen's **Privacy choices** surface (privacy policy link + **delete my data**)
+runs the same erasure as `optOut()`, behind a destructive confirmation.
 
 ## API Reference
 
