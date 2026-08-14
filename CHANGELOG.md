@@ -1,6 +1,10 @@
 # Changelog
 
 
+## 2.9.1 — 2026-08-14
+
+- Share screen social icons updated to the official WINR brand set (Figma).
+
 ## 2.9.0 — 2026-08-14
 
 Post-submit share step with real share actions, claim review slimmed to one
