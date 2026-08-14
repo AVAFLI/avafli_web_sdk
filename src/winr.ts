@@ -87,6 +87,13 @@ export class WINR {
   // reopen re-registers, but registerDevice reuses the user by device fingerprint.
   private currentClaimedToday = false;
   private currentEmailConsentStatus = false;
+  /**
+   * Adoption RE-ENTRY (2.9): the register response reported an adoption that
+   * was started (email typed, code mailed) but never completed on this
+   * device. While true, the next drawer-open routes to the 6-digit code
+   * screen after restaging the adoption. Cleared when the code is verified.
+   */
+  private currentAdoptionPending = false;
   private streakEngine: StreakEngine;
   /**
    * Non-sensitive preferences (device fingerprint, cached giveaway, streak
@@ -504,6 +511,17 @@ export class WINR {
         this.client.post('/confirmEmailVerification', request),
       resendEmailVerification: () =>
         this.client.post('/resendEmailVerification', {}),
+      // Adoption re-entry (2.9): restageAdoption re-sends the 6-digit code
+      // for an adoption this device started but never finished.
+      adoptionPending: this.currentAdoptionPending,
+      restageAdoption: () => this.client.post<{ sent?: boolean }>('/restageAdoption', {}),
+      onAdoptionResolved: () => {
+        this.currentAdoptionPending = false;
+      },
+      // 2.9: attaches the post-submit share step's story to the already
+      // submitted claim ({ story } → { saved }); best-effort by contract.
+      attachClaimStory: (request) =>
+        this.client.post<{ saved?: boolean }>('/attachClaimStory', request),
       optOut: () => WINR.optOutFromExperience(),
       hasRegisteredUuid: () =>
         this.secureStorage.getItem(WINR_CONSTANTS.STORAGE_KEYS.UUID) !== null,
@@ -947,6 +965,9 @@ export class WINR {
       // Per-user backend truth used by the auto-open engine (impression cap,
       // RTD suppression) before the first getActiveGiveaway round-trip.
       this.currentClaimedToday = response.claimedToday === true;
+      // 2.9: an unfinished cross-device adoption routes the next drawer-open
+      // to the code screen (optional field — absent on older backends).
+      this.currentAdoptionPending = response.adoptionPending === true;
       if (response.emailConsentStatus === true) {
         this.currentEmailConsentStatus = true;
         this.storage.setItem(emailSubmittedStorageKey(this.config.bundleId), 'true');
@@ -1088,6 +1109,8 @@ export class WINR {
       copy: this.serverSDKConfig?.copy || {},
       bonusEntriesEnabled: this.serverSDKConfig?.bonusEntriesEnabled,
       rulesUrl: this.serverSDKConfig?.rulesUrl,
+      // 2.9: publisher share link for the winner share step (server-only).
+      shareUrl: this.serverSDKConfig?.shareUrl,
       ageGateEnabled: this.serverSDKConfig?.ageGateEnabled ?? this.config.options?.enableAgeGate ?? true,
       ageGateMinAge: this.serverSDKConfig?.ageGateMinAge ?? this.config.options?.ageGateMinAge ?? 18,
       experience: this.serverSDKConfig?.experience,

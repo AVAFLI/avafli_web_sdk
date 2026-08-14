@@ -337,11 +337,12 @@ export function renderCapture(c: V2ExperienceController, logoUrl?: string | null
   const giveaway = c.giveaway;
   const day1Entries = c.ladderValue(1);
 
+  // 2.9: no accent glow here anymore — the capture screen shares the streak
+  // dashboard drawer's flat dark background (V2_COLORS.gunmetal, carried by
+  // .wv2-screen), exactly.
   const screen = el('div', 'wv2-screen');
-  screen.appendChild(el('div', 'wv2-top-glow'));
 
   const scroll = el('div', 'wv2-scroll');
-  scroll.style.position = 'relative';
   const stack = el('div', 'wv2-capture-stack');
 
   stack.appendChild(
@@ -1255,10 +1256,12 @@ export function renderHowItWorks(c: V2ExperienceController, logoUrl?: string | n
   cta.appendChild(renderPill('GOT IT - START MY STREAK', () => c.hideHowItWorks()));
   scroll.appendChild(cta);
 
-  // Muted privacy opt-out entry point — deliberately quiet: present for
-  // those who look for it, invisible to the pitch.
+  // Muted privacy entry point — deliberately quiet: present for those who
+  // look for it, invisible to the pitch. 2.9: opens the PRIVACY CHOICES
+  // surface (privacy-policy link + delete-my-data) instead of jumping
+  // straight to the delete confirmation.
   const privacy = el('button', 'wv2-privacy-link', WINRV2Strings.privacyChoices);
-  privacy.addEventListener('click', () => c.showOptOutConfirmation());
+  privacy.addEventListener('click', () => c.showPrivacyChoices());
   scroll.appendChild(privacy);
 
   screen.appendChild(scroll);
@@ -1270,9 +1273,14 @@ export function renderHowItWorks(c: V2ExperienceController, logoUrl?: string | n
 }
 
 /**
- * The destructive "Delete my data & stop participating" confirmation (and
- * its in-flight / failed / deleted states) — same scrim-plus-card treatment
- * as the winners dialog, mounted inside the how-it-works screen.
+ * The "Privacy choices" surface and the destructive "Delete my data & stop
+ * participating" confirmation (plus its in-flight / failed / deleted states)
+ * — same scrim-plus-card treatment as the winners dialog, mounted inside the
+ * how-it-works screen.
+ *
+ * 2.9: the first card shown is the PRIVACY CHOICES surface (`phase ===
+ * 'choices'`): the privacy-policy link AND the delete-my-data action live
+ * here; delete then raises the existing destructive confirmation.
  */
 function renderOptOutDialog(c: V2ExperienceController): HTMLElement {
   const layer = el('div', 'wv2-modal-layer');
@@ -1283,6 +1291,29 @@ function renderOptOutDialog(c: V2ExperienceController): HTMLElement {
     if (!inFlight) c.cancelOptOut();
   });
   layer.appendChild(dim);
+
+  if (c.optOutPhase === 'choices') {
+    const card = el('div', 'wv2-optout-card');
+    card.appendChild(el('div', 'wv2-optout-title', WINRV2Strings.privacyChoicesTitle));
+
+    // Privacy policy — plain link, same destination as the legal footer.
+    const policy = el('button', 'wv2-privacy-choice-link', WINRV2Strings.privacyPolicyLink);
+    policy.addEventListener('click', () => openUrl(c.rulesUrl));
+    card.appendChild(policy);
+
+    // Delete-my-data — raises the existing destructive confirmation.
+    const del = el('button', 'wv2-privacy-choice-link wv2-privacy-choice-delete');
+    del.textContent = WINRV2Strings.optOutTitle;
+    del.addEventListener('click', () => c.showOptOutConfirmation());
+    card.appendChild(del);
+
+    const cancel = el('button', 'wv2-optout-cancel', WINRV2Strings.optOutCancel);
+    cancel.addEventListener('click', () => c.cancelOptOut());
+    card.appendChild(cancel);
+
+    layer.appendChild(card);
+    return layer;
+  }
 
   const card = el('div', 'wv2-optout-card');
   if (c.optOutPhase === 'done') {
@@ -1409,14 +1440,19 @@ export function renderWinnerSplash(
   return screen;
 }
 
-// ─── Stepped claim form (Joe's Figma flow: 4 steps + review) ───
+// ─── Stepped claim form (2.9: 3 steps + review; share moved POST-submit) ───
 // Ported from iOS WINRV2ClaimSteps/: a persistent gold-sparkle backdrop +
-// header + animated step indicator, with the four form steps and the review
+// header + animated step indicator, with the form steps and the review
 // screen sliding horizontally beneath them (push left on advance, push right
-// on back).
+// on back). The "PLEASE SHARE A LITTLE" step no longer lives here — it shows
+// AFTER the claim is submitted (see renderWinnerShare) so it can never block
+// the claim.
 
-/** The five screens of the stepped form (5 = review, no step indicator). */
-type ClaimFlowStep = 1 | 2 | 3 | 4 | 5;
+/** The four screens of the stepped form (4 = review, no step indicator). */
+type ClaimFlowStep = 1 | 2 | 3 | 4;
+
+/** How many numbered steps the indicator shows (review is unnumbered). */
+const CLAIM_STEP_COUNT = 3;
 
 export function renderClaimSteps(
   c: V2ExperienceController,
@@ -1474,18 +1510,18 @@ export function renderClaimSteps(
   header.appendChild(close);
   flow.appendChild(header);
 
-  // "STEP N OF 4" + the row of 4 dots connected by accent lines. The fill
+  // "STEP N OF 3" + the row of 3 dots connected by accent lines. The fill
   // animates via CSS transitions; hidden on the review screen.
   const indicator = el('div', 'wv2-step-indicator');
   const stepLabel = el('div', 'wv2-step-label');
   indicator.appendChild(stepLabel);
   const dotsRow = el('div', 'wv2-step-dots');
   const dots: HTMLElement[] = [];
-  for (let i = 1; i <= 4; i++) {
+  for (let i = 1; i <= CLAIM_STEP_COUNT; i++) {
     const dot = el('div', 'wv2-step-dot');
     dots.push(dot);
     dotsRow.appendChild(dot);
-    if (i < 4) dotsRow.appendChild(el('div', 'wv2-step-line'));
+    if (i < CLAIM_STEP_COUNT) dotsRow.appendChild(el('div', 'wv2-step-line'));
   }
   indicator.appendChild(dotsRow);
   flow.appendChild(indicator);
@@ -1497,12 +1533,12 @@ export function renderClaimSteps(
 
   const syncChrome = (): void => {
     back.style.visibility = step === 1 ? 'hidden' : 'visible';
-    if (step === 5) {
+    if (step === 4) {
       indicator.classList.add('wv2-step-indicator-hidden');
     } else {
       indicator.classList.remove('wv2-step-indicator-hidden');
-      stepLabel.textContent = `STEP ${step} OF 4`;
-      indicator.setAttribute('aria-label', `Step ${step} of 4`);
+      stepLabel.textContent = `STEP ${step} OF ${CLAIM_STEP_COUNT}`;
+      indicator.setAttribute('aria-label', `Step ${step} of ${CLAIM_STEP_COUNT}`);
       dots.forEach((dot, i) => dot.classList.toggle('wv2-filled', i + 1 <= step));
     }
   };
@@ -1891,123 +1927,60 @@ export function renderClaimSteps(
     return page;
   };
 
-  // ── Step 4: PLEASE SHARE A LITTLE ──
-
-  /** Generic share line for the social buttons. */
-  const shareLine = (): string => {
-    const prize = stripHeadline(claim.prizeDescription, Math.round(claim.prizeValue));
-    const site = document.title.trim();
-    return site ? `I just won ${prize} on ${site}!` : `I just won ${prize}!`;
-  };
-
-  /** Best-effort share: the native share sheet where available, otherwise
-      copy the line to the clipboard. */
-  const share = (): void => {
-    const text = shareLine();
-    const nav = navigator as Navigator & { share?: (data: { text: string }) => Promise<void> };
-    if (typeof nav.share === 'function') {
-      nav.share({ text }).catch(() => undefined);
-    } else if (navigator.clipboard) {
-      navigator.clipboard.writeText(text).catch(() => undefined);
-    }
-  };
-
-  const renderStep4 = (): HTMLElement => {
-    const content = el('div', 'wv2-step4');
-
-    const storyWrap = el('div', 'wv2-story');
-    const story = el('textarea', 'wv2-story-input');
-    story.placeholder =
-      'Please share anything. What you’re going to do with the prize, why you love our app, your favorite food, etc.';
-    story.value = form.story;
-    story.addEventListener('input', () => {
-      form.story = story.value;
-    });
-    storyWrap.appendChild(story);
-    content.appendChild(storyWrap);
-
-    const social = el('div', 'wv2-social');
-    social.appendChild(el('div', 'wv2-social-title', 'Share on Social Media:'));
-    const socialRow = el('div', 'wv2-social-row');
-    const glyphs: Array<[string, string]> = [
-      [socialInstagramIcon, 'Instagram'],
-      [socialFacebookIcon, 'Facebook'],
-      [socialXIcon, 'X'],
-      [socialSnapchatIcon, 'Snapchat'],
-      [socialTiktokIcon, 'TikTok'],
-    ];
-    for (const [glyph, name] of glyphs) {
-      const btn = el('button', 'wv2-social-btn');
-      btn.type = 'button';
-      btn.appendChild(icon(glyph, 'wv2-social-glyph'));
-      btn.setAttribute('aria-label', `Share on ${name}`);
-      btn.addEventListener('click', share);
-      socialRow.appendChild(btn);
-    }
-    social.appendChild(socialRow);
-    content.appendChild(social);
-
-    const { page } = buildPage(
-      {
-        title: 'PLEASE SHARE A LITTLE',
-        subtitle: 'This helps us show real people like you win!',
-        onCTA: () => go(5),
-      },
-      content
-    );
-    return page;
-  };
-
   // ── Review: ALMOST DONE! ──
+  // 2.9 (team decision 14 Aug): checkboxes 1 ("information is accurate") and
+  // 3 ("agree to Official Rules") are REMOVED — the rules/privacy links stay
+  // visible as plain links. Only the likeness/promotion checkbox remains,
+  // and it is OPTIONAL: SUBMIT never waits on it; its state travels as
+  // `promoConsentGranted` on the claim payload.
 
   const renderReview = (): HTMLElement => {
     const content = el('div', 'wv2-review');
 
     const consents = el('div', 'wv2-consents');
-    type ConsentKey = 'confirmsAccuracy' | 'authorizesLikeness' | 'agreesToRules';
-    const consentRow = (key: ConsentKey, label: HTMLElement): HTMLElement => {
-      const btnRow = el('button', 'wv2-consent-row');
-      btnRow.type = 'button';
-      const box = el('span', 'wv2-consent-box');
-      box.innerHTML = checkIconSvg;
-      btnRow.appendChild(box);
-      btnRow.appendChild(label);
-      const sync = (): void => {
-        box.classList.toggle('wv2-consent-on', form[key]);
-        btnRow.setAttribute('aria-pressed', String(form[key]));
-      };
-      btnRow.addEventListener('click', () => {
-        form[key] = !form[key];
-        sync();
-        refresh();
-      });
-      sync();
-      return btnRow;
+    const likenessRow = el('button', 'wv2-consent-row');
+    likenessRow.type = 'button';
+    const box = el('span', 'wv2-consent-box');
+    box.innerHTML = checkIconSvg;
+    likenessRow.appendChild(box);
+    likenessRow.appendChild(
+      el(
+        'span',
+        'wv2-consent-text',
+        "I authorize this app's publisher and its promotional partners to use my name, city, profile photo, and likeness for winner announcements and promotional purposes. (Optional)"
+      )
+    );
+    const syncLikeness = (): void => {
+      box.classList.toggle('wv2-consent-on', form.authorizesLikeness);
+      likenessRow.setAttribute('aria-pressed', String(form.authorizesLikeness));
     };
-    consents.appendChild(
-      consentRow(
-        'confirmsAccuracy',
-        el('span', 'wv2-consent-text', 'I confirm my information is accurate.')
-      )
-    );
-    consents.appendChild(
-      consentRow(
-        'authorizesLikeness',
-        el(
-          'span',
-          'wv2-consent-text',
-          "I authorize this app's publisher and its promotional partners to use my name, city, profile photo, and likeness for winner announcements and promotional purposes."
-        )
-      )
-    );
-    const rulesText = el('span', 'wv2-consent-text');
-    rulesText.appendChild(document.createTextNode('I agree to the '));
-    rulesText.appendChild(el('span', 'wv2-consent-em', 'Official Rules'));
-    rulesText.appendChild(document.createTextNode(' and '));
-    rulesText.appendChild(el('span', 'wv2-consent-em', 'Privacy Policy'));
-    rulesText.appendChild(document.createTextNode('.'));
-    consents.appendChild(consentRow('agreesToRules', rulesText));
+    likenessRow.addEventListener('click', () => {
+      form.authorizesLikeness = !form.authorizesLikeness;
+      syncLikeness();
+    });
+    syncLikeness();
+    consents.appendChild(likenessRow);
     content.appendChild(consents);
+
+    // Official Rules / Privacy Policy — kept visible as PLAIN LINKS (no
+    // checkbox): entering already bound the user per the capture screen.
+    const legalRow = el('div', 'wv2-review-links');
+    const rules = el('a', undefined, 'Official Rules');
+    rules.href = c.rulesUrl || '#';
+    rules.addEventListener('click', (e) => {
+      e.preventDefault();
+      openUrl(c.rulesUrl);
+    });
+    const privacy = el('a', undefined, 'Privacy Policy');
+    privacy.href = c.rulesUrl || '#';
+    privacy.addEventListener('click', (e) => {
+      e.preventDefault();
+      openUrl(c.rulesUrl);
+    });
+    legalRow.appendChild(rules);
+    legalRow.appendChild(el('span', 'wv2-legal-dot'));
+    legalRow.appendChild(privacy);
+    content.appendChild(legalRow);
 
     const errorEl = el('div', 'wv2-claim-error');
     errorEl.style.display = 'none';
@@ -2042,10 +2015,12 @@ export function renderClaimSteps(
       }
     };
 
-    const { page, refresh } = buildPage(
+    const { page } = buildPage(
       {
+        // SUBMIT is always enabled here (the required steps gated their own
+        // CONTINUEs) — the optional likeness checkbox never dims it.
         title: 'ALMOST DONE!',
-        subtitle: 'Please review and agree to claim your prize.',
+        subtitle: 'Please review and submit to claim your prize.',
         ctaTitle: 'SUBMIT PRIZE CLAIM',
         ctaEnabled: () => isClaimFormValid(form),
         onCTA: (cta) => void onSubmit(cta),
@@ -2065,8 +2040,6 @@ export function renderClaimSteps(
       case 3:
         return renderStep3();
       case 4:
-        return renderStep4();
-      case 5:
         return renderReview();
     }
   };
@@ -2080,6 +2053,151 @@ export function renderClaimSteps(
 const checkIconSvg =
   '<svg viewBox="0 0 14 11" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block;width:13px;height:10px">' +
   '<path d="M1.5 5.5L5.2 9.2L12.5 1.5" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+// ─── Share step ("PLEASE SHARE A LITTLE") — POST-submit, never blocking ───
+
+/**
+ * 2.9: the share step shows AFTER the claim is submitted. The claim is
+ * already recorded server-side, so nothing here can gate or undo it —
+ * CONTINUE advances to the confirmation screen and the X simply closes the
+ * drawer; both leave the claim untouched.
+ *
+ * The social buttons perform REAL, honest actions (team decision 14 Aug):
+ *  - X: tweet intent, prefilled "I just won {prize} in {appName}!" plus the
+ *    publisher's shareUrl when configured.
+ *  - Facebook: the sharer with the shareUrl. FB does not allow prefilled
+ *    text — that is a platform rule, so none is faked.
+ *  - Instagram / Snapchat / TikTok: NO web prefill APIs exist. Use the Web
+ *    Share API (text + url) when available; otherwise copy the line to the
+ *    clipboard with a "Copied! Paste it in your post" toast.
+ * Same icons as before — nothing removed visually.
+ */
+export function renderWinnerShare(
+  c: V2ExperienceController,
+  claim: PrizeClaimBlock,
+  logoUrl?: string | null
+): HTMLElement {
+  const screen = el('div', 'wv2-screen wv2-claim-screen');
+
+  // Same gold-sparkle backdrop as the stepped form.
+  const backdrop = el('div', 'wv2-claim-form-bg');
+  const backdropImg = el('img');
+  backdropImg.src = V2_IMAGES.winnerModalBg;
+  backdropImg.alt = '';
+  backdrop.appendChild(backdropImg);
+  backdrop.appendChild(el('div', 'wv2-claim-form-bg-grad'));
+  screen.appendChild(backdrop);
+
+  const flow = el('div', 'wv2-claim-flow');
+  flow.appendChild(renderClaimHeader(logoUrl, () => c.requestDismiss()));
+
+  const scroll = el('div', 'wv2-scroll');
+  scroll.style.position = 'relative';
+  const stack = el('div', 'wv2-step-stack');
+  stack.appendChild(el('div', 'wv2-step-title', 'PLEASE SHARE A LITTLE'));
+  stack.appendChild(
+    el('div', 'wv2-step-subtitle', 'This helps us show real people like you win!')
+  );
+
+  const content = el('div', 'wv2-step4');
+
+  // The story draft lives on the CONTROLLER so every exit path (DONE, X,
+  // backdrop, Escape) can attach it via attachClaimStory — never lost.
+  const storyWrap = el('div', 'wv2-story');
+  const story = el('textarea', 'wv2-story-input');
+  story.placeholder =
+    'Please share anything. What you’re going to do with the prize, why you love our app, your favorite food, etc.';
+  story.value = c.claimStoryDraft;
+  story.addEventListener('input', () => {
+    c.claimStoryDraft = story.value;
+  });
+  storyWrap.appendChild(story);
+  content.appendChild(storyWrap);
+
+  /** "I just won {prize} in {appName}!" — appName is the host page's title. */
+  const shareLine = (): string => {
+    const prize = stripHeadline(claim.prizeDescription, Math.round(claim.prizeValue));
+    const appName = document.title.trim();
+    return appName ? `I just won ${prize} in ${appName}!` : `I just won ${prize}!`;
+  };
+
+  const shareUrl = c.shareUrl;
+
+  // Transient "Copied!" toast for the clipboard fallback.
+  let toastTimer: number | null = null;
+  const toast = el('div', 'wv2-share-toast', WINRV2Strings.shareCopied);
+  screen.appendChild(toast);
+  const showToast = (): void => {
+    toast.classList.add('wv2-visible');
+    if (toastTimer !== null) window.clearTimeout(toastTimer);
+    toastTimer = window.setTimeout(() => {
+      toast.classList.remove('wv2-visible');
+      toastTimer = null;
+    }, 2200);
+  };
+
+  /** IG/Snap/TikTok: Web Share API when available, else clipboard + toast. */
+  const systemShare = (): void => {
+    const text = shareLine();
+    const nav = navigator as Navigator & {
+      share?: (data: { text: string; url?: string }) => Promise<void>;
+    };
+    if (typeof nav.share === 'function') {
+      nav.share({ text, ...(shareUrl ? { url: shareUrl } : {}) }).catch(() => undefined);
+    } else if (navigator.clipboard) {
+      const line = shareUrl ? `${text} ${shareUrl}` : text;
+      navigator.clipboard
+        .writeText(line)
+        .then(showToast)
+        .catch(() => undefined);
+    }
+  };
+
+  const shareToX = (): void => {
+    const params = new URLSearchParams({ text: shareLine() });
+    if (shareUrl) params.set('url', shareUrl);
+    openUrl(`https://twitter.com/intent/tweet?${params.toString()}`);
+  };
+
+  const shareToFacebook = (): void => {
+    // FB's sharer takes ONLY a URL (prefilled text is not allowed by the
+    // platform). Fall back to the host page when no shareUrl is configured.
+    const u = shareUrl || window.location.href;
+    openUrl(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(u)}`);
+  };
+
+  const social = el('div', 'wv2-social');
+  social.appendChild(el('div', 'wv2-social-title', 'Share on Social Media:'));
+  const socialRow = el('div', 'wv2-social-row');
+  const glyphs: Array<[string, string, () => void]> = [
+    [socialInstagramIcon, 'Instagram', systemShare],
+    [socialFacebookIcon, 'Facebook', shareToFacebook],
+    [socialXIcon, 'X', shareToX],
+    [socialSnapchatIcon, 'Snapchat', systemShare],
+    [socialTiktokIcon, 'TikTok', systemShare],
+  ];
+  for (const [glyph, name, action] of glyphs) {
+    const btn = el('button', 'wv2-social-btn');
+    btn.type = 'button';
+    btn.appendChild(icon(glyph, 'wv2-social-glyph'));
+    btn.setAttribute('aria-label', `Share on ${name}`);
+    btn.addEventListener('click', action);
+    socialRow.appendChild(btn);
+  }
+  social.appendChild(socialRow);
+  content.appendChild(social);
+
+  stack.appendChild(content);
+
+  const ctaWrap = el('div', 'wv2-step-cta');
+  ctaWrap.appendChild(renderPill('CONTINUE', () => c.winnerShareContinue()));
+  stack.appendChild(ctaWrap);
+
+  scroll.appendChild(stack);
+  flow.appendChild(scroll);
+  screen.appendChild(flow);
+  return screen;
+}
 
 // ─── Confirmation ("YOUR PRIZE CLAIM HAS BEEN SUBMITTED") ───
 
@@ -2370,15 +2488,25 @@ function renderCodeScreen(
 /**
  * Verification code entry — shown when the typed email matches an EXISTING
  * account and the OTP gate is on. Reuses {@link renderCodeScreen}.
+ *
+ * The RE-ENTRY variant (2.9, `state.reentry`) is the same screen reached
+ * from a fresh drawer-open after the register response reported
+ * `adoptionPending`: the raw email is no longer in memory, so the subtitle
+ * reads "Pick up where you left off" (the code was just re-sent by
+ * restageAdoption) and resends route through restageAdoption too.
  */
 export function renderCodeEntry(c: V2ExperienceController, logoUrl?: string | null): HTMLElement {
   if (c.state.kind !== 'codeEntry') return el('div');
   const email = c.state.email;
+  const subtitle =
+    c.state.reentry || !email
+      ? WINRV2Strings.adoptionReentrySubtitle
+      : `This email is already part of a WINR streak. Enter the 6-digit code we sent to ${email} to pick it up on this device.`;
   return renderCodeScreen(
     c,
     {
       title: 'CHECK YOUR EMAIL',
-      subtitle: `This email is already part of a WINR streak. Enter the 6-digit code we sent to ${email} to pick it up on this device.`,
+      subtitle,
       onSubmit: (code) => void c.submitVerificationCode(code),
       onResend: () => void c.resendVerificationCode(),
     },

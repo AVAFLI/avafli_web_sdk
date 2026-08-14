@@ -7,7 +7,14 @@
 
 // ─── Form model + validation ───
 
-/** The claim form's field values (steps 1-4 + the review consents). */
+/**
+ * The claim form's field values (steps 1-3 + the review consent).
+ *
+ * NOTE (2.9): the "please share a little" story is NOT part of this form
+ * anymore — it is typed on the POST-submit share step and attached to the
+ * already-submitted claim via the `attachClaimStory` callable (see
+ * V2ExperienceController.claimStoryDraft / flushClaimStory).
+ */
 export interface PrizeClaimForm {
   firstName: string;
   lastName: string;
@@ -19,17 +26,17 @@ export interface PrizeClaimForm {
   zip: string;
   /** JPEG base64 of the optional attached photo (already downscaled/capped). */
   photoBase64?: string;
-  /** Optional "please share a little" story (step 4). Sent trimmed; omitted when empty. */
-  story: string;
   /**
-   * The review screen's consents (Joe's "review and agree" checkboxes). All
-   * three are REQUIRED for submit, but they default to CHECKED (CTO
-   * decision) so SUBMIT is enabled immediately — the user can still untick
-   * any of them, which disables SUBMIT until re-checked.
+   * The review screen's ONE remaining checkbox (2.9, team decision 14 Aug):
+   * the likeness/promotion consent. OPTIONAL — it never gates SUBMIT; its
+   * state travels to the backend as `promoConsentGranted`. Starts UNCHECKED:
+   * consent must be an affirmative act (same stance as the capture screen's
+   * marketing checkbox — pre-ticked boxes are invalid under GDPR).
+   *
+   * The former "information is accurate" and "agree to Official Rules"
+   * checkboxes were REMOVED (the rules/privacy links remain as plain links).
    */
-  confirmsAccuracy: boolean;
   authorizesLikeness: boolean;
-  agreesToRules: boolean;
 }
 
 /** Fixed — US-only sweepstakes. */
@@ -45,11 +52,8 @@ export function emptyClaimForm(): PrizeClaimForm {
     city: '',
     state: '',
     zip: '',
-    story: '',
-    // Pre-checked (still untickable — unticking disables SUBMIT).
-    confirmsAccuracy: true,
-    authorizesLikeness: true,
-    agreesToRules: true,
+    // Unchecked by default — optional consent must be an affirmative act.
+    authorizesLikeness: false,
   };
 }
 
@@ -103,23 +107,16 @@ export function isStep2Valid(form: PrizeClaimForm): boolean {
   );
 }
 
-// Steps 3 (photo) and 4 (story) are fully optional — always advanceable.
+// Step 3 (photo) and the post-submit share step are fully optional.
 
 /**
- * All three review-screen consents affirmed. They start pre-checked, so this
- * only blocks a submit after the user deliberately unticks one.
- */
-export function hasAllConsents(form: PrizeClaimForm): boolean {
-  return form.confirmsAccuracy && form.authorizesLikeness && form.agreesToRules;
-}
-
-/**
- * SUBMIT enables when every required field across the steps is present, the
- * zip is a 5-digit US code, and all three consents are affirmed. Phone,
- * apartment, photo, and story are optional.
+ * SUBMIT enables when every required field across the steps is present and
+ * the zip is a 5-digit US code. Phone, apartment, photo, and the likeness
+ * consent are all optional — the review checkbox never gates SUBMIT (2.9):
+ * its state is simply reported as `promoConsentGranted`.
  */
 export function isClaimFormValid(form: PrizeClaimForm): boolean {
-  return isStep1Valid(form) && isStep2Valid(form) && hasAllConsents(form);
+  return isStep1Valid(form) && isStep2Valid(form);
 }
 
 /** "First L." — the public display name on the winner card. */

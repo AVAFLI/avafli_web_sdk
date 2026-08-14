@@ -14,6 +14,7 @@ import {
   renderLoading,
   renderSessionExpired,
   renderWinnerModal,
+  renderWinnerShare,
   renderWinnerSplash,
 } from './screens';
 import { v2Styles } from './v2-styles';
@@ -86,6 +87,10 @@ export class WINRV2Experience {
     logger.debug('Dismissing WINR V2 experience');
     // A pending Day 2+ auto-reveal must not fire against a torn-down DOM.
     this.controller.cancelAutoReveal();
+    // 2.9: a story typed on the post-submit share step is never lost — every
+    // dismissal path (X, backdrop, Escape) funnels through here, and the
+    // flush is a guarded no-op when nothing was typed or it already went.
+    this.controller.flushClaimStory();
     this.overlay.classList.remove('wv2-open');
     this.overlay.classList.add('wv2-closing');
     if (this.escapeHandler) {
@@ -219,14 +224,16 @@ export class WINRV2Experience {
         this.sheet.appendChild(renderHowItWorks(c, logoUrl));
         break;
       case 'winnerClaim': {
-        // Winner prize-claim flow: splash → stepped form (4 steps + review) →
-        // confirmation, routed by the controller's winnerClaimStep sub-state
-        // (mirrors iOS WINRV2WinnerClaimFlow).
+        // Winner prize-claim flow (2.9): splash → stepped form (3 steps +
+        // review/submit) → non-blocking SHARE step → confirmation, routed by
+        // the controller's winnerClaimStep sub-state.
         const step = c.winnerClaimStep;
         if (step.kind === 'splash') {
           this.sheet.appendChild(renderWinnerSplash(c, state.claim, logoUrl));
         } else if (step.kind === 'form') {
           this.sheet.appendChild(renderClaimSteps(c, state.claim, logoUrl));
+        } else if (step.kind === 'share') {
+          this.sheet.appendChild(renderWinnerShare(c, state.claim, logoUrl));
         } else {
           this.sheet.appendChild(
             renderClaimConfirmation(c, step.claimNumber, step.submittedAt, logoUrl)

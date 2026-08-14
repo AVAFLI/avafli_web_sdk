@@ -10,7 +10,6 @@ import {
   PrizeClaimForm,
   US_STATES,
   emptyClaimForm,
-  hasAllConsents,
   isClaimFormValid,
   isStep1Valid,
   isStep2Valid,
@@ -61,10 +60,7 @@ const VALID_FORM: PrizeClaimForm = {
   city: 'Brooklyn',
   state: 'New York',
   zip: '11201',
-  story: '',
-  confirmsAccuracy: true,
   authorizesLikeness: true,
-  agreesToRules: true,
 };
 
 function fakeStorage(seed: Record<string, string> = {}): LocalStorageProvider {
@@ -89,7 +85,12 @@ function makeController(options: {
   submitError?: Error;
   emailSubmitted?: boolean;
   hasUuid?: boolean;
-}): { controller: V2ExperienceController; api: MockApi } {
+  attachStoryError?: Error;
+}): {
+  controller: V2ExperienceController;
+  api: MockApi;
+  attachClaimStory: ReturnType<typeof vi.fn>;
+} {
   const giveawayResponse: GetActiveGiveawayResponse = {
     giveaway: GIVEAWAY,
     claimedToday: false,
@@ -113,6 +114,10 @@ function makeController(options: {
   };
   const seed: Record<string, string> = {};
   if (options.emailSubmitted !== false) seed['winr_email_submitted_com.test'] = 'true';
+  const attachClaimStory = vi.fn(async () => {
+    if (options.attachStoryError) throw options.attachStoryError;
+    return { saved: true };
+  });
   const deps: V2ControllerDeps = {
     api: api as unknown as WINRAPI,
     storage: fakeStorage(seed),
@@ -120,8 +125,9 @@ function makeController(options: {
     submitEmailAndAdopt: async () => ({ success: true }),
     hasRegisteredUuid: () => options.hasUuid !== false,
     userPrefill: { firstName: 'Ada', lastName: 'Lovelace' },
+    attachClaimStory,
   };
-  return { controller: new V2ExperienceController(deps), api };
+  return { controller: new V2ExperienceController(deps), api, attachClaimStory };
 }
 
 /** Let fire-and-forget promises (silent daily claim) settle. */
@@ -188,7 +194,7 @@ describe('Winner prize-claim routing', () => {
     expect(controller.state.kind).toBe('dashboard');
   });
 
-  it('splash → form → confirmation on successful submit', async () => {
+  it('splash → form → share → confirmation on successful submit (2.9 order)', async () => {
     const { controller, api } = makeController({
       giveawayResponse: { claimedToday: true, prizeClaim: PENDING_CLAIM },
     });
@@ -198,16 +204,19 @@ describe('Winner prize-claim routing', () => {
     controller.winnerClaimContinue();
     expect(controller.winnerClaimStep.kind).toBe('form');
 
+    // The claim is submitted FIRST — the share step comes after and never
+    // gates it.
     await controller.submitPrizeClaim(VALID_FORM);
     expect(controller.winnerClaimStep).toEqual({
-      kind: 'confirmation',
+      kind: 'share',
       claimNumber: 'WNR-2026-0042',
       submittedAt: '2026-08-04T15:00:00Z',
     });
     expect(controller.submittedClaimForm).toEqual(VALID_FORM);
     expect(controller.claimSubmitError).toBeNull();
 
-    // Exact backend payload: fixed US country, empty optionals omitted.
+    // Exact backend payload: fixed US country, empty optionals omitted, and
+    // the optional likeness consent reported as promoConsentGranted.
     expect(api.submitPrizeClaim).toHaveBeenCalledWith({
       giveawayId: 'g1',
       firstName: 'Ada',
@@ -217,7 +226,17 @@ describe('Winner prize-claim routing', () => {
       state: 'New York',
       zip: '11201',
       country: 'United States',
+      promoConsentGranted: true,
     });
+
+    // CONTINUE on the share step → confirmation, claim untouched.
+    controller.winnerShareContinue();
+    expect(controller.winnerClaimStep).toEqual({
+      kind: 'confirmation',
+      claimNumber: 'WNR-2026-0042',
+      submittedAt: '2026-08-04T15:00:00Z',
+    });
+    expect(api.submitPrizeClaim).toHaveBeenCalledOnce();
   });
 
   it('an invalid form never reaches the network', async () => {
@@ -232,7 +251,7 @@ describe('Winner prize-claim routing', () => {
     expect(controller.winnerClaimStep.kind).toBe('form');
   });
 
-  it('an unticked consent blocks the submit (all three stay required)', async () => {
+  it('the likeness consent is OPTIONAL (2.9): unticked still submits, reported as promoConsentGranted: false', async () => {
     const { controller, api } = makeController({
       giveawayResponse: { claimedToday: true, prizeClaim: PENDING_CLAIM },
     });
@@ -240,41 +259,100 @@ describe('Winner prize-claim routing', () => {
     controller.winnerClaimContinue();
 
     await controller.submitPrizeClaim({ ...VALID_FORM, authorizesLikeness: false });
-    expect(api.submitPrizeClaim).not.toHaveBeenCalled();
-    expect(controller.winnerClaimStep.kind).toBe('form');
+    expect(api.submitPrizeClaim).toHaveBeenCalledWith(
+      expect.objectContaining({ promoConsentGranted: false })
+    );
+    expect(controller.winnerClaimStep.kind).toBe('share');
   });
 
-  it('review consents are PRE-CHECKED by default, so a complete form submits without ticking anything', async () => {
-    // The form model (and the controller prefill built from it) starts with
-    // all three consents affirmed — SUBMIT is enabled as soon as the
-    // required fields are in.
-    expect(hasAllConsents(emptyClaimForm())).toBe(true);
+  it('the likeness consent starts UNCHECKED (affirmative act) and never gates validity', () => {
+    // 2.9: the accuracy + rules checkboxes are gone; the one remaining
+    // (likeness) consent defaults OFF and SUBMIT does not wait on it.
+    expect(emptyClaimForm().authorizesLikeness).toBe(false);
 
     const { controller } = makeController({
       giveawayResponse: { claimedToday: true, prizeClaim: PENDING_CLAIM },
     });
     const prefill = controller.claimFormPrefill;
-    expect(prefill.confirmsAccuracy).toBe(true);
-    expect(prefill.authorizesLikeness).toBe(true);
-    expect(prefill.agreesToRules).toBe(true);
+    expect(prefill.authorizesLikeness).toBe(false);
 
-    // With names prefilled, only the address is needed for full validity.
-    expect(
-      isClaimFormValid({ ...prefill, street: '1 Main St', city: 'Troy', state: 'New York', zip: '12180' })
-    ).toBe(true);
+    // With names prefilled, only the address is needed for full validity —
+    // regardless of the consent state.
+    const complete = { ...prefill, street: '1 Main St', city: 'Troy', state: 'New York', zip: '12180' };
+    expect(isClaimFormValid(complete)).toBe(true);
+    expect(isClaimFormValid({ ...complete, authorizesLikeness: true })).toBe(true);
   });
 
-  it('a non-empty story is sent trimmed; an empty one is omitted', async () => {
-    const { controller, api } = makeController({
+  it('the story rides attachClaimStory (post-submit), never the claim payload (2.9)', async () => {
+    const { controller, api, attachClaimStory } = makeController({
       giveawayResponse: { claimedToday: true, prizeClaim: PENDING_CLAIM },
     });
     await controller.load();
     controller.winnerClaimContinue();
 
-    await controller.submitPrizeClaim({ ...VALID_FORM, story: '  Buying a telescope!  ' });
+    await controller.submitPrizeClaim(VALID_FORM);
+    // No story key on the submit payload anymore.
     expect(api.submitPrizeClaim).toHaveBeenCalledWith(
-      expect.objectContaining({ story: 'Buying a telescope!' })
+      expect.not.objectContaining({ story: expect.anything() })
     );
+
+    // The user types a story on the post-submit share step; DONE attaches it
+    // trimmed via the new callable.
+    controller.claimStoryDraft = '  Buying a telescope!  ';
+    controller.winnerShareContinue();
+    await flush();
+    expect(attachClaimStory).toHaveBeenCalledWith({ story: 'Buying a telescope!' });
+    expect(attachClaimStory).toHaveBeenCalledOnce();
+    expect(controller.winnerClaimStep.kind).toBe('confirmation');
+  });
+
+  it('an empty story never calls attachClaimStory; a typed one is flushed at most once', async () => {
+    const { controller, attachClaimStory } = makeController({
+      giveawayResponse: { claimedToday: true, prizeClaim: PENDING_CLAIM },
+    });
+    await controller.load();
+    controller.winnerClaimContinue();
+    await controller.submitPrizeClaim(VALID_FORM);
+
+    // Nothing typed → DONE sends nothing.
+    controller.winnerShareContinue();
+    await flush();
+    expect(attachClaimStory).not.toHaveBeenCalled();
+  });
+
+  it('a story typed before a dismissal is flushed by flushClaimStory (X/backdrop/Escape path), once', async () => {
+    const { controller, attachClaimStory } = makeController({
+      giveawayResponse: { claimedToday: true, prizeClaim: PENDING_CLAIM },
+    });
+    await controller.load();
+    controller.winnerClaimContinue();
+    await controller.submitPrizeClaim(VALID_FORM);
+
+    controller.claimStoryDraft = 'A trip with my kids';
+    // The root's dismiss() invokes this on every close path.
+    controller.flushClaimStory();
+    controller.flushClaimStory(); // double-close must not double-send
+    await flush();
+    expect(attachClaimStory).toHaveBeenCalledOnce();
+    expect(attachClaimStory).toHaveBeenCalledWith({ story: 'A trip with my kids' });
+  });
+
+  it('attachClaimStory failures retry once and never surface an error', async () => {
+    const { controller, attachClaimStory } = makeController({
+      giveawayResponse: { claimedToday: true, prizeClaim: PENDING_CLAIM },
+      attachStoryError: new Error('Failed to fetch'),
+    });
+    await controller.load();
+    controller.winnerClaimContinue();
+    await controller.submitPrizeClaim(VALID_FORM);
+
+    controller.claimStoryDraft = 'Story that will fail';
+    controller.winnerShareContinue();
+    await flush();
+    // One retry, then give up quietly — the flow moved on regardless.
+    expect(attachClaimStory).toHaveBeenCalledTimes(2);
+    expect(controller.winnerClaimStep.kind).toBe('confirmation');
+    expect(controller.claimSubmitError).toBeNull();
   });
 
   it('"Already submitted" rejection suppresses the winner flow and falls back to the dashboard', async () => {
@@ -317,11 +395,10 @@ describe('Winner prize-claim routing', () => {
     expect(isStep2Valid({ ...VALID_FORM, state: '' })).toBe(false);
     expect(isStep2Valid({ ...VALID_FORM, zip: '1120' })).toBe(false);
 
-    // Review: all three consents required for the overall form validity.
-    expect(hasAllConsents(VALID_FORM)).toBe(true);
-    expect(isClaimFormValid({ ...VALID_FORM, agreesToRules: false })).toBe(false);
-    // Steps 3/4 (photo, story) are optional — validity ignores them.
-    expect(isClaimFormValid({ ...VALID_FORM, story: '', photoBase64: undefined })).toBe(true);
+    // Review (2.9): the optional likeness consent never affects validity.
+    expect(isClaimFormValid({ ...VALID_FORM, authorizesLikeness: false })).toBe(true);
+    // The photo is optional — validity ignores it.
+    expect(isClaimFormValid({ ...VALID_FORM, photoBase64: undefined })).toBe(true);
   });
 
   it('a transport failure stays on the form with an inline error', async () => {

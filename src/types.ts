@@ -241,6 +241,14 @@ export interface RegisterDeviceResponse {
    * publisher's giveaways (winner prize-claim flow).
    */
   prizeClaim?: PrizeClaimBlock;
+  /**
+   * True when this device started a cross-device adoption (typed an email
+   * that matched an existing account) but never completed the 6-digit code —
+   * the next drawer-open routes to the code screen after calling
+   * `restageAdoption` (which re-sends a fresh code). OPTIONAL: absent on
+   * production backends that don't emit it yet.
+   */
+  adoptionPending?: boolean;
 }
 
 export interface SDKCopy {
@@ -357,6 +365,12 @@ export interface SDKConfig {
   copy?: SDKCopy;
   /** Rules URL override */
   rulesUrl?: string;
+  /**
+   * Publisher share link used by the winner share step's social actions
+   * (X/Facebook intents, Web Share API). OPTIONAL: absent on production
+   * backends that don't emit it yet — share actions degrade to text-only.
+   */
+  shareUrl?: string;
   /** Age gate enabled */
   ageGateEnabled?: boolean;
   /** Minimum age for age gate */
@@ -446,7 +460,18 @@ export interface SubmitPrizeClaimRequest {
   zip: string;
   country: string;
   photoBase64?: string;
+  /**
+   * Winner story. LEGACY on this payload: 2.9+ clients no longer send it
+   * here — the story is typed on the post-submit share step and attached via
+   * the `attachClaimStory` callable instead. Kept typed for older callers.
+   */
   story?: string;
+  /**
+   * The review screen's OPTIONAL likeness/promotion checkbox, exactly as the
+   * user left it. Always sent by 2.9+ clients; typed optional so payloads
+   * built elsewhere stay valid while the backend adds storage in parallel.
+   */
+  promoConsentGranted?: boolean;
 }
 
 export interface SubmitPrizeClaimResponse {

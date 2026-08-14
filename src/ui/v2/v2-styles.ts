@@ -78,24 +78,64 @@ img { display: block; }
   .wv2-grabber { visibility: hidden; height: 0; margin-top: 8px; }
 }
 
+/* ═══ Desktop treatment (>= 900px), 2.9 ═══
+   NOTE: the Figma pointer for desktop (WINR-High-V2 node 1133-441) resolves
+   to the HOST-SITE homepage mock — the file's WINR experience frames are all
+   430px mobile frames, so there is no drawer-level desktop spec to port.
+   This is therefore the agreed conservative widening: a ~600px card with a
+   modest type/spacing scale-up. Everything below 900px is untouched. */
+@media (min-width: 900px) {
+  .wv2-sheet {
+    width: min(600px, calc(100vw - 64px));
+    height: min(860px, calc(100vh - 64px));
+    height: min(860px, calc(100dvh - 64px));
+    border-radius: 28px;
+  }
+
+  /* Capture */
+  .wv2-capture-stack { gap: 22px; padding-top: 24px; }
+  .wv2-capture-title { font-size: 46px; }
+  .wv2-capture-sub { font-size: 17px; }
+  .wv2-prize-strip-cash { font-size: 28px; }
+  .wv2-prize-strip-title { font-size: 26px; }
+  .wv2-prize-strip-value { font-size: 18px; }
+  .wv2-capture-form { padding: 0 44px; }
+  .wv2-capture-disclaimer { padding: 0 52px; }
+
+  /* Dashboard */
+  .wv2-dash-body { gap: 18px; }
+  .wv2-prize-card { margin: 0 32px; height: 236px; }
+  .wv2-ph-cash-win { font-size: 50px; }
+  .wv2-ph-prize-title { font-size: 32px; }
+  .wv2-rail { padding: 0 34px 12px; gap: 14px; }
+  .wv2-dash-notice { margin: 0 32px; }
+  .wv2-dash-footer .wv2-pill-wrap { padding: 0 48px; }
+
+  /* How it works */
+  .wv2-hiw-items { padding: 0 40px; }
+  .wv2-hiw-cta { padding: 20px 44px 0; }
+
+  /* Winner claim flow */
+  .wv2-step-stack { padding: 0 44px 40px; }
+  .wv2-step-title { font-size: 30px; }
+  .wv2-claim-strip { font-size: 32px; }
+  .wv2-claim-congrats { font-size: 38px; }
+  .wv2-claim-cta { padding: 20px 44px 34px; }
+  .wv2-claim-done-cta { padding: 30px 44px 34px; }
+
+  /* Skeleton mirrors the dashboard's wider margins. */
+  .wv2-sk-card { margin: 15px 32px 0; height: 236px; }
+  .wv2-sk-rail { padding: 0 32px; }
+}
+
 /* ═══ Shared screen scaffolding ═══ */
 
 .wv2-screen { position: relative; height: 100%; display: flex; flex-direction: column; background: ${c.gunmetal}; }
 .wv2-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; -ms-overflow-style: none; overscroll-behavior: contain; }
 .wv2-scroll::-webkit-scrollbar { display: none; }
 
-/* The radial primary-color glow that bleeds from the top of the drawer. */
-.wv2-top-glow {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(440px at 50% 0,
-    var(--wv2-accent) 0,
-    var(--wv2-accent-55) 35%,
-    rgba(29, 35, 48, 0.9) 80%,
-    ${c.gunmetal} 100%);
-  opacity: 0.9;
-  pointer-events: none;
-}
+/* 2.9: the capture screen's radial accent glow (.wv2-top-glow) was removed —
+   email capture now sits on the same flat gunmetal as the dashboard drawer. */
 
 /* Confetti canvases fill their positioned parent. NOTE: canvas is a replaced
    element, so "inset: 0" alone does NOT stretch it — explicit width/height
@@ -604,6 +644,17 @@ button.wv2-dash-notice { cursor: pointer; }
   animation: wv2-modal-in 0.2s ease;
 }
 .wv2-optout-title { font-size: 18px; font-weight: 900; color: #fff; }
+/* Privacy-choices surface (2.9): the privacy-policy link + delete-my-data
+   action, one level above the destructive confirmation. */
+.wv2-privacy-choice-link {
+  display: block; width: 100%; padding: 13px 14px;
+  border-radius: 10px; border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.06);
+  font-size: 15px; font-weight: 600; color: #fff; text-align: center;
+  cursor: pointer;
+}
+.wv2-privacy-choice-link:hover { background: rgba(255,255,255,0.1); }
+.wv2-privacy-choice-delete { color: #ff6b63; border-color: rgba(255,107,99,0.45); }
 .wv2-optout-body { font-size: 14px; color: rgba(255,255,255,0.75); }
 .wv2-optout-error { font-size: 13px; color: #ff6b63; }
 .wv2-optout-success { font-size: 18px; font-weight: 700; color: #fff; padding: 24px 0; }
@@ -689,7 +740,7 @@ button.wv2-dash-notice { cursor: pointer; }
 .wv2-claim-flow { position: relative; height: 100%; display: flex; flex-direction: column; padding-top: 18px; }
 .wv2-claim-back { position: absolute; left: 20px; top: 50%; transform: translateY(-50%); background: rgba(11, 13, 18, 0.85); }
 
-/* "STEP N OF 4" + the row of 4 dots connected by accent lines: filled up to
+/* "STEP N OF 3" + the row of 3 dots connected by accent lines: filled up to
    the current step, outlined after it. Removed on the review screen. */
 .wv2-step-indicator { display: flex; flex-direction: column; align-items: center; gap: 12px; padding-top: 8px; flex: none; }
 .wv2-step-indicator.wv2-step-indicator-hidden { display: none; }
@@ -754,8 +805,13 @@ button.wv2-dash-notice { cursor: pointer; }
 .wv2-sf-locked-value { font-size: 20px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wv2-sf-dim { color: rgba(255,255,255,0.3); }
 .wv2-sf-row { display: flex; align-items: flex-start; gap: 13px; }
-.wv2-sf-state { flex: 1; }
-.wv2-sf-zip { width: 101px; flex: none; }
+.wv2-sf-state { flex: 1 1 auto; min-width: 0; }
+/* Zip fix (2.9): the old 101px box minus the shared 25px input padding left
+   ~51px of content — five digits at 20px were clipped. A slightly wider
+   fixed basis + reduced padding gives the digits room without letting the
+   state select starve it. */
+.wv2-sf-zip { flex: 0 0 118px; width: 118px; }
+.wv2-sf-zip .wv2-sf-input { padding: 0 16px; }
 .wv2-sf-select-wrap { position: relative; }
 .wv2-sf-select {
   appearance: none; -webkit-appearance: none;
@@ -820,10 +876,29 @@ button.wv2-dash-notice { cursor: pointer; }
 .wv2-social-btn { width: 48px; height: 48px; color: #fff; flex: none; }
 .wv2-social-glyph { display: block; width: 100%; height: 100%; }
 
-/* Review ("ALMOST DONE!"): the three required consents, inline error, and
-   the gunmetal "secure and encrypted" lock note under the CTA. */
+/* "Copied! Paste it in your post" toast — the honest clipboard fallback on
+   the post-submit share step (no Web Share API available). */
+.wv2-share-toast {
+  position: absolute; left: 50%; bottom: 28px;
+  transform: translate(-50%, 8px);
+  padding: 10px 18px; border-radius: 999px;
+  background: rgba(0,0,0,0.85); color: #fff;
+  font-size: 14px; font-weight: 700; white-space: nowrap;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  z-index: 5;
+}
+.wv2-share-toast.wv2-visible { opacity: 1; transform: translate(-50%, 0); }
+
+/* Review ("ALMOST DONE!", 2.9): ONE optional likeness consent, the plain
+   Official Rules / Privacy Policy links, inline error, and the gunmetal
+   "secure and encrypted" lock note under the CTA. */
 .wv2-review { display: flex; flex-direction: column; padding: 44px 12px 12px; }
 .wv2-consents { display: flex; flex-direction: column; gap: 32px; }
+/* Official Rules • Privacy Policy — plain links under the consent row. */
+.wv2-review-links { display: flex; align-items: center; justify-content: center; gap: 10px; padding-top: 26px; }
+.wv2-review-links a { font-size: 14px; font-weight: 700; color: #fff; text-decoration: underline; text-underline-offset: 3px; }
+.wv2-review-links a:hover { color: rgba(255,255,255,0.85); }
 .wv2-consent-row { display: flex; align-items: flex-start; gap: 12px; text-align: left; }
 .wv2-consent-box {
   width: 24px; height: 24px; border-radius: 5px; flex: none;

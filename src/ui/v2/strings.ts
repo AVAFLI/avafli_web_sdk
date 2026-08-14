@@ -18,6 +18,15 @@ export const WINRV2Strings = {
   codeIncorrect: "That code didn't match. Check the email and try again.",
   /** RESEND failed — shown in the code-error slot; the code screen stays up. */
   codeResendFailed: "Couldn't send a new code. Check your connection and try again.",
+  /**
+   * Adoption RE-ENTRY (2.9): the register response reported
+   * `adoptionPending: true` — this device typed an email that matched an
+   * existing account but never finished the 6-digit code. The drawer routes
+   * straight to the code screen (after `restageAdoption` re-sends a fresh
+   * code) with this subtitle variant.
+   */
+  adoptionReentrySubtitle:
+    'Pick up where you left off — enter the 6-digit code we just sent to your email to reconnect your streak.',
 
   // ─── Soft email verification (persistent dashboard chip → code screen) ───
   /** The persistent, non-blocking chip on the streak dashboard. */
@@ -47,9 +56,21 @@ export const WINRV2Strings = {
   /** Auto-claim transport failure — dashboard shows UNCLAIMED plus this retryable notice. */
   claimRecordFailed: "We couldn't record today's entry. Check your connection and try again.",
 
+  // ─── Winner share step (post-submit, 2.9) ───
+  /**
+   * Toast after copying the share line to the clipboard — the honest
+   * fallback for platforms with no web prefill API (Instagram, Snapchat,
+   * TikTok) when the Web Share API is unavailable.
+   */
+  shareCopied: 'Copied! Paste it in your post',
+
   // ─── Privacy choices (RTD opt-out, how-it-works screen) ───
   /** Muted entry-point link at the bottom of the how-it-works screen. */
   privacyChoices: 'Privacy choices',
+  /** Title of the small privacy-choices surface (2.9). */
+  privacyChoicesTitle: 'Privacy choices',
+  /** The privacy-policy link inside the privacy-choices surface. */
+  privacyPolicyLink: 'Privacy Policy',
   optOutTitle: 'Delete my data & stop participating',
   optOutBody:
     'This permanently deletes your WINR data, ends your giveaway participation, and cannot be undone. You can also email info@avafli.com.',

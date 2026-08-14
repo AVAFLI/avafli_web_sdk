@@ -45,7 +45,16 @@ export type V2State =
   | { kind: 'loading' }
   | { kind: 'empty' } // no active giveaway / opted out / fatal error
   | { kind: 'emailCapture' }
-  | { kind: 'codeEntry'; email: string; consent: EmailCaptureConsent }
+  /**
+   * The 6-digit adoption-code screen. Normally reached from the capture flow
+   * (email + consent captured this session). The RE-ENTRY variant (2.9,
+   * `reentry: true`) is reached when the register response reported
+   * `adoptionPending` — a previous session typed the email but never
+   * finished the code, so the raw address is no longer in memory (PII is
+   * never persisted): `email`/`consent` are absent, resends go through
+   * `restageAdoption`, and the subtitle reads "Pick up where you left off".
+   */
+  | { kind: 'codeEntry'; email?: string; consent?: EmailCaptureConsent; reentry?: boolean }
   /**
    * Soft email-verification screen — the SAME 6-digit code component as
    * `codeEntry`, reached by tapping the persistent "Verify your email" chip on
@@ -67,10 +76,16 @@ export type V2State =
    */
   | { kind: 'winnerClaim'; claim: PrizeClaimBlock };
 
-/** Sub-screen of the winner claim flow (`state.kind === 'winnerClaim'`). */
+/**
+ * Sub-screen of the winner claim flow (`state.kind === 'winnerClaim'`).
+ * 2.9 order: splash → form (3 steps + review/submit) → share → confirmation.
+ * The SHARE step comes AFTER the submit and never blocks — the claim is
+ * already recorded server-side, so closing/skipping it changes nothing.
+ */
 export type WinnerClaimStep =
   | { kind: 'splash' }
   | { kind: 'form' }
+  | { kind: 'share'; claimNumber: string; submittedAt: string }
   | { kind: 'confirmation'; claimNumber: string; submittedAt: string };
 
 export interface V2ControllerDeps {
@@ -94,6 +109,30 @@ export interface V2ControllerDeps {
   confirmEmailVerification?: (request: { code: string }) => Promise<unknown>;
   /** Re-sends the soft email-verification code. Returns `{ sent: boolean }`. */
   resendEmailVerification?: () => Promise<unknown>;
+  /**
+   * Adoption RE-ENTRY (2.9): the register response reported
+   * `adoptionPending: true` — an adoption was started (email typed, code
+   * mailed) but never completed on this device.
+   */
+  adoptionPending?: boolean;
+  /**
+   * Re-stages a pending adoption: POST /restageAdoption (authed), returns
+   * `{ sent }` after mailing a fresh 6-digit code. Called before routing the
+   * drawer-open to the code screen, and by "Send a new code" in re-entry mode.
+   */
+  restageAdoption?: () => Promise<unknown>;
+  /**
+   * The pending adoption was completed (code verified) — lets the SDK clear
+   * its cached `adoptionPending` flag so later drawer-opens don't re-stage.
+   */
+  onAdoptionResolved?: () => void;
+  /**
+   * Attaches the story typed on the POST-submit share step to the already
+   * submitted claim (2.9 contract addendum): POST /attachClaimStory (authed),
+   * `{ story }` → `{ saved }`. Fire-and-forget from the controller's side —
+   * a failure never blocks or surfaces (the claim is already recorded).
+   */
+  attachClaimStory?: (request: { story: string }) => Promise<unknown>;
   /**
    * Performs the RTD opt-out (the how-it-works screen's "Privacy choices" →
    * DELETE MY DATA flow). MUST reject on failure — unlike the public
@@ -295,6 +334,35 @@ export class V2ExperienceController {
   public claimSubmitError: string | null = null;
   /** The submitted form, kept for the confirmation screen's winner card. */
   public submittedClaimForm: PrizeClaimForm | null = null;
+
+  /**
+   * The story typed on the POST-submit share step (2.9). Held here — not on
+   * the share screen — so ANY exit path (DONE, the X, backdrop, Escape) can
+   * flush it to the backend via {@link flushClaimStory}: a typed story is
+   * never lost. Reset when a fresh share step is entered.
+   */
+  public claimStoryDraft = '';
+  /** One-shot guard so DONE-then-dismiss can't double-send the story. */
+  private claimStoryFlushed = false;
+
+  /**
+   * Best-effort attach of the typed story to the already-submitted claim:
+   * fire-and-forget with ONE retry, and a failure never blocks or surfaces —
+   * the claim is already recorded server-side. No-op when nothing was typed
+   * or the story was already sent.
+   */
+  public flushClaimStory(): void {
+    if (this.claimStoryFlushed) return;
+    const story = this.claimStoryDraft.trim();
+    const send = this.deps.attachClaimStory;
+    if (!story || !send) return;
+    this.claimStoryFlushed = true;
+    void send({ story })
+      .catch(() => send({ story })) // one retry
+      .catch((error) =>
+        logger.debug('attachClaimStory failed after retry (non-blocking):', error)
+      );
+  }
   /**
    * Set after a "Not the winner"/"Already submitted" rejection so the next
    * load skips the winner flow and lands on the normal dashboard.
@@ -323,6 +391,8 @@ export class V2ExperienceController {
   /** One-shot guard for the "already claimed on another device" re-sync. */
   private didResyncAfterAlreadyClaimed = false;
   private isClaiming = false;
+  /** One-shot guard so a reload after verification doesn't re-stage adoption. */
+  private adoptionReentryStaged = false;
 
   constructor(private deps: V2ControllerDeps) {
     this.giveaway = deps.cachedGiveaway ?? null;
@@ -353,6 +423,14 @@ export class V2ExperienceController {
 
   public get rulesUrl(): string | undefined {
     return this.giveaway?.rulesUrl || this.sdkConfig?.rulesUrl;
+  }
+
+  /**
+   * Publisher share link for the winner share step (2.9). Optional on the
+   * wire — absent from production backends until they emit it.
+   */
+  public get shareUrl(): string | undefined {
+    return this.sdkConfig?.shareUrl;
   }
 
   /**
@@ -621,6 +699,24 @@ export class V2ExperienceController {
       if (!this.claimedToday && this.hasEmailConsent) {
         void this.silentDailyClaim();
       }
+      return;
+    }
+
+    // Adoption RE-ENTRY (2.9): a previous session typed an email that matched
+    // an existing account but never finished the 6-digit code. Backend truth
+    // (`adoptionPending` on the register response) routes this open straight
+    // to the code screen — restageAdoption mails a fresh code first. One-shot
+    // per controller; a restage failure still shows the code screen (the
+    // "Send a new code" affordance re-attempts the send).
+    if (this.deps.adoptionPending && !this.adoptionReentryStaged) {
+      this.adoptionReentryStaged = true;
+      try {
+        await this.deps.restageAdoption?.();
+      } catch (error) {
+        logger.warn('restageAdoption failed — code screen still shown (resend available):', error);
+      }
+      this.codeError = null;
+      this.transition({ kind: 'codeEntry', reentry: true });
       return;
     }
 
@@ -1052,6 +1148,9 @@ export class V2ExperienceController {
     try {
       await this.deps.verifyAdoptionCode?.({ code });
       analyticsAdapter.track('winr_adoption_verified');
+      // The adoption is complete — clear the SDK's cached adoptionPending
+      // flag so later drawer-opens don't re-stage a finished adoption.
+      this.deps.onAdoptionResolved?.();
       await this.load();
     } catch (error) {
       // NEVER render raw backend text — map the failure to fixed copy
@@ -1082,6 +1181,21 @@ export class V2ExperienceController {
     const { email, consent } = this.state;
     this.codeError = null;
     this.onChange?.(this.state);
+
+    // RE-ENTRY mode has no email in memory (PII is never persisted) — a
+    // fresh code comes from restageAdoption instead of a re-submit.
+    if (!email || !consent) {
+      try {
+        await this.deps.restageAdoption?.();
+        this.onChange?.(this.state);
+      } catch (error) {
+        logger.warn('Re-entry code resend (restageAdoption) failed:', error);
+        this.codeError = WINRV2Strings.codeResendFailed;
+        this.onChange?.(this.state);
+      }
+      return;
+    }
+
     try {
       // Re-submitting the ORIGINAL consent values is idempotent (same person,
       // same choices) and re-triggers the OTP send. Fabricating values here
@@ -1206,6 +1320,23 @@ export class V2ExperienceController {
   }
 
   /**
+   * CONTINUE on the post-submit share step → the confirmation screen. The
+   * claim was already recorded before the share step showed, so this (and
+   * closing the drawer instead) never affects the claim.
+   */
+  public winnerShareContinue(): void {
+    if (this.state.kind !== 'winnerClaim' || this.winnerClaimStep.kind !== 'share') return;
+    // A typed story is attached best-effort before moving on (never blocks).
+    this.flushClaimStory();
+    this.winnerClaimStep = {
+      kind: 'confirmation',
+      claimNumber: this.winnerClaimStep.claimNumber,
+      submittedAt: this.winnerClaimStep.submittedAt,
+    };
+    this.onChange?.(this.state);
+  }
+
+  /**
    * SUBMIT on the claim form. Success → confirmation screen. A backend
    * "Not the winner"/"Already submitted" rejection falls back to the normal
    * dashboard silently (logged); transport failures surface inline
@@ -1231,12 +1362,21 @@ export class V2ExperienceController {
         zip: form.zip.trim(),
         country: CLAIM_COUNTRY,
         ...(form.photoBase64 ? { photoBase64: form.photoBase64 } : {}),
-        ...(form.story.trim() ? { story: form.story.trim() } : {}),
+        // NOTE (2.9): `story` no longer rides this payload — it is typed on
+        // the POST-submit share step and attached via attachClaimStory.
+        // 2.9: the review screen's ONE optional checkbox, exactly as the user
+        // left it (backend stores it in parallel — see SubmitPrizeClaimRequest).
+        promoConsentGranted: form.authorizesLikeness,
       });
       this.isSubmittingClaim = false;
       this.submittedClaimForm = form;
+      // 2.9: the claim is recorded — the SHARE step comes next (never
+      // blocking; closing it changes nothing about the claim), then the
+      // confirmation screen. Fresh story slate for this share step.
+      this.claimStoryDraft = '';
+      this.claimStoryFlushed = false;
       this.winnerClaimStep = {
-        kind: 'confirmation',
+        kind: 'share',
         claimNumber: response.claimNumber,
         submittedAt: response.submittedAt,
       };
@@ -1294,9 +1434,13 @@ export class V2ExperienceController {
 
   // ─── Privacy choices / RTD opt-out (how-it-works screen) ───
   //
-  //     idle → confirming → inFlight → done → (dismiss whole experience)
-  //                     ↘ failed (inline error, retryable) ↗
+  //     idle → choices → confirming → inFlight → done → (dismiss experience)
+  //                              ↘ failed (inline error, retryable) ↗
   //
+  // 2.9: the "Privacy choices" link no longer jumps straight to the delete
+  // confirmation — it opens a small PRIVACY CHOICES surface (`choices`)
+  // holding the privacy-policy link AND the delete-my-data action; delete
+  // then raises its existing destructive confirmation.
   // Failure NEVER pretends success — the confirmation stays up with the
   // error and the destructive button remains available to retry.
 
@@ -1304,20 +1448,37 @@ export class V2ExperienceController {
   public static readonly OPT_OUT_SUCCESS_HOLD_MS = 1400;
 
   /** Where the "Privacy choices" → delete-my-data flow currently is. */
-  public optOutPhase: 'idle' | 'confirming' | 'inFlight' | 'failed' | 'done' = 'idle';
+  public optOutPhase: 'idle' | 'choices' | 'confirming' | 'inFlight' | 'failed' | 'done' = 'idle';
   /** Inline error on the confirmation (`optOutPhase === 'failed'`). */
   public optOutError: string | null = null;
 
-  /** "Privacy choices" tapped — raise the destructive confirmation. */
-  public showOptOutConfirmation(): void {
+  /** "Privacy choices" tapped — open the privacy-choices surface (2.9). */
+  public showPrivacyChoices(): void {
     if (this.optOutPhase !== 'idle') return;
+    this.optOutPhase = 'choices';
+    this.onChange?.(this.state);
+  }
+
+  /**
+   * DELETE MY DATA on the privacy-choices surface — raise the destructive
+   * confirmation. (Also callable from idle for API/back-compat: headless
+   * integrations and existing tests reach the confirmation directly.)
+   */
+  public showOptOutConfirmation(): void {
+    if (this.optOutPhase !== 'idle' && this.optOutPhase !== 'choices') return;
     this.optOutPhase = 'confirming';
     this.onChange?.(this.state);
   }
 
   /** Cancel / tap-outside. A no-op while in flight or after the deletion. */
   public cancelOptOut(): void {
-    if (this.optOutPhase !== 'confirming' && this.optOutPhase !== 'failed') return;
+    if (
+      this.optOutPhase !== 'choices' &&
+      this.optOutPhase !== 'confirming' &&
+      this.optOutPhase !== 'failed'
+    ) {
+      return;
+    }
     this.optOutPhase = 'idle';
     this.optOutError = null;
     this.onChange?.(this.state);
