@@ -1,6 +1,6 @@
 {
   "name": "winr-web-sdk",
-  "version": "2.9.2",
+  "version": "2.9.3",
   "description": "Web SDK for WINR sweepstakes platform",
   "main": "dist/winr-sdk.umd.js",
   "module": "dist/winr-sdk.esm.js",

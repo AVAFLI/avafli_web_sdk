@@ -246,3 +246,38 @@ describe('partner-supplied email pre-fill', () => {
     expect(input.readOnly).toBe(false);
   });
 });
+
+describe('capture screen legal footer (2.9.3 dedupe)', () => {
+  it('the disclaimer carries Official Rules & Privacy Policy as inline links; the separate links row is gone', () => {
+    const { controller } = makeController();
+    const capture = renderCapture(controller);
+
+    // ONE instance of the legal text: the sentence itself links out.
+    const links = Array.from(
+      capture.querySelectorAll<HTMLAnchorElement>('.wv2-capture-disclaimer a.wv2-inline-legal')
+    );
+    expect(links.map((a) => a.textContent)).toEqual(['Official Rules', 'Privacy Policy']);
+    // Official Rules keeps rulesUrl; Privacy Policy opens the REAL policy
+    // (2.9.3 fix — it used to open rulesUrl because no privacy URL existed).
+    expect(links[0]!.href).toBe('https://example.com/rules');
+    expect(links[1]!.href).toBe('https://winrmedia.com/sdk/privacy');
+
+    // Same tap behavior: preventDefault + window.open in a new tab.
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+    links[0]!.dispatchEvent(new Event('click', { cancelable: true }));
+    expect(open).toHaveBeenCalledWith('https://example.com/rules', '_blank', 'noopener');
+    links[1]!.dispatchEvent(new Event('click', { cancelable: true }));
+    expect(open).toHaveBeenCalledWith('https://winrmedia.com/sdk/privacy', '_blank', 'noopener');
+    open.mockRestore();
+
+    // The duplicate "OFFICIAL RULES • PRIVACY POLICY" row is removed from
+    // THIS screen only.
+    expect(capture.querySelector('.wv2-legal-row')).toBeNull();
+    expect(capture.textContent).not.toContain('OFFICIAL RULES');
+
+    // But the reCAPTCHA attribution (required while the badge is hidden — see
+    // perimeter.ts) and the Powered-by line must survive the dedupe.
+    expect(capture.textContent).toContain('Protected by reCAPTCHA');
+    expect(capture.textContent).toContain('Powered by © WINR Media');
+  });
+});

@@ -1,6 +1,31 @@
 # Changelog
 
 
+## 2.9.3 — 2026-08-14
+
+Note: 2.9.2 was never published to npm; 2.9.3 supersedes it.
+
+- **Capture screen legal text deduplicated** — the disclaimer sentence and a
+  separate "OFFICIAL RULES • PRIVACY POLICY" links row both appeared on the
+  email capture screen. Now ONE instance: "Official Rules" and "Privacy
+  Policy" inside the sentence are underlined, tappable links (same targets
+  and new-tab behavior as the row), and the separate links row is removed
+  from the capture screen only. Other screens that show the links row (claim
+  review, how-it-works, code screen) are unchanged, and the capture screen
+  keeps the reCAPTCHA attribution notice (required while the badge is
+  hidden) and the Powered-by line.
+- **Capture legal block bottom-anchored** — the legal block (disclaimer +
+  reCAPTCHA notice + Powered-by) now sits at the bottom edge of the drawer
+  instead of congested under the CTA; on short viewports (keyboard open) it
+  degrades to normal scrollable flow and never overlaps the button. In the
+  content-sized desktop lightbox it gets fixed comfortable spacing instead.
+- **Privacy Policy links point at the real policy** — every "Privacy Policy"
+  link (capture inline, legal-links row, claim review, privacy-choices
+  surface) opened `rulesUrl`, a latent bug shared with the native SDKs (no
+  privacy URL existed in config). They now open
+  `https://winrmedia.com/sdk/privacy` (new `WINR_CONSTANTS.PRIVACY_URL`).
+  "Official Rules" keeps `rulesUrl`.
+
 ## 2.9.2 — 2026-08-14
 
 - Desktop lightbox matches the final Figma design (colored brand border,

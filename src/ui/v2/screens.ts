@@ -1,4 +1,4 @@
-import { Giveaway, GiveawayWinner, PrizeClaimBlock } from '../../types';
+import { Giveaway, GiveawayWinner, PrizeClaimBlock, WINR_CONSTANTS } from '../../types';
 import { V2_IMAGES } from './assets.generated';
 import {
   CONFETTI_BURST_DURATION_MS,
@@ -177,26 +177,39 @@ function openUrl(url?: string): void {
   if (url) window.open(url, '_blank', 'noopener');
 }
 
-export function renderLegalLinks(rulesUrl?: string, showPoweredBy = false): HTMLElement {
+export function renderLegalLinks(
+  rulesUrl?: string,
+  showPoweredBy = false,
+  showLinksRow = true
+): HTMLElement {
   const wrap = el('div', 'wv2-legal');
-  const row = el('div', 'wv2-legal-row');
-  const rules = el('a', undefined, 'OFFICIAL RULES');
-  rules.setAttribute('role', 'button');
-  rules.href = rulesUrl || '#';
-  rules.addEventListener('click', (e) => {
-    e.preventDefault();
-    openUrl(rulesUrl);
-  });
-  const privacy = el('a', undefined, 'PRIVACY POLICY');
-  privacy.href = rulesUrl || '#';
-  privacy.addEventListener('click', (e) => {
-    e.preventDefault();
-    openUrl(rulesUrl);
-  });
-  row.appendChild(rules);
-  row.appendChild(el('span', 'wv2-legal-dot'));
-  row.appendChild(privacy);
-  wrap.appendChild(row);
+  // The capture screen passes showLinksRow=false: its disclaimer sentence now
+  // carries the Official Rules / Privacy Policy links inline (see
+  // renderLegalInlineLink), so a second links row there was pure duplication.
+  // Every other surface (claim review, how-it-works, code screen) keeps the row.
+  if (showLinksRow) {
+    const row = el('div', 'wv2-legal-row');
+    const rules = el('a', undefined, 'OFFICIAL RULES');
+    rules.setAttribute('role', 'button');
+    rules.href = rulesUrl || '#';
+    rules.addEventListener('click', (e) => {
+      e.preventDefault();
+      openUrl(rulesUrl);
+    });
+    // 2.9.3: PRIVACY POLICY opened rulesUrl (no privacy URL existed in
+    // config — same latent bug as the native SDKs). It now opens the real
+    // policy.
+    const privacy = el('a', undefined, 'PRIVACY POLICY');
+    privacy.href = WINR_CONSTANTS.PRIVACY_URL;
+    privacy.addEventListener('click', (e) => {
+      e.preventDefault();
+      openUrl(WINR_CONSTANTS.PRIVACY_URL);
+    });
+    row.appendChild(rules);
+    row.appendChild(el('span', 'wv2-legal-dot'));
+    row.appendChild(privacy);
+    wrap.appendChild(row);
+  }
   // Required attribution. The reCAPTCHA badge is hidden (see perimeter.ts) — Google
   // allows that only if this notice is shown in the flow instead, so the two must
   // stay together: remove one and the other becomes non-compliant.
@@ -207,6 +220,22 @@ export function renderLegalLinks(rulesUrl?: string, showPoweredBy = false): HTML
     wrap.appendChild(el('div', 'wv2-powered', 'Powered by © WINR Media'));
   }
   return wrap;
+}
+
+/**
+ * An underlined legal link embedded inside running copy (the capture screen's
+ * disclaimer sentence). Same target and behavior as the standalone links row:
+ * both Official Rules and Privacy Policy open `rulesUrl` in a new tab.
+ */
+function renderLegalInlineLink(label: string, url?: string): HTMLAnchorElement {
+  const link = el('a', 'wv2-inline-legal', label);
+  link.setAttribute('role', 'button');
+  link.href = url || '#';
+  link.addEventListener('click', (e) => {
+    e.preventDefault();
+    openUrl(url);
+  });
+  return link;
 }
 
 // ─── Loading / empty states ───
@@ -483,16 +512,28 @@ export function renderCapture(c: V2ExperienceController, logoUrl?: string | null
     }
   });
 
-  // Legal footer
+  // Legal footer — anchored to the BOTTOM of the drawer/card (margin-top:auto
+  // inside the min-height:100% stack, see .wv2-capture-legal) so it never sits
+  // congested under the CTA; on short viewports the auto margin collapses and
+  // the block degrades to normal scrollable flow. The disclaimer sentence
+  // carries the Official Rules / Privacy Policy links INLINE (underlined, same
+  // targets and new-tab behavior as the old links row) — the separate
+  // "OFFICIAL RULES • PRIVACY POLICY" row was a duplicate here and is removed
+  // from this screen only. renderLegalLinks still contributes the reCAPTCHA
+  // attribution (required while the badge is hidden — see perimeter.ts) and
+  // the Powered-by line.
   const legal = el('div', 'wv2-capture-legal');
-  legal.appendChild(
-    el(
-      'div',
-      'wv2-capture-disclaimer',
-      'Your email lets us contact you if you win. By entering you agree to the Official Rules & Privacy Policy'
+  const disclaimer = el('div', 'wv2-capture-disclaimer');
+  disclaimer.appendChild(
+    document.createTextNode(
+      'Your email lets us contact you if you win. By entering you agree to the '
     )
   );
-  legal.appendChild(renderLegalLinks(c.rulesUrl, true));
+  disclaimer.appendChild(renderLegalInlineLink('Official Rules', c.rulesUrl));
+  disclaimer.appendChild(document.createTextNode(' & '));
+  disclaimer.appendChild(renderLegalInlineLink('Privacy Policy', WINR_CONSTANTS.PRIVACY_URL));
+  legal.appendChild(disclaimer);
+  legal.appendChild(renderLegalLinks(c.rulesUrl, true, false));
   stack.appendChild(legal);
 
   scroll.appendChild(stack);
@@ -1299,7 +1340,7 @@ function renderOptOutDialog(c: V2ExperienceController): HTMLElement {
 
     // Privacy policy — plain link, same destination as the legal footer.
     const policy = el('button', 'wv2-privacy-choice-link', WINRV2Strings.privacyPolicyLink);
-    policy.addEventListener('click', () => openUrl(c.rulesUrl));
+    policy.addEventListener('click', () => openUrl(WINR_CONSTANTS.PRIVACY_URL));
     card.appendChild(policy);
 
     // Delete-my-data — raises the existing destructive confirmation.
@@ -2015,10 +2056,10 @@ export function renderClaimSteps(
       openUrl(c.rulesUrl);
     });
     const privacy = el('a', undefined, 'Privacy Policy');
-    privacy.href = c.rulesUrl || '#';
+    privacy.href = WINR_CONSTANTS.PRIVACY_URL;
     privacy.addEventListener('click', (e) => {
       e.preventDefault();
-      openUrl(c.rulesUrl);
+      openUrl(WINR_CONSTANTS.PRIVACY_URL);
     });
     legalRow.appendChild(rules);
     legalRow.appendChild(el('span', 'wv2-legal-dot'));

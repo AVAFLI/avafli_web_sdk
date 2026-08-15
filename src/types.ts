@@ -693,8 +693,15 @@ export interface PresentationOptions {
 // ─── Constants ───
 
 export const WINR_CONSTANTS = {
-  SDK_VERSION: '2.9.2',
+  SDK_VERSION: '2.9.3',
   PLATFORM_OS: 'Web',
+  /**
+   * Canonical WINR privacy policy. 2.9.3: every "Privacy Policy" link used to
+   * open `rulesUrl` — a latent bug shared with the native SDKs, because no
+   * privacy URL existed in config. This is the fallback; a config-supplied
+   * privacy URL would take precedence if one is ever added.
+   */
+  PRIVACY_URL: 'https://winrmedia.com/sdk/privacy',
   getApiBaseUrl: (_environment: 'production' = 'production'): string => {
     return 'https://us-central1-winr-9c11f.cloudfunctions.net';
   },

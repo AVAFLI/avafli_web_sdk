@@ -158,7 +158,7 @@ img { display: block; }
 
 /* ═══ New-user capture ("VISIT. EARN. WIN.") ═══ */
 
-.wv2-capture-stack { display: flex; flex-direction: column; gap: 18px; padding-top: 18px; }
+.wv2-capture-stack { display: flex; flex-direction: column; gap: 18px; padding-top: 18px; min-height: 100%; }
 .wv2-capture-titles { padding: 0 22px; text-align: center; color: #fff; display: flex; flex-direction: column; gap: 4px; }
 .wv2-capture-title { font-size: 40px; font-weight: 900; letter-spacing: -1.2px; white-space: nowrap; }
 .wv2-capture-sub { font-size: 15px; font-weight: 700; white-space: pre; }
@@ -206,10 +206,24 @@ img { display: block; }
 .wv2-age-row .wv2-ic { width: 20px; height: 20px; flex: none; }
 .wv2-age-row span { font-size: 14px; }
 
-.wv2-capture-legal { display: flex; flex-direction: column; gap: 3px; padding-bottom: 24px; }
+/* Bottom-anchored legal block: the stack stretches to the full scroll
+   viewport (min-height: 100%) and margin-top: auto absorbs the free space
+   between the CTA and the legal block, pinning it to the bottom padding.
+   When the viewport is short (keyboard open, small phones) there is no free
+   space — the auto margin resolves to 0, the stack's own 18px gap keeps a
+   minimum breathing room, and the screen simply scrolls. */
+.wv2-capture-legal { display: flex; flex-direction: column; gap: 3px; padding-bottom: 24px; margin-top: auto; }
 .wv2-capture-disclaimer {
   font-size: 12px; color: ${c.textTertiary}; text-align: center;
   padding: 0 30px; margin-bottom: 3px;
+}
+/* Inline Official Rules / Privacy Policy links inside the disclaimer sentence:
+   same size and color as the surrounding copy, underline as the only
+   affordance — replaces the separate links row on this screen (2.9.3). */
+.wv2-inline-legal {
+  color: inherit; font-size: inherit;
+  text-decoration: underline; text-underline-offset: 2px;
+  cursor: pointer;
 }
 
 /* ═══ Return-user dashboard ═══ */
@@ -1028,6 +1042,10 @@ button.wv2-dash-notice { cursor: pointer; }
   .wv2-capture-form { width: 374px; padding: 0; margin: 0 auto; gap: 15px; }
   .wv2-capture-form .wv2-pill { width: 360px; margin: 0 auto; }
   .wv2-capture-disclaimer { padding: 0 52px; }
+  /* The lightbox card is content-sized (height: auto), so the mobile drawer's
+     margin-top: auto bottom-anchor resolves to 0 here — no huge void. Give
+     the legal block deliberate breathing room under the CTA instead. */
+  .wv2-capture-legal { margin-top: 14px; padding-bottom: 30px; }
 
   /* Dashboard — scaled for the 748px card (no dedicated Figma frame; same
      proportional widening as 2.9, margins matched to the 31px header). */
