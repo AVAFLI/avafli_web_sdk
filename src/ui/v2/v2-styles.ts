@@ -78,56 +78,6 @@ img { display: block; }
   .wv2-grabber { visibility: hidden; height: 0; margin-top: 8px; }
 }
 
-/* ═══ Desktop treatment (>= 900px), 2.9 ═══
-   NOTE: the Figma pointer for desktop (WINR-High-V2 node 1133-441) resolves
-   to the HOST-SITE homepage mock — the file's WINR experience frames are all
-   430px mobile frames, so there is no drawer-level desktop spec to port.
-   This is therefore the agreed conservative widening: a ~600px card with a
-   modest type/spacing scale-up. Everything below 900px is untouched. */
-@media (min-width: 900px) {
-  .wv2-sheet {
-    width: min(600px, calc(100vw - 64px));
-    height: min(860px, calc(100vh - 64px));
-    height: min(860px, calc(100dvh - 64px));
-    border-radius: 28px;
-  }
-
-  /* Capture */
-  .wv2-capture-stack { gap: 22px; padding-top: 24px; }
-  .wv2-capture-title { font-size: 46px; }
-  .wv2-capture-sub { font-size: 17px; }
-  .wv2-prize-strip-cash { font-size: 28px; }
-  .wv2-prize-strip-title { font-size: 26px; }
-  .wv2-prize-strip-value { font-size: 18px; }
-  .wv2-capture-form { padding: 0 44px; }
-  .wv2-capture-disclaimer { padding: 0 52px; }
-
-  /* Dashboard */
-  .wv2-dash-body { gap: 18px; }
-  .wv2-prize-card { margin: 0 32px; height: 236px; }
-  .wv2-ph-cash-win { font-size: 50px; }
-  .wv2-ph-prize-title { font-size: 32px; }
-  .wv2-rail { padding: 0 34px 12px; gap: 14px; }
-  .wv2-dash-notice { margin: 0 32px; }
-  .wv2-dash-footer .wv2-pill-wrap { padding: 0 48px; }
-
-  /* How it works */
-  .wv2-hiw-items { padding: 0 40px; }
-  .wv2-hiw-cta { padding: 20px 44px 0; }
-
-  /* Winner claim flow */
-  .wv2-step-stack { padding: 0 44px 40px; }
-  .wv2-step-title { font-size: 30px; }
-  .wv2-claim-strip { font-size: 32px; }
-  .wv2-claim-congrats { font-size: 38px; }
-  .wv2-claim-cta { padding: 20px 44px 34px; }
-  .wv2-claim-done-cta { padding: 30px 44px 34px; }
-
-  /* Skeleton mirrors the dashboard's wider margins. */
-  .wv2-sk-card { margin: 15px 32px 0; height: 236px; }
-  .wv2-sk-rail { padding: 0 32px; }
-}
-
 /* ═══ Shared screen scaffolding ═══ */
 
 .wv2-screen { position: relative; height: 100%; display: flex; flex-direction: column; background: ${c.gunmetal}; }
@@ -1030,5 +980,88 @@ button.wv2-dash-notice { cursor: pointer; }
 .wv2-sk-bar { height: 71px; border-radius: 0; }
 .wv2-sk-pill-wrap { padding: 0 30px; }
 .wv2-sk-pill { height: 54px; border-radius: 27px; }
+
+/* ═══ Desktop lightbox (>= 900px), 2.9.2 ═══
+   Ported 1:1 from Joe's Figma (lV9ySLxVv4rQIxqVU19FpB, page "Prototypes -
+   Desktop Web"): frame "WINR LIGHTBOX DAY 1" 5530:19715 (748x598, email
+   capture) + frame "Modal" 5521:12279 (748x696, how-it-works).
+   Card spec: 748px wide, radius 30, 4px border in the PUBLISHER accent
+   (--wv2-accent — never a hard-coded color), 0 0 40px rgba(0,0,0,0.5)
+   shadow, auto height (content-sized) over the dimmed backdrop.
+   Everything below 900px is untouched. */
+@media (min-width: 900px) {
+  .wv2-sheet {
+    width: min(748px, calc(100vw - 64px));
+    height: auto;
+    max-height: calc(100vh - 64px);
+    max-height: calc(100dvh - 64px);
+    min-height: 460px;
+    display: flex; flex-direction: column;
+    border-radius: 30px;
+    border: 4px solid var(--wv2-accent);
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
+  }
+  /* Screens size to their content inside the auto-height card. */
+  .wv2-sheet > .wv2-screen { height: auto; flex: 1 1 auto; min-height: 0; }
+  /* EXCEPTION: the stepped claim form slides absolutely-positioned pages
+     inside a flex:1 viewport, which needs a definite height — that screen
+     keeps a fixed card height (the 696px Figma modal frame). */
+  .wv2-sheet:has(.wv2-claim-flow) {
+    height: min(696px, calc(100vh - 64px));
+    height: min(696px, calc(100dvh - 64px));
+  }
+
+  /* TOP UI inset per the Figma frames. */
+  .wv2-header { padding: 0 31px; }
+
+  /* Capture ("WINR LIGHTBOX DAY 1" 5530:19715): 49px Inter-Black title,
+     18px semibold sub, full-width 49px white prize strip at 27px, the form
+     a centered 374px column, 360px CTA pill. */
+  .wv2-capture-stack { gap: 20px; padding-top: 22px; }
+  .wv2-capture-titles { gap: 15px; }
+  .wv2-capture-title { font-size: 49px; letter-spacing: -1.47px; line-height: 0.91; }
+  .wv2-capture-sub { font-size: 18px; font-weight: 600; letter-spacing: -0.54px; }
+  .wv2-prize-strip { padding: 10px 12px; }
+  .wv2-prize-strip-cash { font-size: 27px; letter-spacing: -0.81px; }
+  .wv2-prize-strip-title { font-size: 27px; letter-spacing: -0.81px; }
+  .wv2-prize-strip-value { font-size: 18px; }
+  .wv2-capture-form { width: 374px; padding: 0; margin: 0 auto; gap: 15px; }
+  .wv2-capture-form .wv2-pill { width: 360px; margin: 0 auto; }
+  .wv2-capture-disclaimer { padding: 0 52px; }
+
+  /* Dashboard — scaled for the 748px card (no dedicated Figma frame; same
+     proportional widening as 2.9, margins matched to the 31px header). */
+  .wv2-dash-body { gap: 18px; }
+  .wv2-prize-card { margin: 0 31px; height: 236px; }
+  .wv2-ph-cash-win { font-size: 50px; }
+  .wv2-ph-prize-title { font-size: 32px; }
+  .wv2-rail { padding: 0 34px 12px; gap: 14px; }
+  .wv2-dash-notice { margin: 0 31px; }
+  .wv2-dash-footer .wv2-pill-wrap { padding: 0 48px; }
+
+  /* How it works ("Modal" 5521:12279): 70px strip at 35px Inter-Black,
+     656px item column (36px titles / 20px body), 28px ACCENT tagline,
+     343px CTA pill. */
+  .wv2-hiw-strip { height: 70px; font-size: 35px; letter-spacing: -1.05px; }
+  .wv2-hiw-items { padding: 0 46px; gap: 9px; }
+  .wv2-hiw-item { gap: 9px; }
+  .wv2-hiw-item-num, .wv2-hiw-item-title { font-size: 36px; letter-spacing: -1.08px; line-height: 1.31; }
+  .wv2-hiw-item-body { font-size: 20px; line-height: 1.31; }
+  .wv2-hiw-tagline { font-size: 28px; letter-spacing: -0.84px; color: var(--wv2-accent); padding: 40px 17px 0; }
+  .wv2-hiw-cta { padding: 14px 44px 0; }
+  .wv2-hiw-cta .wv2-pill { width: 343px; margin: 0 auto; }
+
+  /* Winner claim flow */
+  .wv2-step-stack { padding: 0 44px 40px; }
+  .wv2-step-title { font-size: 30px; }
+  .wv2-claim-strip { font-size: 32px; }
+  .wv2-claim-congrats { font-size: 38px; }
+  .wv2-claim-cta { padding: 20px 44px 34px; }
+  .wv2-claim-done-cta { padding: 30px 44px 34px; }
+
+  /* Skeleton mirrors the dashboard's wider margins. */
+  .wv2-sk-card { margin: 15px 31px 0; height: 236px; }
+  .wv2-sk-rail { padding: 0 31px; }
+}
 `;
 }

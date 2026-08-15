@@ -1,6 +1,15 @@
 # Changelog
 
 
+## 2.9.2 — 2026-08-14
+
+- Desktop lightbox matches the final Figma design (colored brand border,
+  748px card). ≥900px only: 30px radius, 4px border in the publisher's
+  primary color, 0 0 40px shadow, auto content height, and the Figma type
+  ramp (49px VISIT. EARN. WIN., 27px prize strip, 35px HOW IT WORKS strip,
+  36px/20px items, accent tagline, 360/343px CTA pills). Mobile/tablet
+  untouched.
+
 ## 2.9.1 — 2026-08-14
 
 - Share screen social icons updated to the official WINR brand set (Figma).

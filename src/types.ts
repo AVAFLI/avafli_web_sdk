@@ -693,7 +693,7 @@ export interface PresentationOptions {
 // ─── Constants ───
 
 export const WINR_CONSTANTS = {
-  SDK_VERSION: '2.9.1',
+  SDK_VERSION: '2.9.2',
   PLATFORM_OS: 'Web',
   getApiBaseUrl: (_environment: 'production' = 'production'): string => {
     return 'https://us-central1-winr-9c11f.cloudfunctions.net';
