@@ -434,6 +434,22 @@ export class V2ExperienceController {
   }
 
   /**
+   * Publisher display name for user-facing legal copy (2.9.4: the review
+   * screen's likeness consent). Server-fed `sdkConfig.appName` wins; the
+   * host page's `document.title` (the winner share line's same source) is
+   * the fallback; null when neither exists (callers render generic copy).
+   */
+  public get publisherName(): string | null {
+    const fed = this.sdkConfig?.appName?.trim();
+    if (fed) return fed;
+    if (typeof document !== 'undefined') {
+      const title = document.title.trim();
+      if (title) return title;
+    }
+    return null;
+  }
+
+  /**
    * Label for the capture screen's marketing-consent checkbox. Prefers the
    * nested per-screen override, then the flat legacy field, then the SDK
    * default. The config KEY stays `emailConsentText` for wire compatibility.

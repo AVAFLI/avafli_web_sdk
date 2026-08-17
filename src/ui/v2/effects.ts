@@ -70,6 +70,17 @@ export function resetImageWarmer(): void {
 
 // ─── Confetti ───
 
+/**
+ * Whether the user asked the OS for reduced motion. SSR-safe (no matchMedia
+ * → false). Checked once per effect mount — the OS setting flipping mid-
+ * animation re-applies on the next render, which is plenty.
+ */
+export function prefersReducedMotion(): boolean {
+  return (
+    typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+}
+
 export type ConfettiStyle = 'celebration' | 'gold';
 
 /** Multicolor sprinkle from the claim/celebration modals and streak tiles. */
@@ -91,6 +102,10 @@ const fract = (v: number): number => v - Math.floor(v);
  * Deterministic per-particle parameters (same math as iOS — no Math.random,
  * stable across frames). The rAF loop cancels itself once the canvas leaves
  * the DOM.
+ *
+ * Respects prefers-reduced-motion (2.9.4): under `reduce`, the field draws
+ * ONE static frame (the decorative specks stay, nothing tumbles) and the
+ * loop stops.
  */
 export function createConfetti(options: {
   style?: ConfettiStyle;
@@ -101,8 +116,10 @@ export function createConfetti(options: {
   const canvas = document.createElement('canvas');
   canvas.className = 'wv2-confetti';
   const palette = style === 'celebration' ? CELEBRATION_PALETTE : GOLD_PALETTE;
+  const reduced = prefersReducedMotion();
 
   let wasConnected = false;
+  let drewFrame = false;
   let rafId = 0;
 
   const draw = (): void => {
@@ -157,8 +174,12 @@ export function createConfetti(options: {
         ctx.fill();
         ctx.restore();
       }
+      drewFrame = true;
     }
 
+    // Reduced motion: stop after the first REAL frame (keep looping until
+    // layout gives the canvas a size, so the static frame actually exists).
+    if (reduced && drewFrame) return;
     rafId = requestAnimationFrame(draw);
   };
 

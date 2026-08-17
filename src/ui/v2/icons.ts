@@ -138,6 +138,9 @@ export const squareIcon = svg(
 
 export const checkSquareIcon = svg(
   '0 0 20 20',
+  // 2.9.4: the box fill is currentColor (the capture rows tint it with the
+  // publisher accent); the check is WHITE for contrast, matching the review
+  // screen's consent box and the CTA pill text on the same accent.
   '<rect x="0.5" y="0.5" width="19" height="19" rx="3" fill="currentColor"/>' +
-  '<path d="M5 10.2L8.4 13.6L15 6.6" stroke="#1d2330" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>'
+  '<path d="M5 10.2L8.4 13.6L15 6.6" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>'
 );

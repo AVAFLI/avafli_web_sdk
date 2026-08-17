@@ -1107,6 +1107,8 @@ export class WINR {
         fontFamily: serverBranding?.fontFamily || clientBranding?.fontFamily,
       },
       copy: this.serverSDKConfig?.copy || {},
+      // 2.9.4: publisher display name for legal copy (server-only).
+      appName: this.serverSDKConfig?.appName,
       bonusEntriesEnabled: this.serverSDKConfig?.bonusEntriesEnabled,
       rulesUrl: this.serverSDKConfig?.rulesUrl,
       // 2.9: publisher share link for the winner share step (server-only).

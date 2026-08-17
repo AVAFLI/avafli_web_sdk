@@ -359,6 +359,14 @@ export interface SDKConfig {
   /** Branding overrides (V2 uses ONLY logoUrl + primaryColor) */
   branding?: WINRBranding;
   /**
+   * Server-fed publisher/app display name (2.9.4). Used in user-facing legal
+   * copy — the claim review screen's likeness consent names the actual app
+   * ("I authorize Rumble and its promotional partners…"). OPTIONAL: absent
+   * on backends that don't emit it yet — the UI falls back to the host
+   * page's `document.title`, then to generic wording.
+   */
+  appName?: string;
+  /**
    * Copy/text overrides. NOTE: the V2 experience hardcodes its copy to the
    * design; this survives on the payload for backward compatibility only.
    */
@@ -693,7 +701,7 @@ export interface PresentationOptions {
 // ─── Constants ───
 
 export const WINR_CONSTANTS = {
-  SDK_VERSION: '2.9.3',
+  SDK_VERSION: '2.9.4',
   PLATFORM_OS: 'Web',
   /**
    * Canonical WINR privacy policy. 2.9.3: every "Privacy Policy" link used to

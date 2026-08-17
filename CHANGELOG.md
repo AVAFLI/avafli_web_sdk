@@ -1,6 +1,37 @@
 # Changelog
 
 
+## 2.9.4 — 2026-08-17
+
+Winner-flow design round (Ryan's direction, Joe's updated Figma frames).
+
+- **Claim review screen slimmed to its essentials** — the leftover
+  "Official Rules • Privacy Policy" links row is removed from the review
+  screen (it had survived 2.9.3's capture-screen dedupe). The screen now
+  shows only the optional likeness checkbox, SUBMIT, and the
+  secure-and-encrypted note; the capture screen's inline disclaimer links
+  carry the legal surface.
+- **Likeness consent names the actual publisher** — "I authorize {name} and
+  its promotional partners…" where {name} is the server-fed
+  `sdkConfig.appName` (new optional config field), falling back to the host
+  page's `document.title` (the share line's same source), then to the
+  previous generic "this app's publisher" wording.
+- **Winner splash confetti** — the splash now plays a celebration layer on
+  appearance (Joe's frame): the looping multicolor confetti field over the
+  screen plus the one-shot Figma confetti-burst GIF over the trophy art.
+  Purely decorative and non-blocking (pointer events pass through). Works in
+  both the mobile drawer and the desktop lightbox. `createConfetti` now
+  respects `prefers-reduced-motion` everywhere it is used: under `reduce`
+  the field freezes to a single static frame, and the splash skips the GIF
+  burst entirely.
+- **"EARN." in the publisher's primary color** — the capture screen's
+  VISIT. EARN. WIN. title renders "EARN." in the publisher's brand accent
+  (`--wv2-accent`); VISIT. and WIN. stay white.
+- **Capture checkboxes tinted with the primary color** — the 18+ and
+  marketing-consent boxes: checked is an accent-filled square with a white
+  check (matching the review consent box and the CTA pill), unchecked an
+  accent-tinted outline.
+
 ## 2.9.3 — 2026-08-14
 
 Note: 2.9.2 was never published to npm; 2.9.3 supersedes it.

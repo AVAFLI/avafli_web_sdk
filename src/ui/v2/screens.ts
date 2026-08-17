@@ -5,6 +5,7 @@ import {
   createAnimatedCheck,
   createConfetti,
   mountGifBurst,
+  prefersReducedMotion,
 } from './effects';
 import {
   arrowDownIcon,
@@ -41,6 +42,7 @@ import {
   isStep2Valid,
   isValidClaimName,
   isValidClaimPhone,
+  likenessConsentText,
   monthYearDisplay,
 } from './claim';
 import { attachPlacesAutocomplete, stateNameFromShortCode } from './places-autocomplete';
@@ -349,8 +351,12 @@ function renderConsentRow(
   row.setAttribute('role', 'checkbox');
   row.setAttribute('aria-checked', String(checked));
 
+  // 2.9.4 (Ryan): the boxes carry the publisher's primary color — checked is
+  // an accent-filled square with a contrasting white check (matching the
+  // review screen's consent box and the CTA pill), unchecked an
+  // accent-tinted outline. currentColor drives both icon variants.
   const box = icon(checked ? checkSquareIcon : squareIcon, 'wv2-ic');
-  box.style.color = '#fff';
+  box.style.color = 'var(--wv2-accent)';
   row.appendChild(box);
   row.appendChild(el('span', undefined, label));
 
@@ -384,7 +390,13 @@ export function renderCapture(c: V2ExperienceController, logoUrl?: string | null
   );
 
   const titles = el('div', 'wv2-capture-titles');
-  titles.appendChild(el('div', 'wv2-capture-title', 'VISIT. EARN. WIN.'));
+  // 2.9.4 (Ryan): "EARN." renders in the publisher's primary brand color
+  // (the --wv2-accent token); VISIT. and WIN. stay white.
+  const title = el('div', 'wv2-capture-title');
+  title.appendChild(document.createTextNode('VISIT. '));
+  title.appendChild(el('span', 'wv2-capture-title-earn', 'EARN.'));
+  title.appendChild(document.createTextNode(' WIN.'));
+  titles.appendChild(title);
   titles.appendChild(el('div', 'wv2-capture-sub', 'VISIT DAILY. EARN ENTRIES. WIN BIG!'));
   stack.appendChild(titles);
 
@@ -1479,6 +1491,25 @@ export function renderWinnerSplash(
 
   scroll.appendChild(stack);
   screen.appendChild(scroll);
+
+  // 2.9.4 (Joe's updated frame): celebration layer on splash appearance —
+  // the looping multicolor confetti field over the whole splash plus the
+  // one-shot Figma confetti-burst GIF over the trophy art. Purely
+  // decorative: the canvas/GIF never take pointer events, so nothing blocks
+  // CONTINUE or the X. Under prefers-reduced-motion the field freezes to a
+  // single static frame (createConfetti handles that) and the GIF — which
+  // has no static mode — is simply not mounted.
+  const confetti = createConfetti({ style: 'celebration', count: 18, speed: 0.55 });
+  screen.appendChild(confetti);
+  if (!prefersReducedMotion()) {
+    mountGifBurst({
+      parent: art,
+      src: V2_IMAGES.confettiBurst,
+      className: 'wv2-splash-burst',
+      durationMs: CONFETTI_BURST_DURATION_MS,
+    });
+  }
+
   return screen;
 }
 
@@ -2013,10 +2044,16 @@ export function renderClaimSteps(
 
   // ── Review: ALMOST DONE! ──
   // 2.9 (team decision 14 Aug): checkboxes 1 ("information is accurate") and
-  // 3 ("agree to Official Rules") are REMOVED — the rules/privacy links stay
-  // visible as plain links. Only the likeness/promotion checkbox remains,
-  // and it is OPTIONAL: SUBMIT never waits on it; its state travels as
-  // `promoConsentGranted` on the claim payload.
+  // 3 ("agree to Official Rules") are REMOVED. Only the likeness/promotion
+  // checkbox remains, and it is OPTIONAL: SUBMIT never waits on it; its
+  // state travels as `promoConsentGranted` on the claim payload.
+  // 2.9.4 (Joe's updated frames): the leftover "Official Rules • Privacy
+  // Policy" links row is gone from review too (entering already bound the
+  // user — the capture screen's inline disclaimer links carry the legal
+  // surface). The screen is now just the likeness consent + SUBMIT + the
+  // secure-note. The likeness copy names the actual publisher when known
+  // (sdkConfig.appName, else the host page's title — the share line's same
+  // source) instead of "this app's publisher".
 
   const renderReview = (): HTMLElement => {
     const content = el('div', 'wv2-review');
@@ -2028,11 +2065,7 @@ export function renderClaimSteps(
     box.innerHTML = checkIconSvg;
     likenessRow.appendChild(box);
     likenessRow.appendChild(
-      el(
-        'span',
-        'wv2-consent-text',
-        "I authorize this app's publisher and its promotional partners to use my name, city, profile photo, and likeness for winner announcements and promotional purposes. (Optional)"
-      )
+      el('span', 'wv2-consent-text', likenessConsentText(c.publisherName))
     );
     const syncLikeness = (): void => {
       box.classList.toggle('wv2-consent-on', form.authorizesLikeness);
@@ -2045,26 +2078,6 @@ export function renderClaimSteps(
     syncLikeness();
     consents.appendChild(likenessRow);
     content.appendChild(consents);
-
-    // Official Rules / Privacy Policy — kept visible as PLAIN LINKS (no
-    // checkbox): entering already bound the user per the capture screen.
-    const legalRow = el('div', 'wv2-review-links');
-    const rules = el('a', undefined, 'Official Rules');
-    rules.href = c.rulesUrl || '#';
-    rules.addEventListener('click', (e) => {
-      e.preventDefault();
-      openUrl(c.rulesUrl);
-    });
-    const privacy = el('a', undefined, 'Privacy Policy');
-    privacy.href = WINR_CONSTANTS.PRIVACY_URL;
-    privacy.addEventListener('click', (e) => {
-      e.preventDefault();
-      openUrl(WINR_CONSTANTS.PRIVACY_URL);
-    });
-    legalRow.appendChild(rules);
-    legalRow.appendChild(el('span', 'wv2-legal-dot'));
-    legalRow.appendChild(privacy);
-    content.appendChild(legalRow);
 
     const errorEl = el('div', 'wv2-claim-error');
     errorEl.style.display = 'none';

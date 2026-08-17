@@ -13,6 +13,7 @@ import {
   isClaimFormValid,
   isStep1Valid,
   isStep2Valid,
+  likenessConsentText,
 } from '../src/ui/v2/claim';
 import { WINRAPI } from '../src/network/api';
 import { LocalStorageProvider } from '../src/storage/local-storage';
@@ -427,5 +428,39 @@ describe('claim state list', () => {
     expect(US_STATES.indexOf('District of Columbia')).toBe(US_STATES.indexOf('Delaware') + 1);
     expect(US_STATES.indexOf('Florida')).toBe(US_STATES.indexOf('District of Columbia') + 1);
     expect([...US_STATES].sort()).toEqual([...US_STATES]);
+  });
+});
+
+describe('likeness consent copy (2.9.4)', () => {
+  it('names the actual publisher when a name is available', () => {
+    expect(likenessConsentText('Rumble')).toBe(
+      'I authorize Rumble and its promotional partners to use my name, city, ' +
+        'profile photo, and likeness for winner announcements and promotional ' +
+        'purposes. (Optional)'
+    );
+    // Whitespace-only names do not count as a name.
+    expect(likenessConsentText('  Rumble  ')).toContain('I authorize Rumble and');
+  });
+
+  it('falls back to the generic wording when no name is available', () => {
+    for (const name of [null, undefined, '', '   ']) {
+      expect(likenessConsentText(name)).toBe(
+        "I authorize this app's publisher and its promotional partners to use " +
+          'my name, city, profile photo, and likeness for winner announcements ' +
+          'and promotional purposes. (Optional)'
+      );
+    }
+  });
+
+  it('controller.publisherName prefers the server-fed sdkConfig.appName', () => {
+    const { controller } = makeController({});
+    controller.sdkConfig = { appName: '  Rumble  ' };
+    expect(controller.publisherName).toBe('Rumble');
+
+    // No server name and no DOM (node test env): null → generic copy.
+    controller.sdkConfig = {};
+    expect(controller.publisherName).toBeNull();
+    controller.sdkConfig = null;
+    expect(controller.publisherName).toBeNull();
   });
 });

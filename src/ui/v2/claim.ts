@@ -42,6 +42,25 @@ export interface PrizeClaimForm {
 /** Fixed — US-only sweepstakes. */
 export const CLAIM_COUNTRY = 'United States';
 
+/**
+ * The review screen's optional likeness-consent copy (2.9.4, Joe's updated
+ * frames): names the ACTUAL app/publisher when known so the consent reads as
+ * a real grant ("I authorize Rumble and its promotional partners…"), falling
+ * back to the generic "this app's publisher" only when no name is available.
+ *
+ * `name` resolution lives on the controller ({@link publisherName} =
+ * server-fed `sdkConfig.appName`, else the host page's `document.title` —
+ * the same source the winner share line uses).
+ */
+export function likenessConsentText(name?: string | null): string {
+  const who = name?.trim() || "this app's publisher";
+  return (
+    `I authorize ${who} and its promotional partners to use my name, city, ` +
+    'profile photo, and likeness for winner announcements and promotional ' +
+    'purposes. (Optional)'
+  );
+}
+
 export function emptyClaimForm(): PrizeClaimForm {
   return {
     firstName: '',

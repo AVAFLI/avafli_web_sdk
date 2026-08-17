@@ -161,6 +161,8 @@ img { display: block; }
 .wv2-capture-stack { display: flex; flex-direction: column; gap: 18px; padding-top: 18px; min-height: 100%; }
 .wv2-capture-titles { padding: 0 22px; text-align: center; color: #fff; display: flex; flex-direction: column; gap: 4px; }
 .wv2-capture-title { font-size: 40px; font-weight: 900; letter-spacing: -1.2px; white-space: nowrap; }
+/* 2.9.4 (Ryan): "EARN." in the publisher's primary color; VISIT./WIN. white. */
+.wv2-capture-title-earn { color: var(--wv2-accent); }
 .wv2-capture-sub { font-size: 15px; font-weight: 700; white-space: pre; }
 @media (max-width: 379px) { .wv2-capture-title { font-size: 34px; } }
 
@@ -689,6 +691,17 @@ button.wv2-dash-notice { cursor: pointer; }
 
 .wv2-claim-cta { padding: 20px 30px 30px; }
 
+/* 2.9.4 splash celebration (Joe's frame): the one-shot confetti-burst GIF
+   centered on the trophy art, overflowing it like the streak tile's burst.
+   The looping field itself is the shared .wv2-confetti canvas appended at
+   screen level (absolute inset 0, pointer-events none). */
+.wv2-splash-burst {
+  position: absolute; left: 50%; top: 50%;
+  width: 300px; height: 300px;
+  transform: translate(-50%, -50%);
+  pointer-events: none; z-index: 1;
+}
+
 /* Stepped form (WINRV2ClaimSteps): gold-sparkle full-bleed backdrop (406px)
    fading into the dark body, per the frames. */
 .wv2-claim-form-bg { position: absolute; top: 0; left: 0; right: 0; height: 406px; overflow: hidden; }
@@ -873,15 +886,13 @@ button.wv2-dash-notice { cursor: pointer; }
 }
 .wv2-share-toast.wv2-visible { opacity: 1; transform: translate(-50%, 0); }
 
-/* Review ("ALMOST DONE!", 2.9): ONE optional likeness consent, the plain
-   Official Rules / Privacy Policy links, inline error, and the gunmetal
-   "secure and encrypted" lock note under the CTA. */
+/* Review ("ALMOST DONE!", 2.9.4): ONE optional likeness consent, inline
+   error, and the gunmetal "secure and encrypted" lock note under the CTA.
+   The "Official Rules • Privacy Policy" links row is GONE (Joe's updated
+   frames) — the capture screen's inline disclaimer links carry the legal
+   surface. */
 .wv2-review { display: flex; flex-direction: column; padding: 44px 12px 12px; }
 .wv2-consents { display: flex; flex-direction: column; gap: 32px; }
-/* Official Rules • Privacy Policy — plain links under the consent row. */
-.wv2-review-links { display: flex; align-items: center; justify-content: center; gap: 10px; padding-top: 26px; }
-.wv2-review-links a { font-size: 14px; font-weight: 700; color: #fff; text-decoration: underline; text-underline-offset: 3px; }
-.wv2-review-links a:hover { color: rgba(255,255,255,0.85); }
 .wv2-consent-row { display: flex; align-items: flex-start; gap: 12px; text-align: left; }
 .wv2-consent-box {
   width: 24px; height: 24px; border-radius: 5px; flex: none;
