@@ -2154,6 +2154,30 @@ const checkIconSvg =
 // ─── Share step ("PLEASE SHARE A LITTLE") — POST-submit, never blocking ───
 
 /**
+ * Appends `utm_source={network}&utm_medium=winr_share` to the publisher's
+ * shareUrl via the URL API (correct whether or not the URL already has a
+ * query string). A URL already carrying a `utm_source` param is returned
+ * untouched — the publisher's own tagging wins. Unparseable URLs pass
+ * through unchanged. Exported for tests.
+ */
+export function taggedShareUrl(
+  shareUrl: string | null | undefined,
+  network: string
+): string | null | undefined {
+  if (!shareUrl) return shareUrl;
+  let url: URL;
+  try {
+    url = new URL(shareUrl);
+  } catch {
+    return shareUrl;
+  }
+  if (url.searchParams.has('utm_source')) return shareUrl;
+  url.searchParams.append('utm_source', network);
+  url.searchParams.append('utm_medium', 'winr_share');
+  return url.toString();
+}
+
+/**
  * 2.9: the share step shows AFTER the claim is submitted. The claim is
  * already recorded server-side, so nothing here can gate or undo it —
  * CONTINUE advances to the confirmation screen and the X simply closes the
@@ -2219,6 +2243,9 @@ export function renderWinnerShare(
   };
 
   const shareUrl = c.shareUrl;
+  /** The publisher shareUrl UTM-tagged with the tapped network. */
+  const taggedUrl = (network: string): string | null | undefined =>
+    taggedShareUrl(shareUrl, network);
 
   // Transient "Copied!" toast for the clipboard fallback.
   let toastTimer: number | null = null;
@@ -2233,16 +2260,20 @@ export function renderWinnerShare(
     }, 2200);
   };
 
-  /** IG/Snap/TikTok: Web Share API when available, else clipboard + toast. */
-  const systemShare = (): void => {
+  /**
+   * IG/Snap/TikTok: Web Share API when available, else clipboard + toast.
+   * The shareUrl is UTM-tagged with the tapped [network] on both paths.
+   */
+  const systemShare = (network: string): void => {
     const text = shareLine();
+    const url = taggedUrl(network);
     const nav = navigator as Navigator & {
       share?: (data: { text: string; url?: string }) => Promise<void>;
     };
     if (typeof nav.share === 'function') {
-      nav.share({ text, ...(shareUrl ? { url: shareUrl } : {}) }).catch(() => undefined);
+      nav.share({ text, ...(url ? { url } : {}) }).catch(() => undefined);
     } else if (navigator.clipboard) {
-      const line = shareUrl ? `${text} ${shareUrl}` : text;
+      const line = url ? `${text} ${url}` : text;
       navigator.clipboard
         .writeText(line)
         .then(showToast)
@@ -2252,14 +2283,16 @@ export function renderWinnerShare(
 
   const shareToX = (): void => {
     const params = new URLSearchParams({ text: shareLine() });
-    if (shareUrl) params.set('url', shareUrl);
+    const url = taggedUrl('x');
+    if (url) params.set('url', url);
     openUrl(`https://twitter.com/intent/tweet?${params.toString()}`);
   };
 
   const shareToFacebook = (): void => {
     // FB's sharer takes ONLY a URL (prefilled text is not allowed by the
-    // platform). Fall back to the host page when no shareUrl is configured.
-    const u = shareUrl || window.location.href;
+    // platform). Fall back to the host page when no shareUrl is configured
+    // (the host page is not the publisher's shareUrl, so it is not tagged).
+    const u = taggedUrl('facebook') || window.location.href;
     openUrl(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(u)}`);
   };
 
@@ -2267,11 +2300,11 @@ export function renderWinnerShare(
   social.appendChild(el('div', 'wv2-social-title', 'Share on Social Media:'));
   const socialRow = el('div', 'wv2-social-row');
   const glyphs: Array<[string, string, () => void]> = [
-    [socialInstagramIcon, 'Instagram', systemShare],
+    [socialInstagramIcon, 'Instagram', () => systemShare('instagram')],
     [socialFacebookIcon, 'Facebook', shareToFacebook],
     [socialXIcon, 'X', shareToX],
-    [socialSnapchatIcon, 'Snapchat', systemShare],
-    [socialTiktokIcon, 'TikTok', systemShare],
+    [socialSnapchatIcon, 'Snapchat', () => systemShare('snapchat')],
+    [socialTiktokIcon, 'TikTok', () => systemShare('tiktok')],
   ];
   for (const [glyph, name, action] of glyphs) {
     const btn = el('button', 'wv2-social-btn');

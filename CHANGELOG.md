@@ -1,6 +1,17 @@
 # Changelog
 
 
+## Unreleased
+
+- **Share-link UTM tagging** — when the publisher's `shareUrl` is included
+  in a share action, the SDK appends `utm_source={network}&utm_medium=winr_share`
+  ({network} = x | facebook | instagram | snapchat | tiktok, per the tapped
+  button; Web Share API / clipboard paths keep their network's value). Built
+  with the URL API so URLs with existing query strings extend correctly, and
+  a shareUrl that already carries a `utm_source` param is left untouched
+  (publisher tagging wins). Share-text URLs only — the Facebook host-page
+  fallback (no shareUrl configured) is not tagged; nothing else changes.
+
 ## 2.9.4 — 2026-08-17
 
 Winner-flow design round (Ryan's direction, Joe's updated Figma frames).
