@@ -1113,6 +1113,10 @@ export class WINR {
       rulesUrl: this.serverSDKConfig?.rulesUrl,
       // 2.9: publisher share link for the winner share step (server-only).
       shareUrl: this.serverSDKConfig?.shareUrl,
+      // 2.9.4 fix: this merge is field-by-field, and placesApiKey was never
+      // copied — address autocomplete silently stayed off in any integration
+      // that reads the merged config (all of them, via resolveSdkConfig).
+      placesApiKey: this.serverSDKConfig?.placesApiKey,
       ageGateEnabled: this.serverSDKConfig?.ageGateEnabled ?? this.config.options?.enableAgeGate ?? true,
       ageGateMinAge: this.serverSDKConfig?.ageGateMinAge ?? this.config.options?.ageGateMinAge ?? 18,
       experience: this.serverSDKConfig?.experience,
