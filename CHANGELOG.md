@@ -24,6 +24,15 @@ Winner-flow design round (Ryan's direction, Joe's updated Figma frames).
   respects `prefers-reduced-motion` everywhere it is used: under `reduce`
   the field freezes to a single static frame, and the splash skips the GIF
   burst entirely.
+- **Confirmation screen matches Joe's frame (5386:5807)** — the
+  "YOUR PRIZE CLAIM HAS BEEN SUBMITTED" screen now celebrates on appearance
+  with the same confetti machinery as the splash (looping field + one-shot
+  burst centered on the gold keepsake card, reduced-motion aware,
+  non-blocking); the "3-5 Business Days" card is a solid dark gunmetal card
+  with a subtle border (envelope ring and days line already rode the
+  publisher accent); and the keepsake card's OFFICIAL / WINNER labels render
+  in the publisher accent instead of fixed gold. No bottom attribution
+  strip.
 - **"EARN." in the publisher's primary color** — the capture screen's
   VISIT. EARN. WIN. title renders "EARN." in the publisher's brand accent
   (`--wv2-accent`); VISIT. and WIN. stay white.

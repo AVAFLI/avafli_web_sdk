@@ -2336,12 +2336,17 @@ export function renderClaimConfirmation(
   );
 
   // Mail icon in an accent-ringed circle on the "3-5 Business Days" card.
+  // 2.9.4 (Joe's frame 5386:5807): solid dark gunmetal card with a subtle
+  // border (modifier class) — ring stroke and the days line stay in the
+  // publisher accent, never a hardcoded color.
   const mailRing = el('div', 'wv2-claim-mail-ring');
   mailRing.appendChild(icon(mailIcon, 'wv2-claim-mail'));
   const mailCol = el('div', 'wv2-claim-mail-col');
   mailCol.appendChild(el('div', 'wv2-claim-mail-line', 'Expect to receive your prize within'));
   mailCol.appendChild(el('div', 'wv2-claim-mail-days', '3-5 Business Days'));
-  stack.appendChild(renderClaimInfoCard(mailRing, mailCol));
+  const daysCard = renderClaimInfoCard(mailRing, mailCol);
+  daysCard.classList.add('wv2-claim-done-card');
+  stack.appendChild(daysCard);
 
   // The gold OFFICIAL WINNER keepsake card: cream/gold gradient, small trophy
   // breaking the top border, serif name, award month + claim number.
@@ -2373,6 +2378,25 @@ export function renderClaimConfirmation(
 
   scroll.appendChild(stack);
   screen.appendChild(scroll);
+
+  // 2.9.4 (Joe's frame): confirmation celebrates on appearance with the same
+  // machinery as the winner splash — the looping multicolor confetti field
+  // over the screen plus the one-shot Figma burst GIF centered on the gold
+  // keepsake card (its position:relative anchors the shared burst class).
+  // Decorative and non-blocking; under prefers-reduced-motion the field
+  // freezes to a static frame and the GIF is skipped. Works in both the
+  // mobile drawer and the desktop lightbox.
+  const confetti = createConfetti({ style: 'celebration', count: 18, speed: 0.55 });
+  screen.appendChild(confetti);
+  if (!prefersReducedMotion()) {
+    mountGifBurst({
+      parent: card,
+      src: V2_IMAGES.confettiBurst,
+      className: 'wv2-splash-burst',
+      durationMs: CONFETTI_BURST_DURATION_MS,
+    });
+  }
+
   return screen;
 }
 

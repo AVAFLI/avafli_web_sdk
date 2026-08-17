@@ -691,10 +691,11 @@ button.wv2-dash-notice { cursor: pointer; }
 
 .wv2-claim-cta { padding: 20px 30px 30px; }
 
-/* 2.9.4 splash celebration (Joe's frame): the one-shot confetti-burst GIF
-   centered on the trophy art, overflowing it like the streak tile's burst.
-   The looping field itself is the shared .wv2-confetti canvas appended at
-   screen level (absolute inset 0, pointer-events none). */
+/* 2.9.4 celebration burst (Joe's frames): the one-shot confetti-burst GIF
+   centered on its positioned parent — the splash mounts it on the trophy
+   art, the confirmation on the gold keepsake card. The looping field itself
+   is the shared .wv2-confetti canvas appended at screen level (absolute
+   inset 0, pointer-events none). */
 .wv2-splash-burst {
   position: absolute; left: 50%; top: 50%;
   width: 300px; height: 300px;
@@ -927,6 +928,13 @@ button.wv2-dash-notice { cursor: pointer; }
   text-align: center; padding: 20px 30px 0;
 }
 .wv2-claim-done-sub { font-size: 15px; color: rgba(255,255,255,0.85); text-align: center; padding: 8px 34px 0; }
+/* 2.9.4 (Joe's frame 5386:5807): the "3-5 Business Days" card is a SOLID
+   dark gunmetal card with a subtle border (the shared translucent info-card
+   look stays on the splash's shield card). */
+.wv2-claim-done-card {
+  background: ${c.gunmetal};
+  border: 1px solid rgba(255,255,255,0.12);
+}
 .wv2-claim-mail-ring {
   width: 54px; height: 54px; border-radius: 50%; flex: none;
   border: 2px solid var(--wv2-accent);
@@ -954,7 +962,8 @@ button.wv2-dash-notice { cursor: pointer; }
 .wv2-gold-official {
   display: flex; justify-content: space-between;
   padding: 18px 26px 0;
-  font-size: 16px; font-weight: 900; letter-spacing: 0.5px; color: #b88c29;
+  /* 2.9.4: OFFICIAL / WINNER in the publisher accent (was fixed gold). */
+  font-size: 16px; font-weight: 900; letter-spacing: 0.5px; color: var(--wv2-accent);
 }
 .wv2-gold-name {
   font-family: Georgia, 'Times New Roman', serif;
