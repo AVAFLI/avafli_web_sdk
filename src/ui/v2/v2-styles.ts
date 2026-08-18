@@ -592,12 +592,8 @@ button.wv2-dash-notice { cursor: pointer; }
 }
 .wv2-hiw-cta { padding: 20px 28px 0; }
 
-/* Muted privacy opt-out entry point + its confirmation dialog. */
-.wv2-privacy-link {
-  display: block; margin: 18px auto 30px; padding: 6px 10px;
-  background: none; border: none; cursor: pointer;
-  font-size: 12px; color: ${c.textTertiary}; text-decoration: underline;
-}
+/* Delete-my-data confirmation dialog (raised by the privacy page's delete
+   bridge — see renderOptOutDialog). */
 .wv2-optout-card {
   position: relative;
   width: calc(100% - 48px); max-width: 340px;

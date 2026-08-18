@@ -120,17 +120,12 @@ describe('Privacy choices → delete-my-data flow', () => {
   });
 });
 
-describe('how-it-works screen: privacy entry point (2.9.5)', () => {
-  it('renders the muted "Privacy choices" link, which opens the Privacy overlay directly', () => {
+describe('how-it-works screen: privacy surfaces removed (2.9.5)', () => {
+  it('the "Privacy choices" fine-print link is gone — the legal-links row and capture inline links carry the privacy path', () => {
     const { controller } = makeController();
     const screen = renderHowItWorks(controller);
-    const link = screen.querySelector('.wv2-privacy-link') as HTMLButtonElement | null;
-    expect(link?.textContent).toBe(WINRV2Strings.privacyChoices);
-    link?.click();
-    expect(controller.legalOverlay?.doc).toBe('privacy');
-    // It no longer stages the (removed) privacy-choices card.
-    expect(controller.optOutPhase).toBe('idle');
-    controller.closeLegalOverlay();
+    expect(screen.querySelector('.wv2-privacy-link')).toBeNull();
+    expect(screen.textContent).not.toContain('Privacy choices');
   });
 
   it('the how-it-works screen no longer mounts the opt-out dialog or the choices surface', () => {

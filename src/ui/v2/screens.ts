@@ -1388,14 +1388,11 @@ export function renderHowItWorks(c: V2ExperienceController, logoUrl?: string | n
   cta.appendChild(renderPill('GOT IT - START MY STREAK', () => c.hideHowItWorks()));
   scroll.appendChild(cta);
 
-  // Muted privacy entry point — deliberately quiet: present for those who
-  // look for it, invisible to the pitch. 2.9.5: opens the Privacy Policy
-  // overlay directly — the privacy page itself now carries the "Delete my
-  // data" section (?app=1), which bridges back into the destructive
-  // confirmation. The intermediate privacy-choices card is gone.
-  const privacy = el('button', 'wv2-privacy-link', WINRV2Strings.privacyChoices);
-  privacy.addEventListener('click', () => c.showLegalOverlay('privacy'));
-  scroll.appendChild(privacy);
+  // 2.9.5 (Ryan's review): the muted "Privacy choices" fine-print link that
+  // sat below the CTA is REMOVED — the legal-links row (dashboard, code
+  // screen) and the capture screen's inline disclaimer links keep the
+  // privacy page (and its "Delete my data" section) findable, so a third
+  // entry point here was redundant.
 
   screen.appendChild(scroll);
   return screen;

@@ -70,13 +70,7 @@ export const WINRV2Strings = {
   /** The escape-hatch link under {@link legalOverlayLoadFailed}. */
   legalOverlayOpenInTab: 'Open in new tab',
 
-  // ─── Privacy / RTD opt-out ───
-  /**
-   * Muted entry-point link at the bottom of the how-it-works screen. 2.9.5:
-   * opens the Privacy Policy overlay directly — the delete action lives
-   * inside the privacy page itself now.
-   */
-  privacyChoices: 'Privacy choices',
+  // ─── RTD opt-out (delete-my-data confirmation) ───
   optOutTitle: 'Delete my data & stop participating',
   optOutBody:
     'This permanently deletes your WINR data, ends your giveaway participation, and cannot be undone. You can also email info@avafli.com.',

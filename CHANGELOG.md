@@ -21,9 +21,13 @@
   overlay is open (the listener detaches on close); a valid message closes
   the overlay and raises the EXISTING destructive confirmation +
   authenticated erasure flow, unchanged. The intermediate "Privacy choices"
-  card (2.9) is gone — the muted "Privacy choices" fine-print entry remains
-  and now opens the Privacy overlay directly. The delete confirmation now
-  mounts at root level so the bridge can raise it over any screen.
+  card (2.9) is gone. The delete confirmation now mounts at root level so
+  the bridge can raise it over any screen.
+- **How-it-works "Privacy choices" fine print removed** — the third privacy
+  entry point was redundant once the delete path moved into the privacy
+  page: the legal-links row (dashboard, code entry) and the capture screen's
+  inline disclaimer links keep it findable. The link, its string, and its
+  CSS are deleted.
 - **Share-link UTM tagging** — when the publisher's `shareUrl` is included
   in a share action, the SDK appends `utm_source={network}&utm_medium=winr_share`
   ({network} = x | facebook | instagram | snapchat | tiktok, per the tapped
