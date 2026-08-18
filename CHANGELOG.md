@@ -1,6 +1,14 @@
 # Changelog
 
 
+## 2.9.6 — 2026-08-18
+
+- **Desktop: restored vertical spacing on How-it-works** — the removed
+  "Privacy choices" fine print had been supplying the screen's bottom
+  spacing; the ≥900px lightbox now gets roomier step gaps, air around the
+  warning line, and real bottom padding under the CTA (mobile drawer gets
+  the matching CTA bottom padding).
+
 ## 2.9.5 — 2026-08-18
 
 - **Legal documents open inside the experience** — Official Rules and the

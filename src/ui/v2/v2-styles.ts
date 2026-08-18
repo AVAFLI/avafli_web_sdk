@@ -590,7 +590,10 @@ button.wv2-dash-notice { cursor: pointer; }
   font-size: 20px; font-weight: 700; letter-spacing: -0.6px; color: #fff;
   text-align: center; padding: 22px 40px 0;
 }
-.wv2-hiw-cta { padding: 20px 28px 0; }
+/* 2.9.6: the CTA carries its own bottom padding — the removed "Privacy
+   choices" fine print (margin: 18px auto 30px) had been supplying ALL the
+   spacing under the button. */
+.wv2-hiw-cta { padding: 20px 28px 30px; }
 
 /* Delete-my-data confirmation dialog (raised by the privacy page's delete
    bridge — see renderOptOutDialog). */
@@ -1103,12 +1106,18 @@ button.wv2-dash-notice { cursor: pointer; }
      656px item column (36px titles / 20px body), 28px ACCENT tagline,
      343px CTA pill. */
   .wv2-hiw-strip { height: 70px; font-size: 35px; letter-spacing: -1.05px; }
-  .wv2-hiw-items { padding: 0 46px; gap: 9px; }
+  /* 2.9.6: vertical rhythm restored after the "Privacy choices" fine print
+     was removed (its margins had been supplying the bottom spacing, and the
+     auto-height card ended nearly flush with the CTA): roomier gaps between
+     the numbered steps, clear air around the tagline warning line, and
+     generous bottom padding under the CTA — matching the capture screen's
+     breathing room (.wv2-capture-legal) in the same lightbox. */
+  .wv2-hiw-items { padding: 0 46px; gap: 22px; }
   .wv2-hiw-item { gap: 9px; }
   .wv2-hiw-item-num, .wv2-hiw-item-title { font-size: 36px; letter-spacing: -1.08px; line-height: 1.31; }
   .wv2-hiw-item-body { font-size: 20px; line-height: 1.31; }
-  .wv2-hiw-tagline { font-size: 28px; letter-spacing: -0.84px; color: var(--wv2-accent); padding: 40px 17px 0; }
-  .wv2-hiw-cta { padding: 14px 44px 0; }
+  .wv2-hiw-tagline { font-size: 28px; letter-spacing: -0.84px; color: var(--wv2-accent); padding: 40px 17px 8px; }
+  .wv2-hiw-cta { padding: 22px 44px 40px; }
   .wv2-hiw-cta .wv2-pill { width: 343px; margin: 0 auto; }
 
   /* Winner claim flow */
