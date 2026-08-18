@@ -21,7 +21,7 @@ WINR lets you add daily-entry sweepstakes and prize experiences to your app in u
 - **Winner claim flow** — "WE HAVE A WINNER!" splash and a guided prize-claim flow (name, shipping address incl. DC, optional photo), followed by a post-submit share step (optional story + real share actions) and a claim-number confirmation
 - **Responsive V2 design** — Bottom drawer on mobile (<768px), centered modal card on desktop (≥768px, widened with a modest type/spacing scale-up at ≥900px)
 - **Publisher branding** — Logo, primary color, and prize image configured from the WINR dashboard
-- **GDPR/CCPA compliant** — Built-in consent flows, RTD opt-out via `optOut()`, and an in-app "Privacy choices → delete my data"
+- **GDPR/CCPA compliant** — Built-in consent flows, RTD opt-out via `optOut()`, and a self-serve "Delete my data & stop participating" section inside the in-experience Privacy Policy
 - **Analytics forwarding** — Route SDK events to your existing analytics stack
 - **Shadow DOM isolation** — Styles never leak into your page; fonts and imagery are bundled (no CDN fetches)
 
@@ -115,7 +115,7 @@ attribution upgrades in place and the streak carries over automatically.
 ### npm
 
 ```bash
-npm install winr-web-sdk@^2.9.0
+npm install winr-web-sdk@^2.9.5
 ```
 
 ```typescript
@@ -296,9 +296,10 @@ drawing was fair and that a prize went to a real eligible person, which a sweeps
 operator must be able to show; GDPR Art. 17(3) exempts data needed for legal claims.
 The person is erased, the proof is kept.
 
-Users can also self-serve without any code from you: the how-it-works ("?")
-screen's **Privacy choices** surface (privacy policy link + **delete my data**)
-runs the same erasure as `optOut()`, behind a destructive confirmation.
+Users can also self-serve without any code from you: every legal link opens the
+Privacy Policy in an in-experience overlay (no new tab), and its **Delete my data &
+stop participating** section runs the same erasure as `optOut()`, behind a
+destructive confirmation.
 
 ## API Reference
 
