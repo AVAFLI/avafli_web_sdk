@@ -29,7 +29,7 @@ import {
   ticketIcon,
   uploadIcon,
 } from './icons';
-import { V2ExperienceController } from './controller';
+import { LegalDoc, V2ExperienceController } from './controller';
 import { WINRV2Strings } from './strings';
 import {
   CLAIM_COUNTRY,
@@ -175,12 +175,17 @@ export function renderPill(
   return btn;
 }
 
+/**
+ * New-tab escape hatch. 2.9.5: legal documents NO LONGER route through here
+ * (they open the in-experience overlay); the remaining callers are the
+ * social share intents (X / Facebook), which genuinely belong in a new tab.
+ */
 function openUrl(url?: string): void {
   if (url) window.open(url, '_blank', 'noopener');
 }
 
 export function renderLegalLinks(
-  rulesUrl?: string,
+  c: V2ExperienceController,
   showPoweredBy = false,
   showLinksRow = true
 ): HTMLElement {
@@ -189,23 +194,24 @@ export function renderLegalLinks(
   // carries the Official Rules / Privacy Policy links inline (see
   // renderLegalInlineLink), so a second links row there was pure duplication.
   // Every other surface (claim review, how-it-works, code screen) keeps the row.
+  //
+  // 2.9.5: both links open the IN-EXPERIENCE legal overlay (iframe) instead
+  // of a new tab. The hrefs remain the real destinations so context-menu /
+  // middle-click "open in new tab" still works.
   if (showLinksRow) {
     const row = el('div', 'wv2-legal-row');
     const rules = el('a', undefined, 'OFFICIAL RULES');
     rules.setAttribute('role', 'button');
-    rules.href = rulesUrl || '#';
+    rules.href = c.rulesUrl || '#';
     rules.addEventListener('click', (e) => {
       e.preventDefault();
-      openUrl(rulesUrl);
+      c.showLegalOverlay('rules');
     });
-    // 2.9.3: PRIVACY POLICY opened rulesUrl (no privacy URL existed in
-    // config — same latent bug as the native SDKs). It now opens the real
-    // policy.
     const privacy = el('a', undefined, 'PRIVACY POLICY');
     privacy.href = WINR_CONSTANTS.PRIVACY_URL;
     privacy.addEventListener('click', (e) => {
       e.preventDefault();
-      openUrl(WINR_CONSTANTS.PRIVACY_URL);
+      c.showLegalOverlay('privacy');
     });
     row.appendChild(rules);
     row.appendChild(el('span', 'wv2-legal-dot'));
@@ -226,18 +232,90 @@ export function renderLegalLinks(
 
 /**
  * An underlined legal link embedded inside running copy (the capture screen's
- * disclaimer sentence). Same target and behavior as the standalone links row:
- * both Official Rules and Privacy Policy open `rulesUrl` in a new tab.
+ * disclaimer sentence). Same targets and behavior as the standalone links
+ * row: 2.9.5, opens the in-experience legal overlay instead of a new tab.
  */
-function renderLegalInlineLink(label: string, url?: string): HTMLAnchorElement {
+function renderLegalInlineLink(
+  c: V2ExperienceController,
+  label: string,
+  doc: LegalDoc
+): HTMLAnchorElement {
   const link = el('a', 'wv2-inline-legal', label);
   link.setAttribute('role', 'button');
-  link.href = url || '#';
+  link.href = (doc === 'rules' ? c.rulesUrl : WINR_CONSTANTS.PRIVACY_URL) || '#';
   link.addEventListener('click', (e) => {
     e.preventDefault();
-    openUrl(url);
+    c.showLegalOverlay(doc);
   });
   return link;
+}
+
+/**
+ * How long the legal overlay waits for the iframe's `load` event before
+ * offering the "Open in new tab" fallback. Best-effort: some publisher CSPs
+ * (frame-src) block framing winrmedia.com, and a blocked frame may never
+ * fire `load` — the timeout is the only portable signal.
+ */
+export const LEGAL_IFRAME_TIMEOUT_MS = 8000;
+
+/**
+ * The in-experience legal overlay (2.9.5): a full-surface layer over the
+ * drawer/lightbox with a slim gunmetal header (title + X) and an iframe
+ * loading the document. A loading veil covers the frame until its `load`
+ * event; if that never fires within {@link LEGAL_IFRAME_TIMEOUT_MS}, the
+ * veil swaps to the "Open in new tab" fallback pointing at
+ * `c.legalOverlay.fallbackUrl`.
+ */
+export function renderLegalOverlay(c: V2ExperienceController): HTMLElement {
+  const layer = el('div', 'wv2-legal-overlay');
+  const overlay = c.legalOverlay;
+  if (!overlay) return layer;
+
+  const header = el('div', 'wv2-legal-overlay-header');
+  header.appendChild(el('div', 'wv2-legal-overlay-title', overlay.title));
+  const close = el('button', 'wv2-circle-btn');
+  const x = icon(closeIcon, 'wv2-ic');
+  x.style.cssText = 'width:12px;height:12px';
+  close.appendChild(x);
+  close.setAttribute('aria-label', 'Close');
+  close.addEventListener('click', () => c.closeLegalOverlay());
+  header.appendChild(close);
+  layer.appendChild(header);
+
+  const body = el('div', 'wv2-legal-overlay-body');
+  const frame = el('iframe', 'wv2-legal-overlay-frame');
+  frame.src = overlay.url;
+  frame.title = overlay.title;
+  frame.setAttribute('referrerpolicy', 'no-referrer');
+  body.appendChild(frame);
+
+  const veil = el('div', 'wv2-legal-overlay-veil');
+  veil.appendChild(el('span', 'wv2-spinner'));
+  body.appendChild(veil);
+
+  let settled = false;
+  const timer = window.setTimeout(() => {
+    if (settled) return;
+    settled = true;
+    veil.innerHTML = '';
+    veil.appendChild(
+      el('div', 'wv2-legal-overlay-fallback-text', WINRV2Strings.legalOverlayLoadFailed)
+    );
+    const open = el('a', 'wv2-legal-overlay-fallback-link', WINRV2Strings.legalOverlayOpenInTab);
+    open.href = overlay.fallbackUrl;
+    open.target = '_blank';
+    open.rel = 'noopener noreferrer';
+    veil.appendChild(open);
+  }, LEGAL_IFRAME_TIMEOUT_MS);
+  frame.addEventListener('load', () => {
+    if (settled) return;
+    settled = true;
+    window.clearTimeout(timer);
+    veil.remove();
+  });
+
+  layer.appendChild(body);
+  return layer;
 }
 
 // ─── Loading / empty states ───
@@ -529,7 +607,7 @@ export function renderCapture(c: V2ExperienceController, logoUrl?: string | null
   // congested under the CTA; on short viewports the auto margin collapses and
   // the block degrades to normal scrollable flow. The disclaimer sentence
   // carries the Official Rules / Privacy Policy links INLINE (underlined, same
-  // targets and new-tab behavior as the old links row) — the separate
+  // targets and overlay behavior as the links row) — the separate
   // "OFFICIAL RULES • PRIVACY POLICY" row was a duplicate here and is removed
   // from this screen only. renderLegalLinks still contributes the reCAPTCHA
   // attribution (required while the badge is hidden — see perimeter.ts) and
@@ -541,11 +619,11 @@ export function renderCapture(c: V2ExperienceController, logoUrl?: string | null
       'Your email lets us contact you if you win. By entering you agree to the '
     )
   );
-  disclaimer.appendChild(renderLegalInlineLink('Official Rules', c.rulesUrl));
+  disclaimer.appendChild(renderLegalInlineLink(c, 'Official Rules', 'rules'));
   disclaimer.appendChild(document.createTextNode(' & '));
-  disclaimer.appendChild(renderLegalInlineLink('Privacy Policy', WINR_CONSTANTS.PRIVACY_URL));
+  disclaimer.appendChild(renderLegalInlineLink(c, 'Privacy Policy', 'privacy'));
   legal.appendChild(disclaimer);
-  legal.appendChild(renderLegalLinks(c.rulesUrl, true, false));
+  legal.appendChild(renderLegalLinks(c, true, false));
   stack.appendChild(legal);
 
   scroll.appendChild(stack);
@@ -811,7 +889,7 @@ export function renderDashboard(
   const pill = renderPill('GOT IT', () => c.requestDismiss());
   pillWrap.appendChild(pill);
   footer.appendChild(pillWrap);
-  footer.appendChild(renderLegalLinks(c.rulesUrl));
+  footer.appendChild(renderLegalLinks(c));
   body.appendChild(footer);
 
   scroll.appendChild(body);
@@ -1311,32 +1389,31 @@ export function renderHowItWorks(c: V2ExperienceController, logoUrl?: string | n
   scroll.appendChild(cta);
 
   // Muted privacy entry point — deliberately quiet: present for those who
-  // look for it, invisible to the pitch. 2.9: opens the PRIVACY CHOICES
-  // surface (privacy-policy link + delete-my-data) instead of jumping
-  // straight to the delete confirmation.
+  // look for it, invisible to the pitch. 2.9.5: opens the Privacy Policy
+  // overlay directly — the privacy page itself now carries the "Delete my
+  // data" section (?app=1), which bridges back into the destructive
+  // confirmation. The intermediate privacy-choices card is gone.
   const privacy = el('button', 'wv2-privacy-link', WINRV2Strings.privacyChoices);
-  privacy.addEventListener('click', () => c.showPrivacyChoices());
+  privacy.addEventListener('click', () => c.showLegalOverlay('privacy'));
   scroll.appendChild(privacy);
 
   screen.appendChild(scroll);
-
-  if (c.optOutPhase !== 'idle') {
-    screen.appendChild(renderOptOutDialog(c));
-  }
   return screen;
 }
 
 /**
- * The "Privacy choices" surface and the destructive "Delete my data & stop
- * participating" confirmation (plus its in-flight / failed / deleted states)
- * — same scrim-plus-card treatment as the winners dialog, mounted inside the
- * how-it-works screen.
+ * The destructive "Delete my data & stop participating" confirmation (plus
+ * its in-flight / failed / deleted states) — same scrim-plus-card treatment
+ * as the winners dialog.
  *
- * 2.9: the first card shown is the PRIVACY CHOICES surface (`phase ===
- * 'choices'`): the privacy-policy link AND the delete-my-data action live
- * here; delete then raises the existing destructive confirmation.
+ * 2.9.5: mounted at ROOT level (over whichever screen is up) because it is
+ * raised by the privacy page's delete bridge, and the legal overlay can be
+ * opened from any screen — not just how-it-works. The intermediate "Privacy
+ * choices" card (2.9) is gone: its delete listing now lives INSIDE the
+ * privacy page itself; this confirmation and the erasure flow it guards are
+ * unchanged.
  */
-function renderOptOutDialog(c: V2ExperienceController): HTMLElement {
+export function renderOptOutDialog(c: V2ExperienceController): HTMLElement {
   const layer = el('div', 'wv2-modal-layer');
   const inFlight = c.optOutPhase === 'inFlight';
 
@@ -1345,29 +1422,6 @@ function renderOptOutDialog(c: V2ExperienceController): HTMLElement {
     if (!inFlight) c.cancelOptOut();
   });
   layer.appendChild(dim);
-
-  if (c.optOutPhase === 'choices') {
-    const card = el('div', 'wv2-optout-card');
-    card.appendChild(el('div', 'wv2-optout-title', WINRV2Strings.privacyChoicesTitle));
-
-    // Privacy policy — plain link, same destination as the legal footer.
-    const policy = el('button', 'wv2-privacy-choice-link', WINRV2Strings.privacyPolicyLink);
-    policy.addEventListener('click', () => openUrl(WINR_CONSTANTS.PRIVACY_URL));
-    card.appendChild(policy);
-
-    // Delete-my-data — raises the existing destructive confirmation.
-    const del = el('button', 'wv2-privacy-choice-link wv2-privacy-choice-delete');
-    del.textContent = WINRV2Strings.optOutTitle;
-    del.addEventListener('click', () => c.showOptOutConfirmation());
-    card.appendChild(del);
-
-    const cancel = el('button', 'wv2-optout-cancel', WINRV2Strings.optOutCancel);
-    cancel.addEventListener('click', () => c.cancelOptOut());
-    card.appendChild(cancel);
-
-    layer.appendChild(card);
-    return layer;
-  }
 
   const card = el('div', 'wv2-optout-card');
   if (c.optOutPhase === 'done') {
@@ -2632,7 +2686,7 @@ function renderCodeScreen(
   // Same legal footer as the capture screen — the code screen is one step of
   // the same consent flow, and without it the sheet trails off into a void.
   const legal = el('div', 'wv2-code-legal');
-  legal.appendChild(renderLegalLinks(c.rulesUrl, true));
+  legal.appendChild(renderLegalLinks(c, true));
   root.appendChild(stack);
   root.appendChild(legal);
   setTimeout(() => input.focus(), 50);

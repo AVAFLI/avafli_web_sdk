@@ -776,8 +776,9 @@ export class WINR {
   }
 
   /**
-   * The in-experience RTD opt-out (how-it-works "Privacy choices" → DELETE
-   * MY DATA). Unlike the public {@link optOut}, a failed backend call THROWS
+   * The in-experience RTD opt-out (2.9.5: the privacy page's "Delete my
+   * data" section inside the legal overlay bridges into the destructive
+   * confirmation). Unlike the public {@link optOut}, a failed backend call THROWS
    * and marks NOTHING locally — the experience shows an honest error and the
    * user can retry; the deletion is only announced once the backend has
    * actually tombstoned the person.

@@ -701,13 +701,17 @@ export interface PresentationOptions {
 // ─── Constants ───
 
 export const WINR_CONSTANTS = {
-  SDK_VERSION: '2.9.4',
+  SDK_VERSION: '2.9.5',
   PLATFORM_OS: 'Web',
   /**
    * Canonical WINR privacy policy. 2.9.3: every "Privacy Policy" link used to
    * open `rulesUrl` — a latent bug shared with the native SDKs, because no
    * privacy URL existed in config. This is the fallback; a config-supplied
    * privacy URL would take precedence if one is ever added.
+   *
+   * 2.9.5: in-experience this loads inside the legal overlay with `?app=1`
+   * appended, which makes the page render its "Delete my data" section (the
+   * page posts `{ type: "winr-delete" }` back to the SDK via postMessage).
    */
   PRIVACY_URL: 'https://winrmedia.com/sdk/privacy',
   getApiBaseUrl: (_environment: 'production' = 'production'): string => {

@@ -1,8 +1,29 @@
 # Changelog
 
 
-## Unreleased
+## 2.9.5 — 2026-08-18
 
+- **Legal documents open inside the experience** — Official Rules and the
+  Privacy Policy now open in an in-experience overlay (slim header + iframe
+  over the drawer/lightbox, works in both the mobile drawer and the desktop
+  lightbox) instead of a new browser tab. Every legal entry point routes
+  through it: the capture screen's inline disclaimer links, the legal links
+  row (dashboard, code screen), and the how-it-works fine print. A loading
+  veil covers the frame; if it never loads (some publisher CSPs block
+  framing winrmedia.com — detected best-effort via timeout) the veil becomes
+  an "Open in new tab" fallback.
+- **"Delete my data" moved into the privacy page** — the overlay loads the
+  privacy policy with `?app=1` appended (URL-API built, tolerant of existing
+  query strings), which makes winrmedia.com/sdk/privacy render its delete
+  section; in the framed case the page posts `{ type: "winr-delete" }` to
+  the parent. The SDK's bridge accepts that message ONLY from
+  `https://winrmedia.com`, only with exactly that shape, and only while the
+  overlay is open (the listener detaches on close); a valid message closes
+  the overlay and raises the EXISTING destructive confirmation +
+  authenticated erasure flow, unchanged. The intermediate "Privacy choices"
+  card (2.9) is gone — the muted "Privacy choices" fine-print entry remains
+  and now opens the Privacy overlay directly. The delete confirmation now
+  mounts at root level so the bridge can raise it over any screen.
 - **Share-link UTM tagging** — when the publisher's `shareUrl` is included
   in a share action, the SDK appends `utm_source={network}&utm_medium=winr_share`
   ({network} = x | facebook | instagram | snapchat | tiktok, per the tapped

@@ -610,17 +610,6 @@ button.wv2-dash-notice { cursor: pointer; }
   animation: wv2-modal-in 0.2s ease;
 }
 .wv2-optout-title { font-size: 18px; font-weight: 900; color: #fff; }
-/* Privacy-choices surface (2.9): the privacy-policy link + delete-my-data
-   action, one level above the destructive confirmation. */
-.wv2-privacy-choice-link {
-  display: block; width: 100%; padding: 13px 14px;
-  border-radius: 10px; border: 1px solid rgba(255,255,255,0.18);
-  background: rgba(255,255,255,0.06);
-  font-size: 15px; font-weight: 600; color: #fff; text-align: center;
-  cursor: pointer;
-}
-.wv2-privacy-choice-link:hover { background: rgba(255,255,255,0.1); }
-.wv2-privacy-choice-delete { color: #ff6b63; border-color: rgba(255,107,99,0.45); }
 .wv2-optout-body { font-size: 14px; color: rgba(255,255,255,0.75); }
 .wv2-optout-error { font-size: 13px; color: #ff6b63; }
 .wv2-optout-success { font-size: 18px; font-weight: 700; color: #fff; padding: 24px 0; }
@@ -630,6 +619,43 @@ button.wv2-dash-notice { cursor: pointer; }
   font-size: 14px; color: ${c.textTertiary}; text-decoration: underline;
 }
 .wv2-optout-cancel:disabled { cursor: default; opacity: 0.5; }
+
+/* ═══ In-experience legal overlay (Official Rules / Privacy Policy) ═══
+   2.9.5: legal documents load in an iframe INSIDE the drawer/lightbox
+   instead of a new tab. Full-surface layer, slim gunmetal header, white
+   document area; the veil covers the frame while it loads and becomes the
+   "Open in new tab" fallback if the load never lands (publisher CSP). */
+.wv2-legal-overlay {
+  position: absolute; inset: 0; z-index: 14;
+  display: flex; flex-direction: column;
+  background: ${c.gunmetal};
+  animation: wv2-legal-in 0.25s ease;
+}
+@keyframes wv2-legal-in {
+  from { transform: translateY(24px); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+.wv2-legal-overlay-header {
+  flex: none;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 14px 16px 12px 20px;
+}
+.wv2-legal-overlay-title {
+  font-size: 17px; font-weight: 800; letter-spacing: -0.4px; color: #fff;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.wv2-legal-overlay-body { position: relative; flex: 1; min-height: 0; background: #fff; }
+.wv2-legal-overlay-frame { display: block; width: 100%; height: 100%; border: 0; }
+.wv2-legal-overlay-veil {
+  position: absolute; inset: 0; z-index: 1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px; padding: 24px; text-align: center;
+  background: ${c.gunmetal};
+}
+.wv2-legal-overlay-fallback-text { font-size: 14px; color: rgba(255,255,255,0.75); }
+.wv2-legal-overlay-fallback-link {
+  font-size: 15px; font-weight: 700; color: var(--wv2-accent); text-decoration: underline;
+}
 
 /* ═══ Winner prize-claim flow (splash → form → confirmation) ═══
    Ported from iOS WINRV2Claim.swift (Joe's Light variant, 1pt = 1px). */

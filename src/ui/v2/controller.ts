@@ -88,6 +88,25 @@ export type WinnerClaimStep =
   | { kind: 'share'; claimNumber: string; submittedAt: string }
   | { kind: 'confirmation'; claimNumber: string; submittedAt: string };
 
+/** Which legal document the in-experience overlay shows. */
+export type LegalDoc = 'rules' | 'privacy';
+
+/**
+ * Appends `app=1` to a URL — the flag that makes winrmedia.com/sdk/privacy
+ * render its in-experience "Delete my data" section (parallel build on the
+ * website side). URL-API based so a target that already carries a query
+ * string extends correctly instead of getting a second `?`.
+ */
+export function withAppParam(url: string): string {
+  try {
+    const u = new URL(url);
+    u.searchParams.set('app', '1');
+    return u.toString();
+  } catch {
+    return url;
+  }
+}
+
 export interface V2ControllerDeps {
   api: WINRAPI;
   storage: LocalStorageProvider;
@@ -134,8 +153,9 @@ export interface V2ControllerDeps {
    */
   attachClaimStory?: (request: { story: string }) => Promise<unknown>;
   /**
-   * Performs the RTD opt-out (the how-it-works screen's "Privacy choices" →
-   * DELETE MY DATA flow). MUST reject on failure — unlike the public
+   * Performs the RTD opt-out (the in-experience "Delete my data" flow — the
+   * privacy page inside the legal overlay bridges into the destructive
+   * confirmation). MUST reject on failure — unlike the public
    * `WINR.optOut()`, the in-experience flow shows an honest error instead of
    * pretending the deletion succeeded (wired to `WINR.optOutFromExperience`).
    */
@@ -1448,51 +1468,114 @@ export class V2ExperienceController {
     this.onDismissRequest?.();
   }
 
-  // ─── Privacy choices / RTD opt-out (how-it-works screen) ───
+  // ─── In-experience legal overlay (Official Rules / Privacy Policy) ───
   //
-  //     idle → choices → confirming → inFlight → done → (dismiss experience)
-  //                              ↘ failed (inline error, retryable) ↗
+  // 2.9.5: legal documents open INSIDE the experience — an iframe overlay
+  // covering the drawer/lightbox — instead of a new tab. The privacy page
+  // loads with `?app=1`, which makes winrmedia.com/sdk/privacy render its
+  // "Delete my data" section; in the framed case that section posts
+  // `{ type: "winr-delete" }` to the parent, and the bridge below routes it
+  // into the EXISTING destructive opt-out confirmation + erasure flow.
+
+  /** The only postMessage origin the delete bridge accepts. */
+  public static readonly LEGAL_BRIDGE_ORIGIN = 'https://winrmedia.com';
+
+  /**
+   * The open legal overlay, or null. `url` is what the iframe loads;
+   * `fallbackUrl` is the "Open in new tab" escape hatch shown when the frame
+   * fails to load (some publisher CSPs block framing us) — for privacy that
+   * is the PLAIN policy URL, because outside the experience there is no
+   * parent for the delete section to bridge to.
+   */
+  public legalOverlay: {
+    doc: LegalDoc;
+    title: string;
+    url: string;
+    fallbackUrl: string;
+  } | null = null;
+
+  /** Open the legal overlay. Rules without a configured rulesUrl is a no-op. */
+  public showLegalOverlay(doc: LegalDoc): void {
+    if (doc === 'rules') {
+      const url = this.rulesUrl;
+      if (!url) return;
+      this.legalOverlay = { doc, title: 'Official Rules', url, fallbackUrl: url };
+    } else {
+      this.legalOverlay = {
+        doc,
+        title: 'Privacy Policy',
+        url: withAppParam(WINR_CONSTANTS.PRIVACY_URL),
+        fallbackUrl: WINR_CONSTANTS.PRIVACY_URL,
+      };
+    }
+    // The delete bridge listens only while the overlay is open. (Re-adding
+    // the same handler while already open is a spec-level no-op.)
+    if (typeof window !== 'undefined') {
+      window.addEventListener('message', this.onLegalBridgeMessage);
+    }
+    this.onChange?.(this.state);
+  }
+
+  /** Close the overlay and detach the delete bridge. Safe to call when closed. */
+  public closeLegalOverlay(): void {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('message', this.onLegalBridgeMessage);
+    }
+    if (!this.legalOverlay) return;
+    this.legalOverlay = null;
+    this.onChange?.(this.state);
+  }
+
+  /**
+   * Delete bridge — active only while the overlay is open. Accepts ONLY
+   * events whose origin is exactly {@link LEGAL_BRIDGE_ORIGIN} AND whose
+   * data is `{ type: "winr-delete" }`; everything else is ignored. A valid
+   * message closes the overlay and raises the existing destructive
+   * confirmation (the authenticated erasure flow is unchanged).
+   */
+  private readonly onLegalBridgeMessage = (event: MessageEvent): void => {
+    if (!this.legalOverlay) return;
+    if (event.origin !== V2ExperienceController.LEGAL_BRIDGE_ORIGIN) return;
+    const data = event.data as { type?: unknown } | null | undefined;
+    if (typeof data !== 'object' || data === null || data.type !== 'winr-delete') return;
+    this.closeLegalOverlay();
+    this.showOptOutConfirmation();
+  };
+
+  // ─── RTD opt-out (delete-my-data confirmation) ───
   //
-  // 2.9: the "Privacy choices" link no longer jumps straight to the delete
-  // confirmation — it opens a small PRIVACY CHOICES surface (`choices`)
-  // holding the privacy-policy link AND the delete-my-data action; delete
-  // then raises its existing destructive confirmation.
+  //     idle → confirming → inFlight → done → (dismiss experience)
+  //                    ↘ failed (inline error, retryable) ↗
+  //
+  // 2.9.5: reached from the "Delete my data" section INSIDE the privacy page
+  // (legal overlay → postMessage bridge above). The intermediate "Privacy
+  // choices" card (2.9) is gone — its delete listing moved into the page.
   // Failure NEVER pretends success — the confirmation stays up with the
   // error and the destructive button remains available to retry.
 
   /** How long "Your data has been deleted." holds before the dismiss. */
   public static readonly OPT_OUT_SUCCESS_HOLD_MS = 1400;
 
-  /** Where the "Privacy choices" → delete-my-data flow currently is. */
-  public optOutPhase: 'idle' | 'choices' | 'confirming' | 'inFlight' | 'failed' | 'done' = 'idle';
+  /** Where the delete-my-data flow currently is. */
+  public optOutPhase: 'idle' | 'confirming' | 'inFlight' | 'failed' | 'done' = 'idle';
   /** Inline error on the confirmation (`optOutPhase === 'failed'`). */
   public optOutError: string | null = null;
 
-  /** "Privacy choices" tapped — open the privacy-choices surface (2.9). */
-  public showPrivacyChoices(): void {
-    if (this.optOutPhase !== 'idle') return;
-    this.optOutPhase = 'choices';
-    this.onChange?.(this.state);
-  }
-
   /**
-   * DELETE MY DATA on the privacy-choices surface — raise the destructive
-   * confirmation. (Also callable from idle for API/back-compat: headless
-   * integrations and existing tests reach the confirmation directly.)
+   * Raise the destructive delete-my-data confirmation. 2.9.5: invoked by the
+   * legal overlay's delete bridge (the privacy page's "Delete my data"
+   * section posting `winr-delete`); also callable directly (headless
+   * integrations and tests reach the confirmation without the overlay).
    */
   public showOptOutConfirmation(): void {
-    if (this.optOutPhase !== 'idle' && this.optOutPhase !== 'choices') return;
+    if (this.optOutPhase !== 'idle') return;
     this.optOutPhase = 'confirming';
     this.onChange?.(this.state);
   }
 
   /** Cancel / tap-outside. A no-op while in flight or after the deletion. */
   public cancelOptOut(): void {
-    if (
-      this.optOutPhase !== 'choices' &&
-      this.optOutPhase !== 'confirming' &&
-      this.optOutPhase !== 'failed'
-    ) {
+    if (this.optOutPhase !== 'confirming' && this.optOutPhase !== 'failed') {
       return;
     }
     this.optOutPhase = 'idle';

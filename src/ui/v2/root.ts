@@ -11,7 +11,9 @@ import {
   renderEmpty,
   renderGeoBlocked,
   renderHowItWorks,
+  renderLegalOverlay,
   renderLoading,
+  renderOptOutDialog,
   renderSessionExpired,
   renderWinnerModal,
   renderWinnerShare,
@@ -91,6 +93,9 @@ export class WINRV2Experience {
     // dismissal path (X, backdrop, Escape) funnels through here, and the
     // flush is a guarded no-op when nothing was typed or it already went.
     this.controller.flushClaimStory();
+    // 2.9.5: detach the legal overlay's delete bridge (window message
+    // listener) so nothing outlives the experience. No-op when closed.
+    this.controller.closeLegalOverlay();
     this.overlay.classList.remove('wv2-open');
     this.overlay.classList.add('wv2-closing');
     if (this.escapeHandler) {
@@ -159,6 +164,12 @@ export class WINRV2Experience {
 
     this.escapeHandler = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
+      // Innermost surface first: legal overlay, then winner modal, then the
+      // whole experience.
+      if (this.controller.legalOverlay) {
+        this.controller.closeLegalOverlay();
+        return;
+      }
       if (this.winnerOpen) {
         this.closeWinnerModal();
         return;
@@ -241,6 +252,19 @@ export class WINRV2Experience {
         }
         break;
       }
+    }
+
+    // Destructive delete-my-data confirmation — mounted at root level so the
+    // privacy page's delete bridge can raise it over ANY screen (2.9.5); it
+    // used to live inside the how-it-works screen only.
+    if (c.optOutPhase !== 'idle') {
+      this.sheet.appendChild(renderOptOutDialog(c));
+    }
+
+    // In-experience legal overlay (Official Rules / Privacy Policy iframe) —
+    // full-surface over the drawer/lightbox, above everything else.
+    if (c.legalOverlay) {
+      this.sheet.appendChild(renderLegalOverlay(c));
     }
   }
 

@@ -2,13 +2,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { V2ControllerDeps, V2ExperienceController } from '../src/ui/v2/controller';
 import { WINRV2Strings } from '../src/ui/v2/strings';
-import { renderHowItWorks } from '../src/ui/v2/screens';
+import { renderHowItWorks, renderOptOutDialog } from '../src/ui/v2/screens';
 import { WINRAPI } from '../src/network/api';
 import { LocalStorageProvider } from '../src/storage/local-storage';
 
 /**
- * The 2.6.1 in-experience privacy opt-out ("Privacy choices" on the
- * how-it-works screen):
+ * The in-experience privacy opt-out. 2.9.5: raised by the privacy page's
+ * delete bridge (the legal overlay) — the intermediate "Privacy choices"
+ * card is gone, and the confirmation dialog mounts at ROOT level
+ * (renderOptOutDialog) instead of inside the how-it-works screen:
  *
  *     idle → confirming → inFlight → done → (dismiss whole experience)
  *                     ↘ failed (inline error, retryable) ↗
@@ -118,27 +120,44 @@ describe('Privacy choices → delete-my-data flow', () => {
   });
 });
 
-describe('how-it-works screen: privacy entry point + confirmation UI', () => {
-  it('renders the muted "Privacy choices" link at the bottom', () => {
+describe('how-it-works screen: privacy entry point (2.9.5)', () => {
+  it('renders the muted "Privacy choices" link, which opens the Privacy overlay directly', () => {
     const { controller } = makeController();
     const screen = renderHowItWorks(controller);
-    const link = screen.querySelector('.wv2-privacy-link');
+    const link = screen.querySelector('.wv2-privacy-link') as HTMLButtonElement | null;
     expect(link?.textContent).toBe(WINRV2Strings.privacyChoices);
-    expect(screen.querySelector('.wv2-optout-card')).toBeNull();
+    link?.click();
+    expect(controller.legalOverlay?.doc).toBe('privacy');
+    // It no longer stages the (removed) privacy-choices card.
+    expect(controller.optOutPhase).toBe('idle');
+    controller.closeLegalOverlay();
   });
 
-  it('shows the destructive confirmation with the mandated copy while confirming', () => {
+  it('the how-it-works screen no longer mounts the opt-out dialog or the choices surface', () => {
     const { controller } = makeController();
     controller.showOptOutConfirmation();
     const screen = renderHowItWorks(controller);
-    expect(screen.querySelector('.wv2-optout-title')?.textContent).toBe(
+    // The dialog mounts at ROOT level now (see renderOptOutDialog tests) —
+    // and the intermediate privacy-choices listing is gone entirely.
+    expect(screen.querySelector('.wv2-optout-card')).toBeNull();
+    expect(screen.querySelector('.wv2-privacy-choice-link')).toBeNull();
+    expect(screen.querySelector('.wv2-privacy-choice-delete')).toBeNull();
+  });
+});
+
+describe('root-level opt-out confirmation UI (renderOptOutDialog)', () => {
+  it('shows the destructive confirmation with the mandated copy while confirming', () => {
+    const { controller } = makeController();
+    controller.showOptOutConfirmation();
+    const dialog = renderOptOutDialog(controller);
+    expect(dialog.querySelector('.wv2-optout-title')?.textContent).toBe(
       WINRV2Strings.optOutTitle
     );
-    expect(screen.querySelector('.wv2-optout-body')?.textContent).toBe(WINRV2Strings.optOutBody);
-    expect(screen.querySelector('.wv2-pill-destructive')?.textContent).toBe(
+    expect(dialog.querySelector('.wv2-optout-body')?.textContent).toBe(WINRV2Strings.optOutBody);
+    expect(dialog.querySelector('.wv2-pill-destructive')?.textContent).toBe(
       WINRV2Strings.optOutConfirm
     );
-    expect(screen.querySelector('.wv2-optout-cancel')?.textContent).toBe(
+    expect(dialog.querySelector('.wv2-optout-cancel')?.textContent).toBe(
       WINRV2Strings.optOutCancel
     );
   });
@@ -146,11 +165,11 @@ describe('how-it-works screen: privacy entry point + confirmation UI', () => {
   it('shows the brief "Your data has been deleted." state once done', () => {
     const { controller } = makeController();
     controller.optOutPhase = 'done';
-    const screen = renderHowItWorks(controller);
-    expect(screen.querySelector('.wv2-optout-success')?.textContent).toBe(
+    const dialog = renderOptOutDialog(controller);
+    expect(dialog.querySelector('.wv2-optout-success')?.textContent).toBe(
       WINRV2Strings.optOutSuccess
     );
     // The destructive controls are gone — nothing left to re-confirm.
-    expect(screen.querySelector('.wv2-pill-destructive')).toBeNull();
+    expect(dialog.querySelector('.wv2-pill-destructive')).toBeNull();
   });
 });
