@@ -701,7 +701,7 @@ export interface PresentationOptions {
 // ─── Constants ───
 
 export const WINR_CONSTANTS = {
-  SDK_VERSION: '2.9.6',
+  SDK_VERSION: '2.9.7',
   PLATFORM_OS: 'Web',
   /**
    * Canonical WINR privacy policy. 2.9.3: every "Privacy Policy" link used to

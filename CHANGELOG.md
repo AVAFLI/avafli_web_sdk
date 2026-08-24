@@ -1,6 +1,11 @@
 # Changelog
 
 
+## 2.9.7 — 2026-08-23
+
+- Attribution line is now "Powered by Avafli".
+- Host page scroll is locked while the experience or a legal overlay is open (desktop lightbox no longer scrolls the page behind it).
+
 ## 2.9.6 — 2026-08-18
 
 - **Desktop: restored vertical spacing on How-it-works** — the removed

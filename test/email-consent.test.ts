@@ -285,6 +285,6 @@ describe('capture screen legal footer (2.9.3 dedupe)', () => {
     // But the reCAPTCHA attribution (required while the badge is hidden — see
     // perimeter.ts) and the Powered-by line must survive the dedupe.
     expect(capture.textContent).toContain('Protected by reCAPTCHA');
-    expect(capture.textContent).toContain('Powered by © WINR Media');
+    expect(capture.textContent).toContain('Powered by Avafli');
   });
 });

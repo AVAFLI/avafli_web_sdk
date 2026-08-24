@@ -225,7 +225,7 @@ export function renderLegalLinks(
   recaptcha.textContent = 'Protected by reCAPTCHA — Google Privacy Policy and Terms apply';
   wrap.appendChild(recaptcha);
   if (showPoweredBy) {
-    wrap.appendChild(el('div', 'wv2-powered', 'Powered by © WINR Media'));
+    wrap.appendChild(el('div', 'wv2-powered', 'Powered by Avafli'));
   }
   return wrap;
 }

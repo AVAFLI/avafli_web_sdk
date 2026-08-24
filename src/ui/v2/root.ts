@@ -34,6 +34,7 @@ import { accentAlpha, ensureV2Fonts, resolveAccent } from './v2-theme';
  */
 export class WINRV2Experience {
   private host: HTMLElement | null = null;
+  private previousBodyOverflow = '';
   private overlay: HTMLElement | null = null;
   private sheet: HTMLElement | null = null;
   private modalHost: HTMLElement | null = null;
@@ -104,6 +105,7 @@ export class WINRV2Experience {
     }
     const host = this.host;
     this.host = null;
+    document.body.style.overflow = this.previousBodyOverflow;
     setTimeout(() => {
       host.remove();
       if (!this.settled) {
@@ -117,6 +119,11 @@ export class WINRV2Experience {
   // ─── Mounting ───
 
   private mount(container?: HTMLElement): void {
+    // Lock the host page's scroll while the experience is open — without this,
+    // wheel/keyboard scrolling moves the page behind the lightbox (desktop
+    // especially). Restored in dismiss() after the close animation.
+    this.previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
     const host = document.createElement('div');
     host.setAttribute('data-winr', 'v2');
     const shadow = host.attachShadow({ mode: 'open' });
