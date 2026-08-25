@@ -25,14 +25,14 @@ const woff2DataUri = async (relPath) => {
 };
 
 const fonts = [
-  { family: 'WINR Inter', weight: 400, file: 'assets/fonts/inter-v20-latin-regular.ttf' },
-  { family: 'WINR Inter', weight: 500, file: 'assets/fonts/inter-v20-latin-500.ttf' },
-  { family: 'WINR Inter', weight: 600, file: 'assets/fonts/inter-v20-latin-600.ttf' },
-  { family: 'WINR Inter', weight: 700, file: 'assets/fonts/inter-v20-latin-700.ttf' },
-  { family: 'WINR Inter', weight: 800, file: 'assets/fonts/inter-v20-latin-800.ttf' },
-  { family: 'WINR Inter', weight: 900, file: 'assets/fonts/inter-v20-latin-900.ttf' },
-  { family: 'WINR Oswald', weight: 500, file: 'assets/fonts/oswald-v57-latin-500.ttf' },
-  { family: 'WINR Oswald', weight: 700, file: 'assets/fonts/oswald-v57-latin-700.ttf' },
+  { family: 'Avafli Inter', weight: 400, file: 'assets/fonts/inter-v20-latin-regular.ttf' },
+  { family: 'Avafli Inter', weight: 500, file: 'assets/fonts/inter-v20-latin-500.ttf' },
+  { family: 'Avafli Inter', weight: 600, file: 'assets/fonts/inter-v20-latin-600.ttf' },
+  { family: 'Avafli Inter', weight: 700, file: 'assets/fonts/inter-v20-latin-700.ttf' },
+  { family: 'Avafli Inter', weight: 800, file: 'assets/fonts/inter-v20-latin-800.ttf' },
+  { family: 'Avafli Inter', weight: 900, file: 'assets/fonts/inter-v20-latin-900.ttf' },
+  { family: 'Avafli Oswald', weight: 500, file: 'assets/fonts/oswald-v57-latin-500.ttf' },
+  { family: 'Avafli Oswald', weight: 700, file: 'assets/fonts/oswald-v57-latin-700.ttf' },
 ];
 
 const images = {

@@ -1,4 +1,4 @@
-import { Giveaway, GiveawayWinner, PrizeClaimBlock, WINR_CONSTANTS } from '../../types';
+import { Giveaway, GiveawayWinner, PrizeClaimBlock, AVAFLI_CONSTANTS } from '../../types';
 import { V2_IMAGES } from './assets.generated';
 import {
   CONFETTI_BURST_DURATION_MS,
@@ -30,7 +30,7 @@ import {
   uploadIcon,
 } from './icons';
 import { LegalDoc, V2ExperienceController } from './controller';
-import { WINRV2Strings } from './strings';
+import { AvafliV2Strings } from './strings';
 import {
   CLAIM_COUNTRY,
   PrizeClaimForm,
@@ -139,7 +139,7 @@ export function renderHeader(options: HeaderOptions): HTMLElement {
     img.alt = '';
     logo.appendChild(img);
   } else {
-    logo.appendChild(el('span', 'wv2-header-logo-fallback', 'WINR'));
+    logo.appendChild(el('span', 'wv2-header-logo-fallback', 'Avafli'));
   }
   header.appendChild(logo);
 
@@ -208,7 +208,7 @@ export function renderLegalLinks(
       c.showLegalOverlay('rules');
     });
     const privacy = el('a', undefined, 'PRIVACY POLICY');
-    privacy.href = WINR_CONSTANTS.PRIVACY_URL;
+    privacy.href = AVAFLI_CONSTANTS.PRIVACY_URL;
     privacy.addEventListener('click', (e) => {
       e.preventDefault();
       c.showLegalOverlay('privacy');
@@ -242,7 +242,7 @@ function renderLegalInlineLink(
 ): HTMLAnchorElement {
   const link = el('a', 'wv2-inline-legal', label);
   link.setAttribute('role', 'button');
-  link.href = (doc === 'rules' ? c.rulesUrl : WINR_CONSTANTS.PRIVACY_URL) || '#';
+  link.href = (doc === 'rules' ? c.rulesUrl : AVAFLI_CONSTANTS.PRIVACY_URL) || '#';
   link.addEventListener('click', (e) => {
     e.preventDefault();
     c.showLegalOverlay(doc);
@@ -299,9 +299,9 @@ export function renderLegalOverlay(c: V2ExperienceController): HTMLElement {
     settled = true;
     veil.innerHTML = '';
     veil.appendChild(
-      el('div', 'wv2-legal-overlay-fallback-text', WINRV2Strings.legalOverlayLoadFailed)
+      el('div', 'wv2-legal-overlay-fallback-text', AvafliV2Strings.legalOverlayLoadFailed)
     );
-    const open = el('a', 'wv2-legal-overlay-fallback-link', WINRV2Strings.legalOverlayOpenInTab);
+    const open = el('a', 'wv2-legal-overlay-fallback-link', AvafliV2Strings.legalOverlayOpenInTab);
     open.href = overlay.fallbackUrl;
     open.target = '_blank';
     open.rel = 'noopener noreferrer';
@@ -385,8 +385,8 @@ export function renderEmpty(onClose: () => void): HTMLElement {
 export function renderGeoBlocked(onClose: () => void): HTMLElement {
   const screen = el('div', 'wv2-screen');
   const center = el('div', 'wv2-center-state');
-  center.appendChild(el('div', 'wv2-empty-title', WINRV2Strings.geoBlockedTitle));
-  center.appendChild(el('div', 'wv2-empty-sub wv2-state-body', WINRV2Strings.geoBlockedBody));
+  center.appendChild(el('div', 'wv2-empty-title', AvafliV2Strings.geoBlockedTitle));
+  center.appendChild(el('div', 'wv2-empty-sub wv2-state-body', AvafliV2Strings.geoBlockedBody));
   const cta = el('div', 'wv2-empty-cta');
   cta.appendChild(renderPill('CLOSE', onClose));
   center.appendChild(cta);
@@ -402,9 +402,9 @@ export function renderGeoBlocked(onClose: () => void): HTMLElement {
 export function renderSessionExpired(onRetry: () => void): HTMLElement {
   const screen = el('div', 'wv2-screen');
   const center = el('div', 'wv2-center-state');
-  center.appendChild(el('div', 'wv2-empty-title wv2-state-body', WINRV2Strings.sessionExpired));
+  center.appendChild(el('div', 'wv2-empty-title wv2-state-body', AvafliV2Strings.sessionExpired));
   const cta = el('div', 'wv2-empty-cta');
-  cta.appendChild(renderPill(WINRV2Strings.retry, onRetry));
+  cta.appendChild(renderPill(AvafliV2Strings.retry, onRetry));
   center.appendChild(cta);
   screen.appendChild(center);
   return screen;
@@ -519,7 +519,7 @@ export function renderCapture(c: V2ExperienceController, logoUrl?: string | null
   const isValidEmail = (): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.value.trim());
   let showEmailError = false;
   const syncEmailError = (): void => {
-    setFieldError(emailError, showEmailError && !isValidEmail() ? WINRV2Strings.emailInvalid : null);
+    setFieldError(emailError, showEmailError && !isValidEmail() ? AvafliV2Strings.emailInvalid : null);
   };
 
   // Two consent checkboxes, built by the same helper so they are identical in
@@ -666,8 +666,8 @@ export function renderVerifyChip(onTap: () => void): HTMLButtonElement {
   const chip = el('button', 'wv2-verify-chip');
   chip.type = 'button';
   chip.appendChild(icon(mailIcon, 'wv2-verify-chip-ic'));
-  chip.appendChild(el('span', 'wv2-verify-chip-text', WINRV2Strings.verifyEmailChip));
-  chip.setAttribute('aria-label', WINRV2Strings.verifyEmailChip);
+  chip.appendChild(el('span', 'wv2-verify-chip-text', AvafliV2Strings.verifyEmailChip));
+  chip.setAttribute('aria-label', AvafliV2Strings.verifyEmailChip);
   chip.addEventListener('click', onTap);
   return chip;
 }
@@ -730,8 +730,8 @@ export function renderDashboard(
     if (c.claimFailedNotice) {
       const notice = el('button', 'wv2-dash-notice wv2-dash-notice-retry');
       notice.type = 'button';
-      notice.appendChild(el('span', 'wv2-dash-notice-text', WINRV2Strings.claimRecordFailed));
-      notice.appendChild(el('span', 'wv2-dash-notice-action', WINRV2Strings.retry));
+      notice.appendChild(el('span', 'wv2-dash-notice-text', AvafliV2Strings.claimRecordFailed));
+      notice.appendChild(el('span', 'wv2-dash-notice-action', AvafliV2Strings.retry));
       notice.addEventListener('click', () => void c.retryClaim());
       noticeSlot.appendChild(notice);
       return;
@@ -1422,19 +1422,19 @@ export function renderOptOutDialog(c: V2ExperienceController): HTMLElement {
 
   const card = el('div', 'wv2-optout-card');
   if (c.optOutPhase === 'done') {
-    card.appendChild(el('div', 'wv2-optout-success', WINRV2Strings.optOutSuccess));
+    card.appendChild(el('div', 'wv2-optout-success', AvafliV2Strings.optOutSuccess));
   } else {
-    card.appendChild(el('div', 'wv2-optout-title', WINRV2Strings.optOutTitle));
-    card.appendChild(el('div', 'wv2-optout-body', WINRV2Strings.optOutBody));
+    card.appendChild(el('div', 'wv2-optout-title', AvafliV2Strings.optOutTitle));
+    card.appendChild(el('div', 'wv2-optout-body', AvafliV2Strings.optOutBody));
     if (c.optOutPhase === 'failed' && c.optOutError) {
       card.appendChild(el('div', 'wv2-optout-error', c.optOutError));
     }
-    const confirm = renderPill(WINRV2Strings.optOutConfirm, () => void c.confirmOptOut(), {
+    const confirm = renderPill(AvafliV2Strings.optOutConfirm, () => void c.confirmOptOut(), {
       loading: inFlight,
     });
     confirm.classList.add('wv2-pill-destructive');
     card.appendChild(confirm);
-    const cancel = el('button', 'wv2-optout-cancel', WINRV2Strings.optOutCancel);
+    const cancel = el('button', 'wv2-optout-cancel', AvafliV2Strings.optOutCancel);
     cancel.disabled = inFlight;
     cancel.addEventListener('click', () => c.cancelOptOut());
     card.appendChild(cancel);
@@ -1458,7 +1458,7 @@ function renderClaimHeader(logoUrl: string | null | undefined, onClose: () => vo
     img.alt = '';
     logo.appendChild(img);
   } else {
-    logo.appendChild(el('span', 'wv2-header-logo-fallback', 'WINR'));
+    logo.appendChild(el('span', 'wv2-header-logo-fallback', 'Avafli'));
   }
   header.appendChild(logo);
 
@@ -1622,7 +1622,7 @@ export function renderClaimSteps(
     img.alt = '';
     logo.appendChild(img);
   } else {
-    logo.appendChild(el('span', 'wv2-header-logo-fallback', 'WINR'));
+    logo.appendChild(el('span', 'wv2-header-logo-fallback', 'Avafli'));
   }
   header.appendChild(logo);
   const close = el('button', 'wv2-circle-btn wv2-claim-close');
@@ -1825,10 +1825,10 @@ export function renderClaimSteps(
       if (!showErrors) return;
       setFieldError(
         firstErr,
-        isValidClaimName(form.firstName) ? null : WINRV2Strings.firstNameInvalid
+        isValidClaimName(form.firstName) ? null : AvafliV2Strings.firstNameInvalid
       );
-      setFieldError(lastErr, isValidClaimName(form.lastName) ? null : WINRV2Strings.lastNameInvalid);
-      setFieldError(phoneErr, isValidClaimPhone(form.phone) ? null : WINRV2Strings.phoneInvalid);
+      setFieldError(lastErr, isValidClaimName(form.lastName) ? null : AvafliV2Strings.lastNameInvalid);
+      setFieldError(phoneErr, isValidClaimPhone(form.phone) ? null : AvafliV2Strings.phoneInvalid);
     };
 
     const { page, refresh } = buildPage(
@@ -2205,7 +2205,7 @@ const checkIconSvg =
 // ─── Share step ("PLEASE SHARE A LITTLE") — POST-submit, never blocking ───
 
 /**
- * Appends `utm_source={network}&utm_medium=winr_share` to the publisher's
+ * Appends `utm_source={network}&utm_medium=avafli_share` to the publisher's
  * shareUrl via the URL API (correct whether or not the URL already has a
  * query string). A URL already carrying a `utm_source` param is returned
  * untouched — the publisher's own tagging wins. Unparseable URLs pass
@@ -2224,7 +2224,7 @@ export function taggedShareUrl(
   }
   if (url.searchParams.has('utm_source')) return shareUrl;
   url.searchParams.append('utm_source', network);
-  url.searchParams.append('utm_medium', 'winr_share');
+  url.searchParams.append('utm_medium', 'avafli_share');
   return url.toString();
 }
 
@@ -2300,7 +2300,7 @@ export function renderWinnerShare(
 
   // Transient "Copied!" toast for the clipboard fallback.
   let toastTimer: number | null = null;
-  const toast = el('div', 'wv2-share-toast', WINRV2Strings.shareCopied);
+  const toast = el('div', 'wv2-share-toast', AvafliV2Strings.shareCopied);
   screen.appendChild(toast);
   const showToast = (): void => {
     toast.classList.add('wv2-visible');
@@ -2705,8 +2705,8 @@ export function renderCodeEntry(c: V2ExperienceController, logoUrl?: string | nu
   const email = c.state.email;
   const subtitle =
     c.state.reentry || !email
-      ? WINRV2Strings.adoptionReentrySubtitle
-      : `This email is already part of a WINR streak. Enter the 6-digit code we sent to ${email} to pick it up on this device.`;
+      ? AvafliV2Strings.adoptionReentrySubtitle
+      : `This email is already part of a Avafli streak. Enter the 6-digit code we sent to ${email} to pick it up on this device.`;
   return renderCodeScreen(
     c,
     {
@@ -2729,8 +2729,8 @@ export function renderEmailVerify(c: V2ExperienceController, logoUrl?: string | 
   return renderCodeScreen(
     c,
     {
-      title: WINRV2Strings.verifyEmailTitle,
-      subtitle: WINRV2Strings.verifyEmailSubtitle,
+      title: AvafliV2Strings.verifyEmailTitle,
+      subtitle: AvafliV2Strings.verifyEmailSubtitle,
       onSubmit: (code) => void c.confirmEmailVerificationCode(code),
       onResend: () => void c.resendEmailVerificationCode(),
       onCancel: () => c.cancelEmailVerify(),

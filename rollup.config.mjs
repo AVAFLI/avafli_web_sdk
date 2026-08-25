@@ -7,8 +7,8 @@ import dts from 'rollup-plugin-dts';
 const isProduction = process.env.NODE_ENV === 'production';
 
 const banner = `/*!
- * WINR Web SDK
- * (c) ${new Date().getFullYear()} WINR Team
+ * Avafli Web SDK
+ * (c) ${new Date().getFullYear()} Avafli
  * Released under the MIT License
  */`;
 
@@ -35,7 +35,7 @@ const buildConfigs = [
   {
     ...baseConfig,
     output: {
-      file: 'dist/winr-sdk.esm.js',
+      file: 'dist/avafli-sdk.esm.js',
       format: 'esm',
       banner,
       sourcemap: true,
@@ -45,22 +45,22 @@ const buildConfigs = [
       isProduction && terser({
         format: {
           comments: function(node, comment) {
-            return comment.value.includes('WINR Web SDK');
+            return comment.value.includes('Avafli Web SDK');
           }
         }
       }),
     ].filter(Boolean),
   },
 
-  // UMD build — uses the UMD entry so the global `WINR` is the class itself
-  // (with named exports attached), making the documented `WINR.configure(...)` work.
+  // UMD build — uses the UMD entry so the global `Avafli` is the class itself
+  // (with named exports attached), making the documented `Avafli.configure(...)` work.
   {
     ...baseConfig,
     input: 'src/umd.ts',
     output: {
-      file: 'dist/winr-sdk.umd.js',
+      file: 'dist/avafli-sdk.umd.js',
       format: 'umd',
-      name: 'WINR',
+      name: 'Avafli',
       exports: 'default',
       banner,
       sourcemap: true,
@@ -70,7 +70,7 @@ const buildConfigs = [
       isProduction && terser({
         format: {
           comments: function(node, comment) {
-            return comment.value.includes('WINR Web SDK');
+            return comment.value.includes('Avafli Web SDK');
           }
         }
       }),
@@ -81,7 +81,7 @@ const buildConfigs = [
   {
     input: 'src/index.ts',
     output: {
-      file: 'dist/winr-sdk.d.ts',
+      file: 'dist/avafli-sdk.d.ts',
       format: 'esm',
     },
     plugins: [dts()],

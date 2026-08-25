@@ -99,7 +99,7 @@ export const personIcon = svg(
     '<path d="M2 22.5C2 17.5 6.4 14.3 12 14.3C17.6 14.3 22 17.5 22 22.5H2Z" fill="currentColor"/>'
 );
 
-// ─── Step-4 social glyphs — official WINR brand set (Figma, "Negative"
+// ─── Step-4 social glyphs — official Avafli brand set (Figma, "Negative"
 //     white-on-dark variant). Path data is verbatim from the brand assets;
 //     `fill` swapped to currentColor so the button CSS tints them white. ───
 

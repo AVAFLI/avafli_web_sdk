@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 /**
- * firstName/lastName are optional on WINRUser (2.6.3). A publisher can configure
+ * firstName/lastName are optional on AvafliUser (2.6.3). A publisher can configure
  * from whatever identity data they have — even just an id — and the SDK captures
  * the rest (email via its capture screen). These pin that:
  *   - `{ id: 'user_123' }` (no names, no email) configures without the
@@ -84,9 +84,9 @@ describe('optional firstName/lastName', () => {
   });
 
   it('configures an id-only user (no names, no email) and shows the email-capture screen', async () => {
-    const { WINR } = await import('../src/index');
+    const { Avafli } = await import('../src/index');
     await expect(
-      WINR.configure({ apiKey: 'k', bundleId: BUNDLE, user: { id: 'user_123' } })
+      Avafli.configure({ apiKey: 'k', bundleId: BUNDLE, user: { id: 'user_123' } })
     ).resolves.toBeUndefined();
 
     // Email absent → the capture screen must appear (the capture flow), fronted
@@ -98,17 +98,17 @@ describe('optional firstName/lastName', () => {
   });
 
   it('still supports the guest path (user omitted)', async () => {
-    const { WINR } = await import('../src/index');
+    const { Avafli } = await import('../src/index');
     await expect(
-      WINR.configure({ apiKey: 'k', bundleId: BUNDLE })
+      Avafli.configure({ apiKey: 'k', bundleId: BUNDLE })
     ).resolves.toBeUndefined();
     await vi.waitFor(() => expect(host()).not.toBeNull());
   });
 
   it('still validates a name WHEN one is supplied', async () => {
-    const { WINR } = await import('../src/index');
+    const { Avafli } = await import('../src/index');
     await expect(
-      WINR.configure({
+      Avafli.configure({
         apiKey: 'k',
         bundleId: BUNDLE,
         user: { id: 'user_123', firstName: 'J@ne!', lastName: 'Doe' },

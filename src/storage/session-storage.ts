@@ -56,8 +56,8 @@ export class SessionStorageProvider implements StorageProvider {
     if (!this.isAvailable) return;
     
     try {
-      // Only clear WINR-related keys to avoid affecting other apps
-      this.clearWINRKeys();
+      // Only clear Avafli-related keys to avoid affecting other apps
+      this.clearSdkKeys();
     } catch (error) {
       console.warn('SessionStorage clear failed:', error);
     }
@@ -70,7 +70,7 @@ export class SessionStorageProvider implements StorageProvider {
       }
 
       // Test sessionStorage functionality
-      const testKey = '__winr_session_test__';
+      const testKey = '__avafli_session_test__';
       const testValue = 'test';
       
       window.sessionStorage.setItem(testKey, testValue);
@@ -83,18 +83,20 @@ export class SessionStorageProvider implements StorageProvider {
     }
   }
 
-  private clearWINRKeys(): void {
+  private clearSdkKeys(): void {
     const keys = [];
     
-    // Collect all WINR-related keys
+    // Collect all Avafli-related keys. Persisted SDK keys deliberately KEEP
+    // the legacy `winr_` prefix (3.0 rebrand did not migrate stored state);
+    // `avafli_` covers anything minted under the new prefix.
     for (let i = 0; i < sessionStorage.length; i++) {
       const key = sessionStorage.key(i);
-      if (key?.startsWith('winr_')) {
+      if (key?.startsWith('winr_') || key?.startsWith('avafli_')) {
         keys.push(key);
       }
     }
     
-    // Remove WINR keys
+    // Remove Avafli keys
     keys.forEach(key => sessionStorage.removeItem(key));
   }
 
@@ -105,7 +107,7 @@ export class SessionStorageProvider implements StorageProvider {
       
       for (let i = 0; i < sessionStorage.length; i++) {
         const key = sessionStorage.key(i);
-        if (key?.startsWith('winr_') && !this.isEssentialKey(key)) {
+        if ((key?.startsWith('winr_') || key?.startsWith('avafli_')) && !this.isEssentialKey(key)) {
           nonEssentialKeys.push(key);
         }
       }
@@ -138,7 +140,7 @@ export class SessionStorageProvider implements StorageProvider {
     try {
       // Test with a larger string to detect private mode limitations
       const testData = new Array(1000).join('a'); // ~1KB
-      const testKey = '__winr_private_test__';
+      const testKey = '__avafli_private_test__';
       
       sessionStorage.setItem(testKey, testData);
       sessionStorage.removeItem(testKey);
@@ -161,7 +163,7 @@ export class SessionStorageProvider implements StorageProvider {
       
       while (space < 5 * 1024 * 1024) { // Test up to 5MB
         try {
-          const testKey = `__winr_space_test__`;
+          const testKey = `__avafli_space_test__`;
           const testData = new Array(space + 1024).join(testString); // 1KB increments
           sessionStorage.setItem(testKey, testData);
           sessionStorage.removeItem(testKey);

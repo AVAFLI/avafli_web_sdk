@@ -93,7 +93,7 @@ export function createStorage(provider?: StorageProvider): Storage {
   try {
     if (typeof window !== 'undefined' && window.localStorage) {
       // Test storage to ensure it's working
-      const testKey = '__winr_test__';
+      const testKey = '__avafli_test__';
       window.localStorage.setItem(testKey, 'test');
       window.localStorage.removeItem(testKey);
       return new StorageAdapter(window.localStorage);
@@ -103,6 +103,6 @@ export function createStorage(provider?: StorageProvider): Storage {
   }
 
   // Fallback to memory storage
-  console.warn('WINR: localStorage not available, using memory storage (data will not persist)');
+  console.warn('Avafli: localStorage not available, using memory storage (data will not persist)');
   return new StorageAdapter(new MemoryStorage());
 }

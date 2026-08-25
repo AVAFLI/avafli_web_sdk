@@ -1073,7 +1073,7 @@ button.wv2-dash-notice { cursor: pointer; }
   /* TOP UI inset per the Figma frames. */
   .wv2-header { padding: 0 31px; }
 
-  /* Capture ("WINR LIGHTBOX DAY 1" 5530:19715): 49px Inter-Black title,
+  /* Capture ("Avafli LIGHTBOX DAY 1" 5530:19715): 49px Inter-Black title,
      18px semibold sub, full-width 49px white prize strip at 27px, the form
      a centered 374px column, 360px CTA pill. */
   .wv2-capture-stack { gap: 20px; padding-top: 22px; }

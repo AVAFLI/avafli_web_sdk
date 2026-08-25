@@ -5,19 +5,19 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
  *
  * When the backend's registerDevice call rejects with a message containing
  * "suspended"/"revoked" (publisher billing lapse), the SDK must:
- *  - surface a WINRError with code `service_unavailable`,
- *  - report WINR.isAvailable === false and expose WINR.unavailableReason,
+ *  - surface a AvafliError with code `service_unavailable`,
+ *  - report Avafli.isAvailable === false and expose Avafli.unavailableReason,
  *  - never render the modal from the internal presentation path (the
  *    experience is exclusively auto-opened; there is no public present()),
  *  - cache the state so repeat presentation attempts short-circuit.
  *
- * The internal presentation entry point (WINR['presentExperience']) is
+ * The internal presentation entry point (Avafli['presentExperience']) is
  * TypeScript-private; tests reach it via an unknown-cast to exercise the
  * same code path the auto-open engine uses.
  *
  * The SDK relies on browser globals (navigator/screen/Intl/atob/fetch). We stub
  * the minimum needed and mock fetch per test. Modules are reset between tests so
- * the WINR singleton's static state starts clean.
+ * the Avafli singleton's static state starts clean.
  */
 
 const VALID_USER = {
@@ -36,11 +36,11 @@ function defineGlobal(name: string, value: unknown): void {
 
 /** Reach the SDK-internal (TS-private) presentation entry point. */
 function internalPresent(
-  WINR: unknown,
+  Avafli: unknown,
   options?: { onError?: (e: unknown) => void }
 ): Promise<void> {
   return (
-    WINR as unknown as {
+    Avafli as unknown as {
       presentExperience(opts?: { onError?: (e: unknown) => void }): Promise<void>;
     }
   ).presentExperience(options);
@@ -87,60 +87,60 @@ describe('publisher suspended handling', () => {
     vi.restoreAllMocks();
   });
 
-  it('configure() rejects with a service_unavailable WINRError when suspended', async () => {
+  it('configure() rejects with a service_unavailable AvafliError when suspended', async () => {
     (globalThis as unknown as Record<string, unknown>).fetch = suspendedFetch(
       'API key suspended or revoked'
     );
-    const { WINR, WINRErrorCode, WINRError } = await import('../src/index');
+    const { Avafli, AvafliErrorCode, AvafliError } = await import('../src/index');
 
     await expect(
-      WINR.configure({ apiKey: 'k', bundleId: 'com.test', user: { ...VALID_USER } })
-    ).rejects.toMatchObject({ code: WINRErrorCode.ServiceUnavailable });
+      Avafli.configure({ apiKey: 'k', bundleId: 'com.test', user: { ...VALID_USER } })
+    ).rejects.toMatchObject({ code: AvafliErrorCode.ServiceUnavailable });
 
-    // And it is a real WINRError instance.
-    const err = await WINR.configure({
+    // And it is a real AvafliError instance.
+    const err = await Avafli.configure({
       apiKey: 'k',
       bundleId: 'com.test',
       user: { ...VALID_USER },
     }).catch((e) => e);
-    expect(err).toBeInstanceOf(WINRError);
+    expect(err).toBeInstanceOf(AvafliError);
   });
 
   it('reports isAvailable=false and exposes unavailableReason after a suspended init', async () => {
     (globalThis as unknown as Record<string, unknown>).fetch = suspendedFetch(
       'Publisher account suspended'
     );
-    const { WINR, WINRErrorCode } = await import('../src/index');
+    const { Avafli, AvafliErrorCode } = await import('../src/index');
 
-    await WINR.configure({
+    await Avafli.configure({
       apiKey: 'k',
       bundleId: 'com.test',
       user: { ...VALID_USER },
     }).catch(() => undefined);
 
-    expect(WINR.isAvailable).toBe(false);
-    expect(WINR.unavailableReason).not.toBeNull();
-    expect(WINR.unavailableReason?.code).toBe(WINRErrorCode.ServiceUnavailable);
+    expect(Avafli.isAvailable).toBe(false);
+    expect(Avafli.unavailableReason).not.toBeNull();
+    expect(Avafli.unavailableReason?.code).toBe(AvafliErrorCode.ServiceUnavailable);
   });
 
   it('the internal presentation path does not render the modal and rejects + calls onError when suspended', async () => {
     (globalThis as unknown as Record<string, unknown>).fetch = suspendedFetch(
       'API key suspended or revoked'
     );
-    const { WINR, WINRErrorCode } = await import('../src/index');
+    const { Avafli, AvafliErrorCode } = await import('../src/index');
 
-    await WINR.configure({
+    await Avafli.configure({
       apiKey: 'k',
       bundleId: 'com.test',
       user: { ...VALID_USER },
     }).catch(() => undefined);
 
     const onError = vi.fn();
-    await expect(internalPresent(WINR, { onError })).rejects.toMatchObject({
-      code: WINRErrorCode.ServiceUnavailable,
+    await expect(internalPresent(Avafli, { onError })).rejects.toMatchObject({
+      code: AvafliErrorCode.ServiceUnavailable,
     });
     expect(onError).toHaveBeenCalledTimes(1);
-    expect(onError.mock.calls[0][0].code).toBe(WINRErrorCode.ServiceUnavailable);
+    expect(onError.mock.calls[0][0].code).toBe(AvafliErrorCode.ServiceUnavailable);
 
     // No DOM element should have been created for the modal.
     if (typeof document !== 'undefined') {
@@ -149,19 +149,19 @@ describe('publisher suspended handling', () => {
   });
 
   it('the manual-present public API surface is gone (present/presentInline removed)', async () => {
-    const { WINR } = await import('../src/index');
-    expect((WINR as unknown as Record<string, unknown>).present).toBeUndefined();
+    const { Avafli } = await import('../src/index');
+    expect((Avafli as unknown as Record<string, unknown>).present).toBeUndefined();
     expect(
-      (WINR as unknown as Record<string, unknown>).presentInline
+      (Avafli as unknown as Record<string, unknown>).presentInline
     ).toBeUndefined();
   });
 
   it('caches the suspended state — repeat presentation attempts do not re-hit the network', async () => {
     const fetchMock = suspendedFetch('API key suspended or revoked');
     (globalThis as unknown as Record<string, unknown>).fetch = fetchMock;
-    const { WINR } = await import('../src/index');
+    const { Avafli } = await import('../src/index');
 
-    await WINR.configure({
+    await Avafli.configure({
       apiKey: 'k',
       bundleId: 'com.test',
       user: { ...VALID_USER },
@@ -169,8 +169,8 @@ describe('publisher suspended handling', () => {
 
     const callsAfterConfigure = fetchMock.mock.calls.length;
 
-    await internalPresent(WINR).catch(() => undefined);
-    await internalPresent(WINR).catch(() => undefined);
+    await internalPresent(Avafli).catch(() => undefined);
+    await internalPresent(Avafli).catch(() => undefined);
 
     // Short-circuited: no additional network calls were made.
     expect(fetchMock.mock.calls.length).toBe(callsAfterConfigure);
@@ -184,17 +184,17 @@ describe('publisher suspended handling', () => {
       text: async () => JSON.stringify({ message: 'internal error' }),
       json: async () => ({ message: 'internal error' }),
     })) as unknown as typeof fetch;
-    const { WINR, WINRErrorCode } = await import('../src/index');
+    const { Avafli, AvafliErrorCode } = await import('../src/index');
 
-    await WINR.configure({
+    await Avafli.configure({
       apiKey: 'k',
       bundleId: 'com.test',
       user: { ...VALID_USER },
     }).catch(() => undefined);
 
-    expect(WINR.unavailableReason).toBeNull();
+    expect(Avafli.unavailableReason).toBeNull();
     // A 500 must not masquerade as service_unavailable.
-    const err = await internalPresent(WINR).catch((e) => e);
-    expect(err?.code).not.toBe(WINRErrorCode.ServiceUnavailable);
+    const err = await internalPresent(Avafli).catch((e) => e);
+    expect(err?.code).not.toBe(AvafliErrorCode.ServiceUnavailable);
   });
 });

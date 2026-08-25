@@ -84,8 +84,8 @@ function okFetch() {
 }
 
 async function configureSDK(): Promise<void> {
-  const { WINR } = await import('../src/index');
-  await WINR.configure({
+  const { Avafli } = await import('../src/index');
+  await Avafli.configure({
     apiKey: 'k',
     bundleId: BUNDLE,
     user: { ...VALID_USER },

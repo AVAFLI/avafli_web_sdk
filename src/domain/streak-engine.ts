@@ -1,4 +1,4 @@
-import { StreakState, WINRError, WINRErrorCode } from '../types';
+import { StreakState, AvafliError, AvafliErrorCode } from '../types';
 
 /**
  * Three-tier streak system engine
@@ -11,7 +11,7 @@ export class StreakEngine {
   public nextState(
     currentState: StreakState | null,
     claimDate: Date = new Date()
-  ): { success: true; state: StreakState } | { success: false; error: WINRError } {
+  ): { success: true; state: StreakState } | { success: false; error: AvafliError } {
     try {
       // If no existing state, start fresh
       if (!currentState) {
@@ -55,8 +55,8 @@ export class StreakEngine {
       if (this.isSameDay(currentState.lastClaimedDate, claimDate)) {
         return {
           success: false,
-          error: new WINRError(
-            WINRErrorCode.IneligibleToday,
+          error: new AvafliError(
+            AvafliErrorCode.IneligibleToday,
             'Already claimed today'
           ),
         };
@@ -114,8 +114,8 @@ export class StreakEngine {
     } catch (error) {
       return {
         success: false,
-        error: new WINRError(
-          WINRErrorCode.InvalidState,
+        error: new AvafliError(
+          AvafliErrorCode.InvalidState,
           'Failed to calculate streak state',
           error instanceof Error ? error : undefined
         ),

@@ -4,19 +4,19 @@ import { taggedShareUrl } from '../src/ui/v2/screens';
 
 /**
  * Share-link UTM tagging: whenever the publisher's shareUrl rides along in a
- * share action it gains `utm_source={network}&utm_medium=winr_share` — unless
+ * share action it gains `utm_source={network}&utm_medium=avafli_share` — unless
  * the publisher already tagged it with their own utm_source.
  */
 describe('share-link UTM tagging', () => {
   it('appends utm params to a plain URL', () => {
     expect(taggedShareUrl('https://example.com/app', 'x')).toBe(
-      'https://example.com/app?utm_source=x&utm_medium=winr_share'
+      'https://example.com/app?utm_source=x&utm_medium=avafli_share'
     );
   });
 
   it('appends utm params to a URL with an existing query string', () => {
     expect(taggedShareUrl('https://example.com/app?ref=abc', 'facebook')).toBe(
-      'https://example.com/app?ref=abc&utm_source=facebook&utm_medium=winr_share'
+      'https://example.com/app?ref=abc&utm_source=facebook&utm_medium=avafli_share'
     );
   });
 
@@ -37,7 +37,7 @@ describe('share-link UTM tagging', () => {
       const tagged = taggedShareUrl('https://example.com/app', network);
       const params = new URL(tagged as string).searchParams;
       expect(params.get('utm_source')).toBe(network);
-      expect(params.get('utm_medium')).toBe('winr_share');
+      expect(params.get('utm_medium')).toBe('avafli_share');
     }
   });
 });

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>WINR Web SDK — V2 Demo</title>
+<title>Avafli Web SDK — V2 Demo</title>
 <style>
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0; background: #f4f5f7; color: #1d2330; }
   .wrap { max-width: 720px; margin: 0 auto; padding: 32px 20px 80px; }
@@ -22,7 +22,7 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>WINR Web SDK — V2 Demo</h1>
+  <h1>Avafli Web SDK — V2 Demo</h1>
   <p class="sub">The experience <strong>auto-opens on the first visit of each calendar day</strong> (drawer &lt;768px wide, centered modal &ge;768px). Resize the window and re-open to see both presentations.</p>
 
   <div class="card">
@@ -63,8 +63,8 @@
 
 <script>
 /* ─── Demo scenario config (persisted) ─── */
-const DEMO_KEY = 'winr_demo_config';
-const STATE_KEY = 'winr_demo_state';
+const DEMO_KEY = 'avafli_demo_config';
+const STATE_KEY = 'avafli_demo_state';
 const BUNDLE_ID = 'com.example.demo';
 
 const demo = Object.assign(
@@ -201,10 +201,10 @@ window.fetch = async (url, init) => {
   }
 };
 </script>
-<script src="../dist/winr-sdk.umd.js"></script>
+<script src="../dist/avafli-sdk.umd.js"></script>
 <script>
 /* ─── SDK integration ─── */
-WINR.configure({
+Avafli.configure({
   apiKey: 'demo-api-key',
   bundleId: BUNDLE_ID,
   user: { id: 'demo-user-1', firstName: 'Demo', lastName: 'User' },
@@ -213,7 +213,7 @@ WINR.configure({
   .catch((e) => log('configure failed:', e.message));
 
 // Replay = clear the SDK's once-per-day auto-open mark, then reload. On load,
-// WINR.configure() re-runs the internal auto-open check, which fires again.
+// Avafli.configure() re-runs the internal auto-open check, which fires again.
 document.getElementById('replayBtn').addEventListener('click', () => {
   localStorage.removeItem('winr_last_auto_present_' + BUNDLE_ID);
   location.reload();
@@ -237,7 +237,8 @@ document.getElementById('nextDayBtn').addEventListener('click', () => {
 });
 
 document.getElementById('resetBtn').addEventListener('click', () => {
-  Object.keys(localStorage).filter(k => k.startsWith('winr')).forEach(k => localStorage.removeItem(k));
+  // SDK state keys keep the legacy winr_ prefix; demo keys use avafli_.
+  Object.keys(localStorage).filter(k => k.startsWith('winr') || k.startsWith('avafli')).forEach(k => localStorage.removeItem(k));
   sessionStorage.clear();
   location.reload();
 });

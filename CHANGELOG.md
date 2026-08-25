@@ -1,6 +1,49 @@
 # Changelog
 
 
+## 3.0.0 — 2026-08-25
+
+**Full rebrand: WINR → Avafli.** New npm package name (`avafli-sdk`), new
+global, new public type names. No behavioral changes to the experience, the
+backend contract, or stored user state — existing users keep their streaks,
+consent, and opt-out flags across the upgrade.
+
+### Migration from 2.9.x
+
+| 2.9.x (winr-web-sdk) | 3.0.0 (avafli-sdk) |
+| --- | --- |
+| `npm install winr-web-sdk` | `npm install avafli-sdk` |
+| `import { WINR } from 'winr-web-sdk'` | `import { Avafli } from 'avafli-sdk'` |
+| UMD global `WINR` (`WINR.configure(...)`) | UMD global `Avafli` (`Avafli.configure(...)`) |
+| `dist/winr-sdk.umd.js` / `dist/winr-sdk.esm.js` / `dist/winr-sdk.d.ts` | `dist/avafli-sdk.umd.js` / `dist/avafli-sdk.esm.js` / `dist/avafli-sdk.d.ts` |
+| `WINRConfiguration`, `WINROptions`, `WINRBranding`, `WINRUser` | `AvafliConfiguration`, `AvafliOptions`, `AvafliBranding`, `AvafliUser` |
+| `WINRError`, `WINRErrorCode` (`error.name === 'WINRError'`) | `AvafliError`, `AvafliErrorCode` (`error.name === 'AvafliError'`) |
+| `WINR_CONSTANTS` | `AVAFLI_CONSTANTS` |
+| Analytics events `winr_*` (e.g. `winr_modal_presented`) | `avafli_*` (e.g. `avafli_modal_presented`) — update any dashboards keyed to the old names |
+| Share links: `utm_medium=winr_share` | `utm_medium=avafli_share` |
+| Debug flag `winr_debug` (URL param / localStorage, dev builds) | `avafli_debug` (legacy `winr_debug` still honored) |
+| Guest ids minted as `winr_guest_…` | New guests mint `avafli_guest_…`; existing stored guest ids are kept as-is |
+
+**Deliberately unchanged (compatibility):**
+
+- **API keys and backend** — `winr_live_…` / `winr_test_…` keys, endpoints, and
+  wire payloads are identical; no server-side change is needed to upgrade.
+- **Stored state** — every persisted localStorage/sessionStorage key keeps its
+  `winr_` prefix (`winr_token`, `winr_streak_state`, `winr_opted_out`, …), so
+  upgrading in place loses nothing: streaks, email consent, impression caps,
+  auto-open marks, and RTD opt-outs all carry over.
+- **Legal pages and the delete bridge** — legal documents still load from
+  `https://winrmedia.com`, and the origin-locked postMessage delete bridge now
+  accepts **both** `{ type: "winr-delete" }` and `{ type: "avafli-delete" }`
+  (still only from `https://winrmedia.com`), so the pages can migrate their
+  message type without a lockstep SDK release.
+- **DOM surface** — the shadow-DOM CSS class prefix (`.wv2-*`) and the host
+  marker attribute (`data-winr="v2"`) are unchanged; any publisher CSS or
+  selectors targeting them keep working.
+
+**2.9.x is frozen.** The `winr-web-sdk` package receives no further releases;
+all future development ships as `avafli-sdk`.
+
 ## 2.9.7 — 2026-08-23
 
 - Attribution line is now "Powered by Avafli".

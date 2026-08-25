@@ -19,8 +19,8 @@
  */
 
 const SITE_KEY = '6Lc5NHgtAAAAAJT6dO3XqcOEL_dDXzO5GvVvC5L_';
-const SCRIPT_ID = 'winr-recaptcha';
-const BADGE_STYLE_ID = 'winr-recaptcha-badge';
+const SCRIPT_ID = 'avafli-recaptcha';
+const BADGE_STYLE_ID = 'avafli-recaptcha-badge';
 const LOAD_TIMEOUT_MS = 4000;
 const EXECUTE_TIMEOUT_MS = 4000;
 

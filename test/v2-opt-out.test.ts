@@ -1,9 +1,9 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { V2ControllerDeps, V2ExperienceController } from '../src/ui/v2/controller';
-import { WINRV2Strings } from '../src/ui/v2/strings';
+import { AvafliV2Strings } from '../src/ui/v2/strings';
 import { renderHowItWorks, renderOptOutDialog } from '../src/ui/v2/screens';
-import { WINRAPI } from '../src/network/api';
+import { AvafliAPI } from '../src/network/api';
 import { LocalStorageProvider } from '../src/storage/local-storage';
 
 /**
@@ -17,7 +17,7 @@ import { LocalStorageProvider } from '../src/storage/local-storage';
  *
  * Failure NEVER pretends success — the confirmation stays up with the fixed
  * connection error and nothing is marked locally (the deps.optOut contract
- * rejects instead of swallowing, unlike the public WINR.optOut()).
+ * rejects instead of swallowing, unlike the public Avafli.optOut()).
  */
 
 function fakeStorage(): LocalStorageProvider {
@@ -35,7 +35,7 @@ function makeController(optOut?: () => Promise<void>): {
   dismissed: ReturnType<typeof vi.fn>;
 } {
   const deps: V2ControllerDeps = {
-    api: {} as unknown as WINRAPI,
+    api: {} as unknown as AvafliAPI,
     storage: fakeStorage(),
     bundleId: 'com.test',
     submitEmailAndAdopt: vi.fn(),
@@ -102,7 +102,7 @@ describe('Privacy choices → delete-my-data flow', () => {
     await controller.confirmOptOut();
 
     expect(controller.optOutPhase).toBe('failed');
-    expect(controller.optOutError).toBe(WINRV2Strings.optOutFailed);
+    expect(controller.optOutError).toBe(AvafliV2Strings.optOutFailed);
     expect(dismissed).not.toHaveBeenCalled();
 
     // The destructive button remains live: confirm retries from 'failed'.
@@ -115,7 +115,7 @@ describe('Privacy choices → delete-my-data flow', () => {
     controller.showOptOutConfirmation();
     await controller.confirmOptOut();
     expect(controller.optOutPhase).toBe('failed');
-    expect(controller.optOutError).toBe(WINRV2Strings.optOutFailed);
+    expect(controller.optOutError).toBe(AvafliV2Strings.optOutFailed);
     expect(dismissed).not.toHaveBeenCalled();
   });
 });
@@ -146,14 +146,14 @@ describe('root-level opt-out confirmation UI (renderOptOutDialog)', () => {
     controller.showOptOutConfirmation();
     const dialog = renderOptOutDialog(controller);
     expect(dialog.querySelector('.wv2-optout-title')?.textContent).toBe(
-      WINRV2Strings.optOutTitle
+      AvafliV2Strings.optOutTitle
     );
-    expect(dialog.querySelector('.wv2-optout-body')?.textContent).toBe(WINRV2Strings.optOutBody);
+    expect(dialog.querySelector('.wv2-optout-body')?.textContent).toBe(AvafliV2Strings.optOutBody);
     expect(dialog.querySelector('.wv2-pill-destructive')?.textContent).toBe(
-      WINRV2Strings.optOutConfirm
+      AvafliV2Strings.optOutConfirm
     );
     expect(dialog.querySelector('.wv2-optout-cancel')?.textContent).toBe(
-      WINRV2Strings.optOutCancel
+      AvafliV2Strings.optOutCancel
     );
   });
 
@@ -162,7 +162,7 @@ describe('root-level opt-out confirmation UI (renderOptOutDialog)', () => {
     controller.optOutPhase = 'done';
     const dialog = renderOptOutDialog(controller);
     expect(dialog.querySelector('.wv2-optout-success')?.textContent).toBe(
-      WINRV2Strings.optOutSuccess
+      AvafliV2Strings.optOutSuccess
     );
     // The destructive controls are gone — nothing left to re-confirm.
     expect(dialog.querySelector('.wv2-pill-destructive')).toBeNull();

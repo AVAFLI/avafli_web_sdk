@@ -1,15 +1,17 @@
-# WINR Web SDK
+# Avafli Web SDK
 **Drop-in sweepstakes, prizing, and gamification for your web application**
 
-[![npm](https://img.shields.io/npm/v/winr-web-sdk.svg)](https://www.npmjs.com/package/winr-web-sdk)
+[![npm](https://img.shields.io/npm/v/avafli-sdk.svg)](https://www.npmjs.com/package/avafli-sdk)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0%2B-blue.svg?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/AVAFLI/winr_web_sdk/blob/main/LICENSE)
+
+> **Formerly the WINR Web SDK.** Version 3.0.0 renames the package (`winr-web-sdk` → `avafli-sdk`), the global (`WINR` → `Avafli`), and the public types (`WINR*` → `Avafli*`). The backend, your API keys, and all stored user state are unchanged — see the [3.0.0 migration table](CHANGELOG.md#300) for the exact rename map.
 
 ---
 
 ## Overview
 
-WINR lets you add daily-entry sweepstakes and prize experiences to your app in under 20 lines of code. The entire UI — branding, theming, copy, and prize configuration — is managed server-side from the WINR dashboard. You integrate once; your marketing team controls the rest.
+Avafli lets you add daily-entry sweepstakes and prize experiences to your app in under 20 lines of code. The entire UI — branding, theming, copy, and prize configuration — is managed server-side from the Avafli dashboard. You integrate once; your marketing team controls the rest.
 
 **Key capabilities:**
 - **Daily entry sweepstakes** — Users earn entries every day they engage
@@ -20,7 +22,7 @@ WINR lets you add daily-entry sweepstakes and prize experiences to your app in u
 - **Soft email verification** — A brand-new typed email shows a persistent, dismissible "Verify your email" chip; it never blocks play, only prize-draw eligibility
 - **Winner claim flow** — "WE HAVE A WINNER!" splash and a guided prize-claim flow (name, shipping address incl. DC, optional photo), followed by a post-submit share step (optional story + real share actions) and a claim-number confirmation
 - **Responsive V2 design** — Bottom drawer on mobile (<768px), centered modal card on desktop (≥768px, widened with a modest type/spacing scale-up at ≥900px)
-- **Publisher branding** — Logo, primary color, and prize image configured from the WINR dashboard
+- **Publisher branding** — Logo, primary color, and prize image configured from the Avafli dashboard
 - **GDPR/CCPA compliant** — Built-in consent flows, RTD opt-out via `optOut()`, and a self-serve "Delete my data & stop participating" section inside the in-experience Privacy Policy
 - **Analytics forwarding** — Route SDK events to your existing analytics stack
 - **Shadow DOM isolation** — Styles never leak into your page; fonts and imagery are bundled (no CDN fetches)
@@ -30,10 +32,10 @@ WINR lets you add daily-entry sweepstakes and prize experiences to your app in u
 ### ES Modules
 
 ```typescript
-import { WINR } from 'winr-web-sdk';
+import { Avafli } from 'avafli-sdk';
 
 // 1. Configure the SDK
-await WINR.configure({
+await Avafli.configure({
   apiKey: 'YOUR_API_KEY', // debug builds: use your winr_test_ sandbox key
   bundleId: 'com.example.myapp',
   user: {
@@ -55,10 +57,10 @@ await WINR.configure({
 ### Script Tag (UMD)
 
 ```html
-<script src="/vendor/winr/winr-sdk.umd.js"></script>
+<script src="/vendor/avafli/avafli-sdk.umd.js"></script>
 <script>
   (async function () {
-    await WINR.configure({
+    await Avafli.configure({
       apiKey: 'YOUR_API_KEY', // debug builds: use your winr_test_ sandbox key
       bundleId: 'com.example.myapp',
       user: { id: 'user_123', firstName: 'Jane', lastName: 'Doe' },
@@ -74,7 +76,7 @@ already hold — even just an id — and the SDK fills in the gaps: it captures 
 email through its own screen, and the name at prize-claim time if the user wins.
 There are three cases:
 
-**1. Signed-in user without an email (the common case, and WINR's main value).**
+**1. Signed-in user without an email (the common case, and Avafli's main value).**
 Pass the id plus whatever you have and OMIT `email`. The SDK shows its capture
 screen and the user types their email — so you capture an address you didn't
 have before:
@@ -97,14 +99,14 @@ user: { id: 'user_123', firstName: 'Jane', lastName: 'Doe', email: 'jane@example
 **3. No signed-in user at all.** Simply omit `user`:
 
 ```typescript
-await WINR.configure({
+await Avafli.configure({
   apiKey: 'winr_live_…',
   bundleId: 'com.example.myapp',
   // no user — guest session
 });
 ```
 
-The SDK mints a stable per-install guest id (`winr_guest_…`) for attribution —
+The SDK mints a stable per-install guest id (`avafli_guest_…`) for attribution —
 never fabricate placeholder ids yourself. The experience is fully functional
 for guests. When the user signs in, call `configure` again with the real user:
 attribution upgrades in place and the streak carries over automatically.
@@ -115,12 +117,15 @@ attribution upgrades in place and the streak carries over automatically.
 ### npm
 
 ```bash
-npm install winr-web-sdk@^2.9.5
+npm install avafli-sdk
 ```
 
 ```typescript
-import { WINR } from 'winr-web-sdk';
+import { Avafli } from 'avafli-sdk';
 ```
+
+> Migrating from 2.9.x? The old package `winr-web-sdk` is frozen at 2.9.x —
+> see the [3.0.0 migration table](CHANGELOG.md#300).
 
 ### Self-hosted bundles
 
@@ -131,11 +136,11 @@ git clone https://github.com/AVAFLI/winr_web_sdk.git
 cd winr_web_sdk
 npm install
 npm run build
-# outputs: dist/winr-sdk.esm.js, dist/winr-sdk.umd.js, dist/winr-sdk.d.ts
+# outputs: dist/avafli-sdk.esm.js, dist/avafli-sdk.umd.js, dist/avafli-sdk.d.ts
 ```
 
-- **ESM / bundlers:** copy `dist/winr-sdk.esm.js` (and `winr-sdk.d.ts`) into your project, or add the repo as a git dependency (`npm install github:AVAFLI/winr_web_sdk`).
-- **Script tag:** self-host `dist/winr-sdk.umd.js` and load it with a `<script>` tag — it exposes a global `WINR`.
+- **ESM / bundlers:** copy `dist/avafli-sdk.esm.js` (and `avafli-sdk.d.ts`) into your project, or add the repo as a git dependency (`npm install github:AVAFLI/winr_web_sdk`).
+- **Script tag:** self-host `dist/avafli-sdk.umd.js` and load it with a `<script>` tag — it exposes a global `Avafli`.
 
 The bundles are fully self-contained (fonts and imagery embedded, zero runtime dependencies).
 
@@ -146,7 +151,7 @@ The bundles are fully self-contained (fonts and imagery embedded, zero runtime d
 Initialize the SDK with your user and environment settings:
 
 ```typescript
-await WINR.configure({
+await Avafli.configure({
   apiKey: 'winr_live_xxxxxxxxxx',
   bundleId: 'com.example.myapp',
   user: {
@@ -167,12 +172,12 @@ await WINR.configure({
 
 | Parameter | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `apiKey` | `string` | ✅ | Your WINR API key from the dashboard |
+| `apiKey` | `string` | ✅ | Your Avafli API key from the dashboard |
 | `bundleId` | `string` | ✅ | App bundle ID (e.g., com.example.myapp) |
-| `user` | `WINRUser?` | — | The signed-in user; omit for a guest session |
-| `options` | `WINROptions?` | — | Optional behavior toggles |
+| `user` | `AvafliUser?` | — | The signed-in user; omit for a guest session |
+| `options` | `AvafliOptions?` | — | Optional behavior toggles |
 
-### WINRUser
+### AvafliUser
 
 | Parameter | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
@@ -189,7 +194,8 @@ await WINR.configure({
 
 ## Test in Development: Your Sandbox Key
 
-Your publisher dashboard shows two API keys:
+Your publisher dashboard shows two API keys (key prefixes are unchanged by the
+rebrand):
 
 | Key | Use it in |
 | --- | --------- |
@@ -210,7 +216,7 @@ changes.
 
 ## The Experience Presents Itself
 
-There is no manual launch API — the WINR experience is exclusively SDK-driven. After `WINR.configure()`, the experience opens automatically at most once per calendar day (first visit of the day, re-checked when the tab regains focus; if `configure()` runs before the DOM is ready, the open is deferred until DOMContentLoaded). Auto-open respects the server-side kill switch (`sdkConfig.experience.autoOpenEnabled`), an unregistered-impression cap (default 3 impressions until the user submits an email), and the RTD opt-out — an opted-out user never sees the experience again.
+There is no manual launch API — the Avafli experience is exclusively SDK-driven. After `Avafli.configure()`, the experience opens automatically at most once per calendar day (first visit of the day, re-checked when the tab regains focus; if `configure()` runs before the DOM is ready, the open is deferred until DOMContentLoaded). Auto-open respects the server-side kill switch (`sdkConfig.experience.autoOpenEnabled`), an unregistered-impression cap (default 3 impressions until the user submits an email), and the RTD opt-out — an opted-out user never sees the experience again.
 
 Entries are claimed silently the moment the experience opens. On day 1 the "You're in!" celebration modal is the reveal (its GOT IT closes the experience). On day 2+ there is no modal and nothing to press: the celebration is the dashboard's first visible frame — today's tile checks off with a confetti burst, the streak label advances, the total counts up and pops, and the bar leads with a "YOU'RE ON A ROLL!" toast before settling into the come-back message. The pill reads GOT IT throughout and closes the experience.
 
@@ -220,7 +226,7 @@ Email is captured inside the SDK's own opt-in screen (see the identity section a
 
 Two verification paths run from that screen:
 
-- **Cross-device verified adoption.** When the typed email matches an existing WINR account (from another device or install), the SDK asks for a **6-digit code** emailed to that address before the two identities are merged — so a streak follows the person across devices without letting anyone attach to someone else's record.
+- **Cross-device verified adoption.** When the typed email matches an existing Avafli account (from another device or install), the SDK asks for a **6-digit code** emailed to that address before the two identities are merged — so a streak follows the person across devices without letting anyone attach to someone else's record.
 - **Soft email verification (2.7.0+).** A brand-new, never-before-seen typed email surfaces a persistent, dismissible **"Verify your email"** chip on the dashboard. It **never blocks play** — the user keeps earning entries — it only affects prize-draw eligibility until the address is confirmed.
 
 ## Winner Experience
@@ -233,11 +239,11 @@ This requires no integration work — the flow appears only for the drawn winner
 
 ## Push Notifications
 
-Streak reminder pushes are a mobile-SDK feature. On the web, `WINR.registerForPushNotifications()` is a **logged no-op unless web push is configured** — functional web push needs a VAPID application-server key and a service worker, which this build does not ship. It is also gated on `enablePushReminders`. Web engagement runs through the daily auto-open experience itself, not browser notifications.
+Streak reminder pushes are a mobile-SDK feature. On the web, `Avafli.registerForPushNotifications()` is a **logged no-op unless web push is configured** — functional web push needs a VAPID application-server key and a service worker, which this build does not ship. It is also gated on `enablePushReminders`. Web engagement runs through the daily auto-open experience itself, not browser notifications.
 
 ## Customization
 
-All branding, themes, and copy are managed server-side through the [WINR Dashboard](https://avafli-website.web.app/sdk/dashboard):
+All branding, themes, and copy are managed server-side through the [Avafli Dashboard](https://avafli-website.web.app/sdk/dashboard):
 
 - **Colors & Branding** — Primary colors, logos, backgrounds
 - **Copy & Messaging** — Headlines, CTAs, legal text
@@ -247,10 +253,10 @@ Changes apply instantly across all web applications without requiring a deployme
 
 ## Analytics
 
-Forward WINR events to your existing analytics stack:
+Forward Avafli events to your existing analytics stack:
 
 ```typescript
-import { WINR, AnalyticsAdapter } from 'winr-web-sdk';
+import { Avafli, AnalyticsAdapter } from 'avafli-sdk';
 
 const analytics: AnalyticsAdapter = {
   track(event, properties) { 
@@ -262,7 +268,7 @@ const analytics: AnalyticsAdapter = {
   },
 };
 
-await WINR.configure({
+await Avafli.configure({
   apiKey: 'YOUR_API_KEY',
   bundleId: 'com.example.myapp',
   user: { id: 'user_123', firstName: 'Jane', lastName: 'Doe' },
@@ -270,20 +276,22 @@ await WINR.configure({
 });
 ```
 
-**Events emitted by the SDK:**
-- `winr_device_registered` — Device registered with WINR
-- `winr_modal_presented` — The WINR experience auto-opened
-- `winr_email_captured` — User completed the email/consent capture
-- `winr_daily_entry_claimed` — Daily entries awarded (auto-claimed on open)
-- `winr_modal_dismissed` — User closed the WINR experience
-- `winr_user_data_deleted` — User data deletion completed
+**Events emitted by the SDK** (3.0.0 renamed the `winr_` event prefix to `avafli_`):
+- `avafli_device_registered` — Device registered with Avafli
+- `avafli_modal_presented` — The Avafli experience auto-opened
+- `avafli_email_captured` — User completed the email/consent capture
+- `avafli_daily_entry_claimed` — Daily entries awarded (auto-claimed on open)
+- `avafli_modal_dismissed` — User closed the Avafli experience
+- `avafli_email_verified` / `avafli_adoption_verified` — Email verification / cross-device adoption completed
+- `avafli_winner_claim_shown` / `avafli_prize_claim_submitted` — Winner claim flow shown / submitted
+- `avafli_opted_out` — Right-to-delete opt-out completed
 
 ## GDPR / CCPA
 
 Handle erasure requests with `optOut()`:
 
 ```javascript
-await WINR.optOut();
+await Avafli.optOut();
 ```
 
 This is the complete Right-to-be-Forgotten path. It removes the person's personal
@@ -307,14 +315,14 @@ destructive confirmation.
 
 | Method | Returns | Description |
 | ------ | ------- | ----------- |
-| `WINR.configure(config)` | `Promise<void>` | Initialize the SDK with user and settings (the experience then auto-opens once per day) |
-| `WINR.dismiss()` | `void` | Programmatically close the auto-opened experience |
-| `WINR.isAvailable` | `boolean` | Whether the experience is currently available (eligible to auto-open) |
-| `WINR.refreshConfig()` | `Promise<void>` | Re-fetch the giveaway/SDK config from the backend |
-| `WINR.registerForPushNotifications()` | `Promise<void>` | Logged no-op on web unless web push (VAPID + service worker) is configured; gated on `enablePushReminders` |
-| `WINR.optOut()` | `Promise<void>` | Right-to-delete: submits the user's opt-out and suppresses them permanently |
+| `Avafli.configure(config)` | `Promise<void>` | Initialize the SDK with user and settings (the experience then auto-opens once per day) |
+| `Avafli.dismiss()` | `void` | Programmatically close the auto-opened experience |
+| `Avafli.isAvailable` | `boolean` | Whether the experience is currently available (eligible to auto-open) |
+| `Avafli.refreshConfig()` | `Promise<void>` | Re-fetch the giveaway/SDK config from the backend |
+| `Avafli.registerForPushNotifications()` | `Promise<void>` | Logged no-op on web unless web push (VAPID + service worker) is configured; gated on `enablePushReminders` |
+| `Avafli.optOut()` | `Promise<void>` | Right-to-delete: submits the user's opt-out and suppresses them permanently |
 
-For detailed API documentation, see the [WINR Docs](https://avafli-website.web.app/sdk/web).
+For detailed API documentation, see the [Avafli Docs](https://avafli-website.web.app/sdk/web).
 
 ## Example / Demo
 

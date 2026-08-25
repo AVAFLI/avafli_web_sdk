@@ -16,9 +16,9 @@ import { NetworkClient } from './client';
 import { getPerimeterToken } from '../perimeter';
 
 /**
- * WINR API client with typed endpoints
+ * Avafli API client with typed endpoints
  */
-export class WINRAPI {
+export class AvafliAPI {
   constructor(private client: NetworkClient) {}
 
   /**
@@ -104,8 +104,8 @@ export class WINRAPI {
 }
 
 /**
- * Factory function to create WINR API client
+ * Factory function to create Avafli API client
  */
-export function createWINRAPI(client: NetworkClient): WINRAPI {
-  return new WINRAPI(client);
+export function createAvafliAPI(client: NetworkClient): AvafliAPI {
+  return new AvafliAPI(client);
 }

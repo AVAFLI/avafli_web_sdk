@@ -1,10 +1,10 @@
 /**
- * Core types and interfaces for the WINR Web SDK
+ * Core types and interfaces for the Avafli Web SDK
  */
 
 // ─── Configuration Types ───
 
-export interface WINROptions {
+export interface AvafliOptions {
   /** API environment */
   environment?: 'production';
   /** Enable debug logging */
@@ -21,28 +21,29 @@ export interface WINROptions {
   deviceFingerprintProvider?: () => Promise<string>;
 }
 
-export interface WINRConfiguration {
+export interface AvafliConfiguration {
   /** Publisher API key */
   apiKey: string;
   /** Application bundle/package identifier */
   bundleId: string;
   /**
    * Current user. OMIT for a guest session (logged out / no account system) —
-   * the SDK mints a stable per-install guest id (`winr_guest_…`) and uses it
+   * the SDK mints a stable per-install guest id (`avafli_guest_…`; guests
+   * minted by 2.x installs keep their stored `winr_guest_…` id) and uses it
    * for attribution, so there is always a real identifier without your
    * integration fabricating one. The experience is fully functional for
    * guests; when your user signs in, call configure again with the real user
    * and attribution upgrades in place (the streak is device-anchored and
    * unaffected).
    */
-  user?: WINRUser;
+  user?: AvafliUser;
   /** SDK configuration options */
-  options?: WINROptions;
+  options?: AvafliOptions;
   /** Custom branding configuration */
-  branding?: WINRBranding;
+  branding?: AvafliBranding;
 }
 
-export interface WINRBranding {
+export interface AvafliBranding {
   /** Primary color (hex) */
   primaryColor?: string;
   /** Secondary color (hex) */
@@ -55,7 +56,7 @@ export interface WINRBranding {
   fontFamily?: string;
 }
 
-export interface WINRUser {
+export interface AvafliUser {
   /** User ID (the only required field) */
   id: string;
   /** First name (optional — the SDK collects it at prize-claim if missing) */
@@ -67,11 +68,11 @@ export interface WINRUser {
   /**
    * The user's email from YOUR authenticated session (optional).
    *
-   * When supplied, the WINR capture screen shows it pre-filled and READ-ONLY —
-   * the user cannot swap in a different address. Deliberate: WINR links
+   * When supplied, the Avafli capture screen shows it pre-filled and READ-ONLY —
+   * the user cannot swap in a different address. Deliberate: Avafli links
    * accounts across devices by email, so a free-typed address lets a user
    * attach themselves to someone else's record. Supplying it never records any
-   * consent — the user still ticks the boxes and submits inside the WINR flow.
+   * consent — the user still ticks the boxes and submits inside the Avafli flow.
    * A malformed value is ignored and the field stays editable.
    */
   email?: string;
@@ -357,7 +358,7 @@ export interface ExperienceConfig {
 
 export interface SDKConfig {
   /** Branding overrides (V2 uses ONLY logoUrl + primaryColor) */
-  branding?: WINRBranding;
+  branding?: AvafliBranding;
   /**
    * Server-fed publisher/app display name (2.9.4). Used in user-facing legal
    * copy — the claim review screen's likeness consent names the actual app
@@ -451,7 +452,7 @@ export interface PrizeClaimBlock {
   prizeDescription: string;
   prizeValue: number;
   /**
-   * Display-only masked winning email ("d********r@winr.example.com") for
+   * Display-only masked winning email ("d********r@avafli.example.com") for
    * the claim form's locked field. Absent from older backends.
    */
   maskedEmail?: string;
@@ -570,7 +571,7 @@ export interface SubmitUserProfileResponse {
 
 // ─── Error Types ───
 
-export enum WINRErrorCode {
+export enum AvafliErrorCode {
   NotConfigured = 'not_configured',
   InvalidState = 'invalid_state',
   AuthenticationRequired = 'authentication_required',
@@ -582,22 +583,22 @@ export enum WINRErrorCode {
   RewardedVideoUnavailable = 'rewarded_video_unavailable',
   InvalidConfiguration = 'invalid_configuration',
   /**
-   * The WINR experience is not available for this publisher — e.g. the
+   * The Avafli experience is not available for this publisher — e.g. the
    * publisher's account/API key has been suspended or revoked (billing lapse).
    * The SDK degrades gracefully: the default modal is not rendered, and custom
-   * UI can query {@link WINR.isAvailable} to show its own messaging.
+   * UI can query {@link Avafli.isAvailable} to show its own messaging.
    */
   ServiceUnavailable = 'service_unavailable',
 }
 
-export class WINRError extends Error {
+export class AvafliError extends Error {
   constructor(
-    public code: WINRErrorCode,
+    public code: AvafliErrorCode,
     message: string,
     public originalError?: Error
   ) {
     super(message);
-    this.name = 'WINRError';
+    this.name = 'AvafliError';
   }
 }
 
@@ -695,16 +696,16 @@ export interface PresentationOptions {
   /** Completion callback */
   onComplete?: (result: DailyEntryGrant) => void;
   /** Error callback */
-  onError?: (error: WINRError) => void;
+  onError?: (error: AvafliError) => void;
 }
 
 // ─── Constants ───
 
-export const WINR_CONSTANTS = {
-  SDK_VERSION: '2.9.7',
+export const AVAFLI_CONSTANTS = {
+  SDK_VERSION: '3.0.0',
   PLATFORM_OS: 'Web',
   /**
-   * Canonical WINR privacy policy. 2.9.3: every "Privacy Policy" link used to
+   * Canonical Avafli privacy policy. 2.9.3: every "Privacy Policy" link used to
    * open `rulesUrl` — a latent bug shared with the native SDKs, because no
    * privacy URL existed in config. This is the fallback; a config-supplied
    * privacy URL would take precedence if one is ever added.

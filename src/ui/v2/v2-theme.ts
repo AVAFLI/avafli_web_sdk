@@ -20,8 +20,8 @@ export const V2_COLORS = {
   panel: '#141519',
   /** Modal hairline border. */
   panelBorder: '#515151',
-  /** WINR brand blue — the DEFAULT primary when a publisher hasn't set one. */
-  winrBlue: '#268fff',
+  /** Avafli brand blue — the DEFAULT primary when a publisher hasn't set one. */
+  avafliBlue: '#268fff',
 
   textSecondary: 'rgba(255,255,255,0.75)',
   textTertiary: 'rgba(255,255,255,0.6)',
@@ -29,15 +29,15 @@ export const V2_COLORS = {
 } as const;
 
 /**
- * The publisher's primary color (branding.primaryColor) with the WINR-blue
+ * The publisher's primary color (branding.primaryColor) with the Avafli-blue
  * default. Drives: CTA buttons, streak-tile outlines/glow, accent text,
  * power-up tiles.
  */
 export function resolveAccent(hex?: string | null): string {
-  if (!hex) return V2_COLORS.winrBlue;
+  if (!hex) return V2_COLORS.avafliBlue;
   let h = hex.trim();
   if (h.startsWith('#')) h = h.slice(1);
-  if (!/^[0-9a-fA-F]{6}$/.test(h)) return V2_COLORS.winrBlue;
+  if (!/^[0-9a-fA-F]{6}$/.test(h)) return V2_COLORS.avafliBlue;
   return `#${h.toLowerCase()}`;
 }
 
@@ -53,8 +53,8 @@ export function accentAlpha(accentHex: string, alpha: number): string {
 // ─── Fonts (Inter + Oswald, bundled) ───
 
 export const V2_INTER =
-  "'WINR Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
-export const V2_OSWALD = "'WINR Oswald', 'Arial Narrow', Impact, sans-serif";
+  "'Avafli Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
+export const V2_OSWALD = "'Avafli Oswald', 'Arial Narrow', Impact, sans-serif";
 
 let fontsInjected = false;
 
@@ -62,7 +62,7 @@ let fontsInjected = false;
  * Registers the bundled Inter/Oswald faces with the document. Idempotent.
  *
  * NOTE: @font-face rules are ignored inside shadow roots in some engines, so
- * the faces are declared at DOCUMENT level (with WINR-prefixed family names to
+ * the faces are declared at DOCUMENT level (with Avafli-prefixed family names to
  * avoid colliding with a host page's own Inter/Oswald) while all other V2 CSS
  * stays isolated inside the shadow root.
  */
@@ -70,7 +70,7 @@ export function ensureV2Fonts(): void {
   if (fontsInjected) return;
   if (typeof document === 'undefined') return;
   fontsInjected = true;
-  if (document.getElementById('winr-v2-fonts')) return;
+  if (document.getElementById('avafli-v2-fonts')) return;
 
   const css = V2_FONT_FACES.map(
     (f) =>
@@ -79,7 +79,7 @@ export function ensureV2Fonts(): void {
   ).join('\n');
 
   const style = document.createElement('style');
-  style.id = 'winr-v2-fonts';
+  style.id = 'avafli-v2-fonts';
   style.textContent = css;
   document.head.appendChild(style);
 }

@@ -2,8 +2,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { V2ExperienceController, V2ControllerDeps } from '../src/ui/v2/controller';
 import { renderDashboard, renderLoading, startComeBackToast } from '../src/ui/v2/screens';
-import { GetActiveGiveawayResponse, Giveaway, WINR_CONSTANTS } from '../src/types';
-import { WINRAPI } from '../src/network/api';
+import { GetActiveGiveawayResponse, Giveaway, AVAFLI_CONSTANTS } from '../src/types';
+import { AvafliAPI } from '../src/network/api';
 import { LocalStorageProvider } from '../src/storage/local-storage';
 
 /**
@@ -33,9 +33,9 @@ const GIVEAWAY: Giveaway = {
 };
 
 const BUNDLE = 'com.test';
-const EMAIL_KEY = `${WINR_CONSTANTS.STORAGE_KEYS.EMAIL_SUBMITTED}_${BUNDLE}`;
-const GIVEAWAY_KEY = WINR_CONSTANTS.STORAGE_KEYS.CACHED_GIVEAWAY;
-const STREAK_KEY = WINR_CONSTANTS.STORAGE_KEYS.STREAK_STATE;
+const EMAIL_KEY = `${AVAFLI_CONSTANTS.STORAGE_KEYS.EMAIL_SUBMITTED}_${BUNDLE}`;
+const GIVEAWAY_KEY = AVAFLI_CONSTANTS.STORAGE_KEYS.CACHED_GIVEAWAY;
+const STREAK_KEY = AVAFLI_CONSTANTS.STORAGE_KEYS.STREAK_STATE;
 
 function fakeStorage(seed: Record<string, string> = {}): LocalStorageProvider {
   const store = new Map<string, string>(Object.entries(seed));
@@ -103,7 +103,7 @@ function makeController(options: {
     }),
   };
   const deps: V2ControllerDeps = {
-    api: api as unknown as WINRAPI,
+    api: api as unknown as AvafliAPI,
     storage: options.storage ?? warmStorage(),
     bundleId: BUNDLE,
     submitEmailAndAdopt: async () => ({ success: true }),

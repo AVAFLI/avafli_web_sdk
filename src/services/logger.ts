@@ -9,11 +9,11 @@ export enum LogLevel {
 }
 
 /**
- * WINR SDK Logger with configurable levels and formatting
+ * Avafli SDK Logger with configurable levels and formatting
  */
-export class WINRLogger implements Logger {
+export class AvafliLogger implements Logger {
   private level: LogLevel = LogLevel.Warn;
-  private prefix = '[WINR]';
+  private prefix = '[Avafli]';
 
   constructor(level: LogLevel = LogLevel.Warn) {
     this.level = level;
@@ -106,8 +106,8 @@ export class WINRLogger implements Logger {
   /**
    * Create a child logger with additional context
    */
-  public child(context: string): WINRLogger {
-    const childLogger = new WINRLogger(this.level);
+  public child(context: string): AvafliLogger {
+    const childLogger = new AvafliLogger(this.level);
     childLogger.prefix = `${this.prefix}[${context}]`;
     return childLogger;
   }
@@ -135,14 +135,14 @@ export class WINRLogger implements Logger {
   /**
    * Create a logger from debug flag
    */
-  public static fromDebug(debug: boolean): WINRLogger {
-    return new WINRLogger(debug ? LogLevel.Debug : LogLevel.Warn);
+  public static fromDebug(debug: boolean): AvafliLogger {
+    return new AvafliLogger(debug ? LogLevel.Debug : LogLevel.Warn);
   }
 
   /**
    * Create a logger from environment
    */
-  public static fromEnvironment(): WINRLogger {
+  public static fromEnvironment(): AvafliLogger {
     try {
       // Determine whether we are in a development build. NOTE: nothing replaces
       // process.env.NODE_ENV at build time (no @rollup/plugin-replace) — this is a
@@ -155,28 +155,32 @@ export class WINRLogger implements Logger {
       // In production this prevents end-users from trivially enabling debug
       // logging (and potential PII leakage) via a query param.
       if (isDevBuild && typeof window !== 'undefined') {
+        // `avafli_debug` (3.0) — `winr_debug` still honored for muscle memory.
         const params = new URLSearchParams(window.location.search);
-        if (params.get('winr_debug') === 'true') {
-          return new WINRLogger(LogLevel.Debug);
+        if (params.get('avafli_debug') === 'true' || params.get('winr_debug') === 'true') {
+          return new AvafliLogger(LogLevel.Debug);
         }
 
         // Check localStorage for debug setting
-        if (window.localStorage?.getItem('winr_debug') === 'true') {
-          return new WINRLogger(LogLevel.Debug);
+        if (
+          window.localStorage?.getItem('avafli_debug') === 'true' ||
+          window.localStorage?.getItem('winr_debug') === 'true'
+        ) {
+          return new AvafliLogger(LogLevel.Debug);
         }
       }
 
       // Dev builds default to verbose logging.
       if (isDevBuild) {
-        return new WINRLogger(LogLevel.Debug);
+        return new AvafliLogger(LogLevel.Debug);
       }
     } catch {
       // Ignore errors accessing environment variables
     }
 
-    return new WINRLogger(LogLevel.Warn);
+    return new AvafliLogger(LogLevel.Warn);
   }
 }
 
 // Export singleton instance
-export const logger = WINRLogger.fromEnvironment();
+export const logger = AvafliLogger.fromEnvironment();

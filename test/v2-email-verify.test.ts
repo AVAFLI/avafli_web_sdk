@@ -2,9 +2,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { V2ControllerDeps, V2ExperienceController } from '../src/ui/v2/controller';
 import { renderDashboard, renderEmailVerify } from '../src/ui/v2/screens';
-import { WINRV2Strings } from '../src/ui/v2/strings';
+import { AvafliV2Strings } from '../src/ui/v2/strings';
 import { Giveaway, GetActiveGiveawayResponse } from '../src/types';
-import { WINRAPI } from '../src/network/api';
+import { AvafliAPI } from '../src/network/api';
 import { LocalStorageProvider } from '../src/storage/local-storage';
 
 /**
@@ -62,7 +62,7 @@ function makeController(status: Partial<GetActiveGiveawayResponse>): {
     claimDailyEntries: vi.fn(async () => ({ entries: 10, streakDay: 3, totalEntries: 110 })),
   };
   const deps: V2ControllerDeps = {
-    api: api as unknown as WINRAPI,
+    api: api as unknown as AvafliAPI,
     storage: fakeStorage(),
     bundleId: 'com.test',
     submitEmailAndAdopt: vi.fn(async () => ({ success: true })),
@@ -88,7 +88,7 @@ describe('soft email-verification chip', () => {
     const dash = renderDashboard(controller, null, () => {});
     const el = chip(dash);
     expect(el).not.toBeNull();
-    expect(el!.textContent).toContain(WINRV2Strings.verifyEmailChip);
+    expect(el!.textContent).toContain(AvafliV2Strings.verifyEmailChip);
   });
 
   it('hides the chip when emailVerified is absent (verified/partner/no-email)', async () => {
@@ -116,10 +116,10 @@ describe('soft email-verification chip', () => {
 
     const screen = renderEmailVerify(controller, null);
     expect(screen.querySelector('.wv2-capture-title')!.textContent).toBe(
-      WINRV2Strings.verifyEmailTitle
+      AvafliV2Strings.verifyEmailTitle
     );
     expect(screen.querySelector('.wv2-code-sub')!.textContent).toBe(
-      WINRV2Strings.verifyEmailSubtitle
+      AvafliV2Strings.verifyEmailSubtitle
     );
     // Reuses the exact 6-digit input from the adoption screen.
     expect(screen.querySelector('.wv2-code-input')).not.toBeNull();
@@ -138,7 +138,7 @@ describe('soft email-verification chip', () => {
     expect(controller.unverified).toBe(false);
     expect(controller.state.kind).toBe('dashboard');
     // Reuses the dashboard's transient-notice surface.
-    expect(controller.dashboardNotice).toBe(WINRV2Strings.emailVerified);
+    expect(controller.dashboardNotice).toBe(AvafliV2Strings.emailVerified);
     // …and the chip is gone on the next render.
     expect(chip(renderDashboard(controller, null, () => {}))).toBeNull();
   });
@@ -153,7 +153,7 @@ describe('soft email-verification chip', () => {
 
     expect(controller.state.kind).toBe('emailVerify');
     expect(controller.unverified).toBe(true); // still unverified
-    expect(controller.codeError).toBe(WINRV2Strings.codeExpired);
+    expect(controller.codeError).toBe(AvafliV2Strings.codeExpired);
   });
 
   it('a failed resend surfaces the resend error but keeps the screen up', async () => {
@@ -165,6 +165,6 @@ describe('soft email-verification chip', () => {
     await controller.resendEmailVerificationCode();
 
     expect(controller.state.kind).toBe('emailVerify');
-    expect(controller.codeError).toBe(WINRV2Strings.codeResendFailed);
+    expect(controller.codeError).toBe(AvafliV2Strings.codeResendFailed);
   });
 });

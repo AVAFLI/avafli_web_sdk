@@ -1,7 +1,7 @@
 import { logger } from './logger';
 
 /**
- * Web Push Notification manager for WINR SDK
+ * Web Push Notification manager for Avafli SDK
  */
 export class PushNotificationManager {
   private registration: ServiceWorkerRegistration | null = null;
@@ -172,7 +172,7 @@ export class PushNotificationManager {
         await this.registration.showNotification(title, {
           icon: '/icon-192.png',
           badge: '/badge-72.png',
-          tag: 'winr-notification',
+          tag: 'avafli-notification',
           // renotify: true, // Non-standard property
           requireInteraction: false,
           ...options,
@@ -181,7 +181,7 @@ export class PushNotificationManager {
         // Fallback to regular notification
         new Notification(title, {
           icon: '/icon-192.png',
-          tag: 'winr-notification',
+          tag: 'avafli-notification',
           ...options,
         });
       }

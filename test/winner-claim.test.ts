@@ -15,7 +15,7 @@ import {
   isStep2Valid,
   likenessConsentText,
 } from '../src/ui/v2/claim';
-import { WINRAPI } from '../src/network/api';
+import { AvafliAPI } from '../src/network/api';
 import { LocalStorageProvider } from '../src/storage/local-storage';
 
 /**
@@ -49,7 +49,7 @@ const PENDING_CLAIM: PrizeClaimBlock = {
   giveawayId: 'g1',
   prizeDescription: 'Cash Prize',
   prizeValue: 1000,
-  maskedEmail: 'a********e@winr.example.com',
+  maskedEmail: 'a********e@avafli.example.com',
 };
 
 const VALID_FORM: PrizeClaimForm = {
@@ -120,7 +120,7 @@ function makeController(options: {
     return { saved: true };
   });
   const deps: V2ControllerDeps = {
-    api: api as unknown as WINRAPI,
+    api: api as unknown as AvafliAPI,
     storage: fakeStorage(seed),
     bundleId: 'com.test',
     submitEmailAndAdopt: async () => ({ success: true }),

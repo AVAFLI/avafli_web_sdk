@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { V2ExperienceController, V2ControllerDeps } from '../src/ui/v2/controller';
 import { GetActiveGiveawayResponse, Giveaway } from '../src/types';
-import { WINRAPI } from '../src/network/api';
+import { AvafliAPI } from '../src/network/api';
 import { LocalStorageProvider } from '../src/storage/local-storage';
 
 /**
@@ -70,7 +70,7 @@ function makeController(options: {
   });
   const onAdoptionResolved = vi.fn();
   const deps: V2ControllerDeps = {
-    api: api as unknown as WINRAPI,
+    api: api as unknown as AvafliAPI,
     storage: fakeStorage({ winr_email_submitted_com_test: 'true' }),
     bundleId: 'com_test',
     submitEmailAndAdopt: async () => ({ success: true }),

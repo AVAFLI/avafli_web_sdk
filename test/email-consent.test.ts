@@ -7,7 +7,7 @@ import {
 } from '../src/ui/v2/controller';
 import { renderCapture } from '../src/ui/v2/screens';
 import { Giveaway, SDKConfig, SubmitEmailRequest } from '../src/types';
-import { WINRAPI } from '../src/network/api';
+import { AvafliAPI } from '../src/network/api';
 import { LocalStorageProvider } from '../src/storage/local-storage';
 
 /**
@@ -66,7 +66,7 @@ function makeController(
     claimDailyEntries: vi.fn(async () => ({ entries: 10, streakDay: 1, totalEntries: 10 })),
   };
   const deps: V2ControllerDeps = {
-    api: api as unknown as WINRAPI,
+    api: api as unknown as AvafliAPI,
     storage: fakeStorage(),
     bundleId: 'com.test',
     submitEmailAndAdopt,

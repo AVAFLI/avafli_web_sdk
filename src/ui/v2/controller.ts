@@ -7,13 +7,13 @@ import {
   StreakState,
   SubmitEmailRequest,
   SubmitEmailResponse,
-  WINRError,
-  WINRErrorCode,
-  WINR_CONSTANTS,
+  AvafliError,
+  AvafliErrorCode,
+  AVAFLI_CONSTANTS,
 } from '../../types';
 import { CLAIM_COUNTRY, PrizeClaimForm, emptyClaimForm, isClaimFormValid } from './claim';
-import { WINRV2Strings, isGeoBlockedError } from './strings';
-import { WINRAPI } from '../../network/api';
+import { AvafliV2Strings, isGeoBlockedError } from './strings';
+import { AvafliAPI } from '../../network/api';
 import { LocalStorageProvider } from '../../storage/local-storage';
 import { logger } from '../../services/logger';
 import { analyticsAdapter } from '../../services/analytics';
@@ -108,10 +108,10 @@ export function withAppParam(url: string): string {
 }
 
 export interface V2ControllerDeps {
-  api: WINRAPI;
+  api: AvafliAPI;
   storage: LocalStorageProvider;
   bundleId: string;
-  /** Cross-device adoption path (WINR.submitEmailAndAdopt). */
+  /** Cross-device adoption path (Avafli.submitEmailAndAdopt). */
   submitEmailAndAdopt: (request: SubmitEmailRequest) => Promise<SubmitEmailResponse>;
   /** Whether the registration handshake produced a user_uid. */
   hasRegisteredUuid: () => boolean;
@@ -156,11 +156,11 @@ export interface V2ControllerDeps {
    * Performs the RTD opt-out (the in-experience "Delete my data" flow — the
    * privacy page inside the legal overlay bridges into the destructive
    * confirmation). MUST reject on failure — unlike the public
-   * `WINR.optOut()`, the in-experience flow shows an honest error instead of
-   * pretending the deletion succeeded (wired to `WINR.optOutFromExperience`).
+   * `Avafli.optOut()`, the in-experience flow shows an honest error instead of
+   * pretending the deletion succeeded (wired to `Avafli.optOutFromExperience`).
    */
   optOut?: () => Promise<void>;
-  /** Warm-start data cached by WINR from device registration. */
+  /** Warm-start data cached by Avafli from device registration. */
   cachedGiveaway?: Giveaway | null;
   cachedSdkConfig?: SDKConfig | null;
   /**
@@ -169,7 +169,7 @@ export interface V2ControllerDeps {
    * V2ExperienceController.hydrateFromCache}).
    */
   cachedClaimedToday?: boolean;
-  /** Lets WINR keep its instance caches (giveaway, claim state, RTD) in sync. */
+  /** Lets Avafli keep its instance caches (giveaway, claim state, RTD) in sync. */
   onGiveawayRefreshed?: (response: GetActiveGiveawayResponse) => void;
   /**
    * Resolves the effective SDK config (server overrides merged over client
@@ -203,7 +203,7 @@ export const DEFAULT_MARKETING_CONSENT_TEXT = 'I agree to receive marketing emai
 
 /** Non-PII "email submitted" flag key — shared with the auto-open engine. */
 export function emailSubmittedStorageKey(bundleId: string): string {
-  return `${WINR_CONSTANTS.STORAGE_KEYS.EMAIL_SUBMITTED}_${bundleId}`;
+  return `${AVAFLI_CONSTANTS.STORAGE_KEYS.EMAIL_SUBMITTED}_${bundleId}`;
 }
 
 /**
@@ -405,7 +405,7 @@ export class V2ExperienceController {
   public onDismissRequest?: () => void;
   /** A claim succeeded (present()'s completion contract). */
   public onComplete?: (grant: DailyEntryGrant) => void;
-  public onError?: (error: WINRError) => void;
+  public onError?: (error: AvafliError) => void;
 
   private previousState: V2State | null = null;
   /** One-shot guard for the "already claimed on another device" re-sync. */
@@ -429,7 +429,7 @@ export class V2ExperienceController {
   public get ladder(): number[] {
     const ladder = this.giveaway?.streakLadder;
     if (ladder && ladder.length > 0) return ladder;
-    return [...WINR_CONSTANTS.DEFAULT_STREAK_LADDER];
+    return [...AVAFLI_CONSTANTS.DEFAULT_STREAK_LADDER];
   }
 
   public ladderValue(day: number): number {
@@ -517,7 +517,7 @@ export class V2ExperienceController {
   }
 
   private get giveawayCacheKey(): string {
-    return WINR_CONSTANTS.STORAGE_KEYS.CACHED_GIVEAWAY;
+    return AVAFLI_CONSTANTS.STORAGE_KEYS.CACHED_GIVEAWAY;
   }
 
   /**
@@ -543,7 +543,7 @@ export class V2ExperienceController {
   public hydratedFromCache = false;
 
   private get streakStateKey(): string {
-    return WINR_CONSTANTS.STORAGE_KEYS.STREAK_STATE;
+    return AVAFLI_CONSTANTS.STORAGE_KEYS.STREAK_STATE;
   }
 
   /**
@@ -693,7 +693,7 @@ export class V2ExperienceController {
       // authoritative auth failure, not a transient blip — collapsing it into
       // the generic empty state ("Nothing to see here yet") hid the real
       // problem. Render the dedicated retryable state instead.
-      if (error instanceof WINRError && error.code === WINRErrorCode.AuthenticationRequired) {
+      if (error instanceof AvafliError && error.code === AvafliErrorCode.AuthenticationRequired) {
         logger.warn('Session expired (token refresh failed) — showing retry state');
         this.hydratedFromCache = false;
         this.transition({ kind: 'sessionExpired' });
@@ -729,7 +729,7 @@ export class V2ExperienceController {
     if (pendingPrizeClaim) {
       this.winnerClaimStep = { kind: 'splash' };
       this.transition({ kind: 'winnerClaim', claim: pendingPrizeClaim });
-      analyticsAdapter.track('winr_winner_claim_shown', {
+      analyticsAdapter.track('avafli_winner_claim_shown', {
         giveaway_id: pendingPrizeClaim.giveawayId,
       });
       if (!this.claimedToday && this.hasEmailConsent) {
@@ -839,7 +839,7 @@ export class V2ExperienceController {
       this.preClaimTotalEntries = response.totalEntries - (response.entries + bonus);
       this.preRevealSnapshot = null;
 
-      analyticsAdapter.track('winr_daily_entry_claimed', {
+      analyticsAdapter.track('avafli_daily_entry_claimed', {
         day: response.streakDay,
         entries: response.entries,
         ...(response.weeklyBonusEntries ? { weekly_bonus: response.weeklyBonusEntries } : {}),
@@ -910,7 +910,7 @@ export class V2ExperienceController {
         // tell the user what happened instead of silently flipping state.
         logger.info('Already claimed today — updating local state');
         this.claimedToday = true;
-        this.dashboardNotice = WINRV2Strings.alreadyEnteredToday;
+        this.dashboardNotice = AvafliV2Strings.alreadyEnteredToday;
         this.cancelAutoReveal();
         this.pendingRevealGrant = null;
         this.preClaimTotalEntries = null;
@@ -976,7 +976,7 @@ export class V2ExperienceController {
       this.streakDay = response.streakDay;
       this.totalEntries = response.totalEntries;
 
-      analyticsAdapter.track('winr_daily_entry_claimed', {
+      analyticsAdapter.track('avafli_daily_entry_claimed', {
         day: response.streakDay,
         entries: response.entries,
         ...(response.weeklyBonusEntries ? { weekly_bonus: response.weeklyBonusEntries } : {}),
@@ -1051,7 +1051,7 @@ export class V2ExperienceController {
       if (/already claimed|already entered/i.test(message)) {
         logger.info('Already claimed today — updating local state');
         this.claimedToday = true;
-        this.dashboardNotice = WINRV2Strings.alreadyEnteredToday;
+        this.dashboardNotice = AvafliV2Strings.alreadyEnteredToday;
         this.transition({ kind: 'dashboard' });
         if (!this.didResyncAfterAlreadyClaimed) {
           this.didResyncAfterAlreadyClaimed = true;
@@ -1110,7 +1110,7 @@ export class V2ExperienceController {
         ageConfirmed: consent.ageConfirmed,
         marketingConsent: consent.marketingConsent,
       })) as { verificationRequired?: boolean; emailVerified?: boolean } | undefined;
-      analyticsAdapter.track('winr_email_captured');
+      analyticsAdapter.track('avafli_email_captured');
       logger.info('Email submitted to backend');
 
       // A brand-new, unconfirmed email comes back with emailVerified === false —
@@ -1148,7 +1148,7 @@ export class V2ExperienceController {
       }
       // Stay on the capture screen with an inline error so the user can
       // retry; the old behavior swallowed this and proceeded as success.
-      this.emailSubmitError = WINRV2Strings.emailSubmitFailed;
+      this.emailSubmitError = AvafliV2Strings.emailSubmitFailed;
       this.onChange?.(this.state);
       return;
     }
@@ -1183,21 +1183,21 @@ export class V2ExperienceController {
     this.onChange?.(this.state);
     try {
       await this.deps.verifyAdoptionCode?.({ code });
-      analyticsAdapter.track('winr_adoption_verified');
+      analyticsAdapter.track('avafli_adoption_verified');
       // The adoption is complete — clear the SDK's cached adoptionPending
       // flag so later drawer-opens don't re-stage a finished adoption.
       this.deps.onAdoptionResolved?.();
       await this.load();
     } catch (error) {
       // NEVER render raw backend text — map the failure to fixed copy
-      // (Master Field List; see WINRV2Strings).
+      // (Master Field List; see AvafliV2Strings).
       const message = error instanceof Error ? error.message : String(error);
       if (/expired/i.test(message)) {
-        this.codeError = WINRV2Strings.codeExpired;
+        this.codeError = AvafliV2Strings.codeExpired;
       } else if (/attempts/i.test(message)) {
-        this.codeError = WINRV2Strings.codeTooManyAttempts;
+        this.codeError = AvafliV2Strings.codeTooManyAttempts;
       } else {
-        this.codeError = WINRV2Strings.codeIncorrect;
+        this.codeError = AvafliV2Strings.codeIncorrect;
       }
       logger.warn('Adoption code check failed:', error);
       this.onChange?.(this.state);
@@ -1226,7 +1226,7 @@ export class V2ExperienceController {
         this.onChange?.(this.state);
       } catch (error) {
         logger.warn('Re-entry code resend (restageAdoption) failed:', error);
-        this.codeError = WINRV2Strings.codeResendFailed;
+        this.codeError = AvafliV2Strings.codeResendFailed;
         this.onChange?.(this.state);
       }
       return;
@@ -1252,7 +1252,7 @@ export class V2ExperienceController {
       await this.load();
     } catch (error) {
       logger.warn('Resend verification code failed:', error);
-      this.codeError = WINRV2Strings.codeResendFailed;
+      this.codeError = AvafliV2Strings.codeResendFailed;
       this.onChange?.(this.state);
     }
   }
@@ -1290,21 +1290,21 @@ export class V2ExperienceController {
     this.onChange?.(this.state);
     try {
       await this.deps.confirmEmailVerification?.({ code });
-      analyticsAdapter.track('winr_email_verified');
+      analyticsAdapter.track('avafli_email_verified');
       this.unverified = false;
       this.isVerifyingCode = false;
       // Reuse the dashboard's transient-notice surface for the confirmation.
-      this.dashboardNotice = WINRV2Strings.emailVerified;
+      this.dashboardNotice = AvafliV2Strings.emailVerified;
       this.transition({ kind: 'dashboard' });
     } catch (error) {
       // NEVER render raw backend text — map to the fixed adoption copy.
       const message = error instanceof Error ? error.message : String(error);
       if (/expired/i.test(message)) {
-        this.codeError = WINRV2Strings.codeExpired;
+        this.codeError = AvafliV2Strings.codeExpired;
       } else if (/attempts/i.test(message)) {
-        this.codeError = WINRV2Strings.codeTooManyAttempts;
+        this.codeError = AvafliV2Strings.codeTooManyAttempts;
       } else {
-        this.codeError = WINRV2Strings.codeIncorrect;
+        this.codeError = AvafliV2Strings.codeIncorrect;
       }
       logger.warn('Email verification code check failed:', error);
       this.isVerifyingCode = false;
@@ -1325,7 +1325,7 @@ export class V2ExperienceController {
       await this.deps.resendEmailVerification?.();
     } catch (error) {
       logger.warn('Resend email verification code failed:', error);
-      this.codeError = WINRV2Strings.codeResendFailed;
+      this.codeError = AvafliV2Strings.codeResendFailed;
       if (this.state.kind === 'emailVerify') this.onChange?.(this.state);
     }
   }
@@ -1416,7 +1416,7 @@ export class V2ExperienceController {
         claimNumber: response.claimNumber,
         submittedAt: response.submittedAt,
       };
-      analyticsAdapter.track('winr_prize_claim_submitted', {
+      analyticsAdapter.track('avafli_prize_claim_submitted', {
         giveaway_id: claim.giveawayId,
         claim_number: response.claimNumber,
       });
@@ -1434,7 +1434,7 @@ export class V2ExperienceController {
         return;
       }
       logger.error('Prize claim submit failed:', error);
-      this.claimSubmitError = WINRV2Strings.claimSubmitFailed;
+      this.claimSubmitError = AvafliV2Strings.claimSubmitFailed;
     }
   }
 
@@ -1504,8 +1504,8 @@ export class V2ExperienceController {
       this.legalOverlay = {
         doc,
         title: 'Privacy Policy',
-        url: withAppParam(WINR_CONSTANTS.PRIVACY_URL),
-        fallbackUrl: WINR_CONSTANTS.PRIVACY_URL,
+        url: withAppParam(AVAFLI_CONSTANTS.PRIVACY_URL),
+        fallbackUrl: AVAFLI_CONSTANTS.PRIVACY_URL,
       };
     }
     // The delete bridge listens only while the overlay is open. (Re-adding
@@ -1529,15 +1529,19 @@ export class V2ExperienceController {
   /**
    * Delete bridge — active only while the overlay is open. Accepts ONLY
    * events whose origin is exactly {@link LEGAL_BRIDGE_ORIGIN} AND whose
-   * data is `{ type: "winr-delete" }`; everything else is ignored. A valid
-   * message closes the overlay and raises the existing destructive
-   * confirmation (the authenticated erasure flow is unchanged).
+   * data is `{ type: "winr-delete" }` or `{ type: "avafli-delete" }` (3.0:
+   * the legal pages still live on winrmedia.com and post the legacy type;
+   * the rebranded type is accepted so the pages can migrate without a
+   * lockstep SDK release); everything else is ignored. A valid message
+   * closes the overlay and raises the existing destructive confirmation
+   * (the authenticated erasure flow is unchanged).
    */
   private readonly onLegalBridgeMessage = (event: MessageEvent): void => {
     if (!this.legalOverlay) return;
     if (event.origin !== V2ExperienceController.LEGAL_BRIDGE_ORIGIN) return;
     const data = event.data as { type?: unknown } | null | undefined;
-    if (typeof data !== 'object' || data === null || data.type !== 'winr-delete') return;
+    if (typeof data !== 'object' || data === null) return;
+    if (data.type !== 'winr-delete' && data.type !== 'avafli-delete') return;
     this.closeLegalOverlay();
     this.showOptOutConfirmation();
   };
@@ -1603,7 +1607,7 @@ export class V2ExperienceController {
     } catch (error) {
       logger.error('Opt-out failed:', error);
       this.optOutPhase = 'failed';
-      this.optOutError = WINRV2Strings.optOutFailed;
+      this.optOutError = AvafliV2Strings.optOutFailed;
       this.onChange?.(this.state);
     }
   }

@@ -1,8 +1,8 @@
 import {
-  WINRConfiguration,
-  WINRUser,
-  WINRError,
-  WINRErrorCode,
+  AvafliConfiguration,
+  AvafliUser,
+  AvafliError,
+  AvafliErrorCode,
   PresentationOptions,
   RegisterDeviceRequest,
   RegisterDeviceResponse,
@@ -13,11 +13,11 @@ import {
   Giveaway,
   StreakState,
   SDKConfig,
-  WINR_CONSTANTS,
+  AVAFLI_CONSTANTS,
 } from './types';
 import { NetworkClient } from './network/client';
-import { WINRAPI, createWINRAPI } from './network/api';
-import { WINRV2Experience } from './ui/v2/root';
+import { AvafliAPI, createAvafliAPI } from './network/api';
+import { AvafliV2Experience } from './ui/v2/root';
 import { V2ExperienceController, emailSubmittedStorageKey } from './ui/v2/controller';
 import { prewarmImage } from './ui/v2/effects';
 import { StreakEngine } from './domain/streak-engine';
@@ -62,24 +62,24 @@ function isJwtValid(token: string | null): boolean {
 }
 
 /**
- * Main WINR Web SDK class
+ * Main Avafli Web SDK class
  * Singleton pattern for global access
  */
-export class WINR {
-  private static instance: WINR | null = null;
+export class Avafli {
+  private static instance: Avafli | null = null;
   private static isConfigured = false;
   /**
    * Cached service-unavailable error captured during a failed configure() when
    * the publisher is suspended/revoked. Held at the static level because a
    * failed configure() tears down the instance — custom-UI publishers still
-   * need to query {@link WINR.isAvailable}/{@link WINR.unavailableReason}.
+   * need to query {@link Avafli.isAvailable}/{@link Avafli.unavailableReason}.
    */
-  private static serviceUnavailable: WINRError | null = null;
+  private static serviceUnavailable: AvafliError | null = null;
 
   private client: NetworkClient;
-  private api: WINRAPI;
-  private config: WINRConfiguration;
-  private currentUser: WINRUser | null = null;
+  private api: AvafliAPI;
+  private config: AvafliConfiguration;
+  private currentUser: AvafliUser | null = null;
   private currentGiveaway: Giveaway | null = null;
   // Authoritative per-user state from the backend (getActiveGiveaway). The modal
   // is gated on these so a recognized user isn't re-prompted for email and can't
@@ -111,7 +111,7 @@ export class WINR {
    */
   private secureStorage: SessionStorageProvider;
   private deviceFingerprint: string | null = null;
-  private currentExperience: WINRV2Experience | null = null;
+  private currentExperience: AvafliV2Experience | null = null;
   private serverSDKConfig: SDKConfig | null = null;
   /**
    * RTD opt-out — from the backend or the persisted local flag. Once true the
@@ -123,11 +123,11 @@ export class WINR {
    * Cached "publisher suspended / service unavailable" state. Set when device
    * registration fails because the publisher's API key has been suspended or
    * revoked (billing lapse). Once set, the auto-open engine short-circuits
-   * without rendering the modal, and {@link WINR.isAvailable} reports false.
+   * without rendering the modal, and {@link Avafli.isAvailable} reports false.
    */
-  private serviceUnavailableError: WINRError | null = null;
+  private serviceUnavailableError: AvafliError | null = null;
 
-  private constructor(config: WINRConfiguration) {
+  private constructor(config: AvafliConfiguration) {
     this.config = config;
     this.storage = new LocalStorageProvider();
     this.secureStorage = new SessionStorageProvider();
@@ -135,13 +135,13 @@ export class WINR {
 
     // Initialize network client
     this.client = new NetworkClient({
-      baseURL: WINR_CONSTANTS.getApiBaseUrl(config.options?.environment),
+      baseURL: AVAFLI_CONSTANTS.getApiBaseUrl(config.options?.environment),
       apiKey: config.apiKey,
       tokenProvider: () => this.getValidToken(),
       refreshHandler: () => this.refreshToken(),
       logger: logger,
     });
-    this.api = createWINRAPI(this.client);
+    this.api = createAvafliAPI(this.client);
   }
 
   /**
@@ -149,9 +149,9 @@ export class WINR {
    * Used by UI components so they route through the authenticated network
    * client instead of constructing their own unauthenticated one.
    */
-  public static getAPI(): WINRAPI {
-    WINR.ensureConfigured();
-    return WINR.instance!.api;
+  public static getAPI(): AvafliAPI {
+    Avafli.ensureConfigured();
+    return Avafli.instance!.api;
   }
 
   /**
@@ -161,33 +161,33 @@ export class WINR {
    * Tokens are read fresh on each request, so persisting them here is sufficient.
    */
   public static async submitEmailAndAdopt(request: SubmitEmailRequest): Promise<SubmitEmailResponse> {
-    WINR.ensureConfigured();
-    const response = await WINR.instance!.api.submitEmail(request);
+    Avafli.ensureConfigured();
+    const response = await Avafli.instance!.api.submitEmail(request);
     if (response.adopted && response.token && response.uuid) {
-      const store = WINR.instance!.secureStorage;
-      store.setItem(WINR_CONSTANTS.STORAGE_KEYS.TOKEN, response.token);
+      const store = Avafli.instance!.secureStorage;
+      store.setItem(AVAFLI_CONSTANTS.STORAGE_KEYS.TOKEN, response.token);
       if (response.refreshToken) {
-        store.setItem(WINR_CONSTANTS.STORAGE_KEYS.REFRESH_TOKEN, response.refreshToken);
+        store.setItem(AVAFLI_CONSTANTS.STORAGE_KEYS.REFRESH_TOKEN, response.refreshToken);
       }
-      store.setItem(WINR_CONSTANTS.STORAGE_KEYS.UUID, response.uuid);
+      store.setItem(AVAFLI_CONSTANTS.STORAGE_KEYS.UUID, response.uuid);
       logger.info('Adopted existing account — streak unified across devices');
     }
     // The cached consent flag is otherwise only refreshed by getActiveGiveaway.
     // Set it here too so the auto-open engine's impression-cap check reads the
     // truth it just created rather than depending on the once-per-day mark
     // being evaluated first.
-    WINR.instance!.currentEmailConsentStatus = true;
+    Avafli.instance!.currentEmailConsentStatus = true;
     return response;
   }
 
   /** Expose the resolved consent / age-gate config to UI components. */
   public static getResolvedSDKConfig(): SDKConfig {
-    WINR.ensureConfigured();
-    return WINR.instance!.getCurrentSDKConfig();
+    Avafli.ensureConfigured();
+    return Avafli.instance!.getCurrentSDKConfig();
   }
 
   /**
-   * Whether the WINR experience is currently available for this publisher.
+   * Whether the Avafli experience is currently available for this publisher.
    *
    * Returns false when the SDK has not been configured, or when device
    * registration determined the publisher's account/API key is suspended or
@@ -196,9 +196,9 @@ export class WINR {
    * elsewhere on the page.
    */
   public static get isAvailable(): boolean {
-    if (WINR.serviceUnavailable) return false;
-    if (!WINR.isConfigured || !WINR.instance) return false;
-    return WINR.instance.serviceUnavailableError === null;
+    if (Avafli.serviceUnavailable) return false;
+    if (!Avafli.isConfigured || !Avafli.instance) return false;
+    return Avafli.instance.serviceUnavailableError === null;
   }
 
   /**
@@ -206,10 +206,10 @@ export class WINR {
    * otherwise null. Lets custom-UI publishers read the message/code without
    * triggering an exception. Returns null until the SDK is configured.
    */
-  public static get unavailableReason(): WINRError | null {
-    if (WINR.serviceUnavailable) return WINR.serviceUnavailable;
-    if (!WINR.isConfigured || !WINR.instance) return null;
-    return WINR.instance.serviceUnavailableError;
+  public static get unavailableReason(): AvafliError | null {
+    if (Avafli.serviceUnavailable) return Avafli.serviceUnavailable;
+    if (!Avafli.isConfigured || !Avafli.instance) return null;
+    return Avafli.instance.serviceUnavailableError;
   }
 
   /**
@@ -219,7 +219,7 @@ export class WINR {
    * "Publisher account suspended").
    */
   private static isSuspendedError(error: unknown): boolean {
-    if (error instanceof WINRError && error.code === WINRErrorCode.ServiceUnavailable) {
+    if (error instanceof AvafliError && error.code === AvafliErrorCode.ServiceUnavailable) {
       return true;
     }
     const message =
@@ -233,14 +233,14 @@ export class WINR {
    * reacted to a 401; this validates `exp` up front.
    */
   private getValidToken(): string | null {
-    const token = this.secureStorage.getItem(WINR_CONSTANTS.STORAGE_KEYS.TOKEN);
+    const token = this.secureStorage.getItem(AVAFLI_CONSTANTS.STORAGE_KEYS.TOKEN);
     if (token && isJwtValid(token)) {
       return token;
     }
     // Token missing/expired/malformed — kick off a refresh (best-effort, async)
     // and return the current value so the in-flight request can still attempt;
     // a resulting 401 will trigger the reactive refresh path as a fallback.
-    if (this.secureStorage.getItem(WINR_CONSTANTS.STORAGE_KEYS.REFRESH_TOKEN)) {
+    if (this.secureStorage.getItem(AVAFLI_CONSTANTS.STORAGE_KEYS.REFRESH_TOKEN)) {
       this.refreshToken().catch((err) =>
         logger.debug('Proactive token refresh failed:', err)
       );
@@ -249,23 +249,23 @@ export class WINR {
   }
 
   /**
-   * Configure the WINR SDK
+   * Configure the Avafli SDK
    */
-  public static async configure(config: WINRConfiguration): Promise<void> {
-    if (WINR.isConfigured) {
-      logger.warn('WINR already configured, skipping reconfiguration');
+  public static async configure(config: AvafliConfiguration): Promise<void> {
+    if (Avafli.isConfigured) {
+      logger.warn('Avafli already configured, skipping reconfiguration');
       return;
     }
 
     // Clear any service-unavailable state from a prior failed attempt so this
     // configure() starts clean.
-    WINR.serviceUnavailable = null;
+    Avafli.serviceUnavailable = null;
 
     try {
       // Validate configuration
       if (!config.apiKey || !config.bundleId) {
-        throw new WINRError(
-          WINRErrorCode.InvalidConfiguration,
+        throw new AvafliError(
+          AvafliErrorCode.InvalidConfiguration,
           'API key and bundle ID are required'
         );
       }
@@ -274,22 +274,22 @@ export class WINR {
       // so attribution always carries a real identifier — bundle-scoped, same
       // persistence as the auto-open marks.
       if (!config.user) {
-        // The WINR instance doesn't exist yet (it's constructed from this
+        // The Avafli instance doesn't exist yet (it's constructed from this
         // config), so mint through a standalone provider — same class, same
         // backing store as the instance will use.
         const guestStore = new LocalStorageProvider();
-        const guestKey = `${WINR_CONSTANTS.STORAGE_KEYS.GUEST_ID}_${config.bundleId}`;
+        const guestKey = `${AVAFLI_CONSTANTS.STORAGE_KEYS.GUEST_ID}_${config.bundleId}`;
         let guestId = guestStore.getItem(guestKey);
         if (!guestId) {
-          guestId = `winr_guest_${crypto.randomUUID()}`;
+          guestId = `avafli_guest_${crypto.randomUUID()}`;
           guestStore.setItem(guestKey, guestId);
         }
         config = { ...config, user: { id: guestId, firstName: '', lastName: '' } };
       }
 
       if (!config.user || !config.user.id) {
-        throw new WINRError(
-          WINRErrorCode.InvalidConfiguration,
+        throw new AvafliError(
+          AvafliErrorCode.InvalidConfiguration,
           'User with an id is required'
         );
       }
@@ -300,8 +300,8 @@ export class WINR {
       // Guests likewise have deliberately empty names — nothing to validate.
       if ((config.user.firstName && !NAME_REGEX.test(config.user.firstName)) ||
           (config.user.lastName && !NAME_REGEX.test(config.user.lastName))) {
-        throw new WINRError(
-          WINRErrorCode.InvalidConfiguration,
+        throw new AvafliError(
+          AvafliErrorCode.InvalidConfiguration,
           'First and last name may only contain letters, spaces, hyphens, or apostrophes (max 50 chars)'
         );
       }
@@ -310,8 +310,8 @@ export class WINR {
       if (config.user.phone) {
         const normalizedPhone = config.user.phone.replace(/\D/g, '');
         if (!PHONE_REGEX.test(normalizedPhone)) {
-          throw new WINRError(
-            WINRErrorCode.InvalidConfiguration,
+          throw new AvafliError(
+            AvafliErrorCode.InvalidConfiguration,
             'Please enter a valid 10-digit mobile number'
           );
         }
@@ -319,16 +319,16 @@ export class WINR {
       }
 
       // Create singleton instance
-      WINR.instance = new WINR(config);
+      Avafli.instance = new Avafli(config);
       
       // Initialize device fingerprint
-      await WINR.instance.initializeDeviceFingerprint();
+      await Avafli.instance.initializeDeviceFingerprint();
       
       // Register device
-      await WINR.instance.registerDevice();
+      await Avafli.instance.registerDevice();
       
-      WINR.isConfigured = true;
-      logger.info('WINR SDK configured successfully');
+      Avafli.isConfigured = true;
+      logger.info('Avafli SDK configured successfully');
       
       // Initialize analytics if provided
       if (config.options?.analyticsAdapter) {
@@ -337,11 +337,11 @@ export class WINR {
 
       // Auto-setup user from configuration
       const user = config.user;
-      WINR.instance.currentUser = user;
+      Avafli.instance.currentUser = user;
 
       // Submit user profile to server
       try {
-        await WINR.instance.client.post<{ success: boolean }>('/submitUserProfile', {
+        await Avafli.instance.client.post<{ success: boolean }>('/submitUserProfile', {
           firstName: user.firstName,
           lastName: user.lastName,
           phone: user.phone,
@@ -366,89 +366,89 @@ export class WINR {
       // sdkConfig.experience.autoOpenEnabled). Also re-checks when the tab
       // becomes visible again, covering the "tab stayed open overnight" case.
       if (typeof document !== 'undefined') {
-        WINR.instance.attachAutoOpenListeners();
-        void WINR.autoPresentIfEligible();
+        Avafli.instance.attachAutoOpenListeners();
+        void Avafli.autoPresentIfEligible();
       }
 
     } catch (error) {
-      WINR.instance = null;
-      WINR.isConfigured = false;
+      Avafli.instance = null;
+      Avafli.isConfigured = false;
 
       // Preserve a service-unavailable (publisher suspended) error verbatim and
       // cache it at the static level so isAvailable / unavailableReason still
       // report it after the instance is torn down. Detect both the typed error
       // (thrown from registerDevice) and any raw suspended message.
       if (
-        (error instanceof WINRError && error.code === WINRErrorCode.ServiceUnavailable) ||
-        WINR.isSuspendedError(error)
+        (error instanceof AvafliError && error.code === AvafliErrorCode.ServiceUnavailable) ||
+        Avafli.isSuspendedError(error)
       ) {
-        const winrError =
-          error instanceof WINRError && error.code === WINRErrorCode.ServiceUnavailable
+        const avafliError =
+          error instanceof AvafliError && error.code === AvafliErrorCode.ServiceUnavailable
             ? error
-            : new WINRError(
-                WINRErrorCode.ServiceUnavailable,
-                'WINR is no longer available',
+            : new AvafliError(
+                AvafliErrorCode.ServiceUnavailable,
+                'Avafli is no longer available',
                 error instanceof Error ? error : undefined
               );
-        WINR.serviceUnavailable = winrError;
-        logger.warn('WINR configuration failed — publisher account suspended or revoked');
-        throw winrError;
+        Avafli.serviceUnavailable = avafliError;
+        logger.warn('Avafli configuration failed — publisher account suspended or revoked');
+        throw avafliError;
       }
 
-      const winrError = error instanceof WINRError
+      const avafliError = error instanceof AvafliError
         ? error
-        : new WINRError(
-            WINRErrorCode.InvalidConfiguration,
-            'Failed to configure WINR SDK',
+        : new AvafliError(
+            AvafliErrorCode.InvalidConfiguration,
+            'Failed to configure Avafli SDK',
             error instanceof Error ? error : undefined
           );
 
-      logger.error('WINR configuration failed:', winrError);
-      throw winrError;
+      logger.error('Avafli configuration failed:', avafliError);
+      throw avafliError;
     }
   }
 
   /**
-   * Present the WINR experience as a modal.
+   * Present the Avafli experience as a modal.
    *
    * Internal-only: the experience is exclusively SDK-driven. It is opened by
-   * the once-a-day auto-open engine ({@link WINR.autoPresentIfEligible}) and
+   * the once-a-day auto-open engine ({@link Avafli.autoPresentIfEligible}) and
    * cannot be launched manually by the host page.
    */
   private static async presentExperience(options?: PresentationOptions): Promise<void> {
     // If the publisher has been suspended, do NOT render the modal. Checked
     // before ensureConfigured() because a suspended configure() tears down the
     // instance.
-    const unavailable = WINR.unavailableReason;
+    const unavailable = Avafli.unavailableReason;
     if (unavailable) {
-      logger.warn('presentExperience() called while WINR is unavailable — not rendering modal');
+      logger.warn('presentExperience() called while Avafli is unavailable — not rendering modal');
       options?.onError?.(unavailable);
       throw unavailable;
     }
 
-    if (!WINR.ensureConfigured()) return;
+    if (!Avafli.ensureConfigured()) return;
 
     // RTD: an opted-out person never sees the experience again.
-    if (WINR.instance!.isOptedOut()) {
+    if (Avafli.instance!.isOptedOut()) {
       logger.info('presentExperience() suppressed: user opted out (RTD)');
       return;
     }
 
     // Don't stack on top of an already-presented experience.
-    if (WINR.instance!.currentExperience) {
+    if (Avafli.instance!.currentExperience) {
       logger.debug('presentExperience() skipped: experience already on screen');
       return;
     }
 
-    let experience: WINRV2Experience | null = null;
+    let experience: AvafliV2Experience | null = null;
     try {
       // Track presentation (the controller fetches fresh giveaway/claim state
       // itself in a single getActiveGiveaway round-trip after mount).
-      analyticsAdapter.track('winr_modal_presented', {
-        giveawayId: WINR.instance!.currentGiveaway?.id,
+      analyticsAdapter.track('avafli_modal_presented', {
+        giveawayId: Avafli.instance!.currentGiveaway?.id,
       });
 
-      experience = WINR.instance!.createExperience(options);
+      experience = Avafli.instance!.createExperience(options);
       await experience.present();
 
     } catch (error) {
@@ -456,23 +456,23 @@ export class WINR {
       // "already on screen" guard so a later (re-)check can present again.
       // (Read through a local to sidestep TS's stale narrowing from the
       // pre-try guard above.)
-      const current = WINR.instance
-        ? (WINR.instance.currentExperience as WINRV2Experience | null)
+      const current = Avafli.instance
+        ? (Avafli.instance.currentExperience as AvafliV2Experience | null)
         : null;
       if (experience && current === experience) {
-        WINR.instance!.currentExperience = null;
+        Avafli.instance!.currentExperience = null;
       }
-      const winrError = error instanceof WINRError
+      const avafliError = error instanceof AvafliError
         ? error
-        : new WINRError(
-            WINRErrorCode.InvalidState,
-            'Failed to present WINR modal',
+        : new AvafliError(
+            AvafliErrorCode.InvalidState,
+            'Failed to present Avafli modal',
             error instanceof Error ? error : undefined
           );
 
-      logger.error('Failed to present modal:', winrError);
-      options?.onError?.(winrError);
-      throw winrError;
+      logger.error('Failed to present modal:', avafliError);
+      options?.onError?.(avafliError);
+      throw avafliError;
     }
   }
 
@@ -480,13 +480,13 @@ export class WINR {
    * Dismiss any currently presented modal
    */
   public static dismiss(): void {
-    if (!WINR.ensureConfigured()) return;
+    if (!Avafli.ensureConfigured()) return;
 
-    if (WINR.instance!.currentExperience) {
-      WINR.instance!.currentExperience.dismiss();
-      WINR.instance!.currentExperience = null;
+    if (Avafli.instance!.currentExperience) {
+      Avafli.instance!.currentExperience.dismiss();
+      Avafli.instance!.currentExperience = null;
 
-      analyticsAdapter.track('winr_modal_dismissed');
+      analyticsAdapter.track('avafli_modal_dismissed');
       logger.debug('Modal dismissed');
     }
   }
@@ -498,13 +498,13 @@ export class WINR {
    * The controller re-fetches getActiveGiveaway on mount, auto-claims when
    * eligible, and keeps this instance's caches in sync via the refresh hook.
    */
-  private createExperience(options?: PresentationOptions): WINRV2Experience {
+  private createExperience(options?: PresentationOptions): AvafliV2Experience {
     const controller = new V2ExperienceController({
       api: this.api,
       storage: this.storage,
       bundleId: this.config.bundleId,
       submitEmailAndAdopt: (request) =>
-        WINR.submitEmailAndAdopt({ ...request, publisherUserId: this.resolvedUser.id }),
+        Avafli.submitEmailAndAdopt({ ...request, publisherUserId: this.resolvedUser.id }),
       verifyAdoptionCode: (request) =>
         this.client.post('/verifyAdoptionCode', request),
       confirmEmailVerification: (request) =>
@@ -522,9 +522,9 @@ export class WINR {
       // submitted claim ({ story } → { saved }); best-effort by contract.
       attachClaimStory: (request) =>
         this.client.post<{ saved?: boolean }>('/attachClaimStory', request),
-      optOut: () => WINR.optOutFromExperience(),
+      optOut: () => Avafli.optOutFromExperience(),
       hasRegisteredUuid: () =>
-        this.secureStorage.getItem(WINR_CONSTANTS.STORAGE_KEYS.UUID) !== null,
+        this.secureStorage.getItem(AVAFLI_CONSTANTS.STORAGE_KEYS.UUID) !== null,
       userPrefill: {
         firstName: this.resolvedUser.firstName,
         lastName: this.resolvedUser.lastName,
@@ -546,7 +546,7 @@ export class WINR {
       },
     };
 
-    const experience = new WINRV2Experience(controller, wrappedOptions);
+    const experience = new AvafliV2Experience(controller, wrappedOptions);
     this.currentExperience = experience;
     return experience;
   }
@@ -555,11 +555,11 @@ export class WINR {
   private onGiveawayResponse(response: GetActiveGiveawayResponse): void {
     if (response.giveaway === null) {
       this.currentGiveaway = null;
-      this.storage.removeItem(WINR_CONSTANTS.STORAGE_KEYS.CACHED_GIVEAWAY);
+      this.storage.removeItem(AVAFLI_CONSTANTS.STORAGE_KEYS.CACHED_GIVEAWAY);
     } else {
       this.currentGiveaway = response.giveaway;
       this.storage.setItem(
-        WINR_CONSTANTS.STORAGE_KEYS.CACHED_GIVEAWAY,
+        AVAFLI_CONSTANTS.STORAGE_KEYS.CACHED_GIVEAWAY,
         JSON.stringify(response.giveaway)
       );
     }
@@ -605,22 +605,22 @@ export class WINR {
    * the minted guest — before storing config, so this never throws in practice;
    * the throw documents the invariant rather than handling a real path.
    */
-  private get resolvedUser(): WINRUser {
+  private get resolvedUser(): AvafliUser {
     const u = this.config.user;
-    if (!u) throw new WINRError(WINRErrorCode.InvalidConfiguration, 'configure() has not run');
+    if (!u) throw new AvafliError(AvafliErrorCode.InvalidConfiguration, 'configure() has not run');
     return u;
   }
 
   private get lastAutoPresentKey(): string {
-    return `${WINR_CONSTANTS.STORAGE_KEYS.LAST_AUTO_PRESENT}_${this.config.bundleId}`;
+    return `${AVAFLI_CONSTANTS.STORAGE_KEYS.LAST_AUTO_PRESENT}_${this.config.bundleId}`;
   }
 
   private get unregisteredImpressionsKey(): string {
-    return `${WINR_CONSTANTS.STORAGE_KEYS.UNREGISTERED_IMPRESSIONS}_${this.config.bundleId}`;
+    return `${AVAFLI_CONSTANTS.STORAGE_KEYS.UNREGISTERED_IMPRESSIONS}_${this.config.bundleId}`;
   }
 
   private get optedOutKey(): string {
-    return `${WINR_CONSTANTS.STORAGE_KEYS.OPTED_OUT}_${this.config.bundleId}`;
+    return `${AVAFLI_CONSTANTS.STORAGE_KEYS.OPTED_OUT}_${this.config.bundleId}`;
   }
 
   private isOptedOut(): boolean {
@@ -645,9 +645,9 @@ export class WINR {
     if (this.autoOpenListenersAttached || typeof document === 'undefined') return;
     this.autoOpenListenersAttached = true;
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') void WINR.autoPresentIfEligible();
+      if (document.visibilityState === 'visible') void Avafli.autoPresentIfEligible();
     });
-    window.addEventListener('focus', () => void WINR.autoPresentIfEligible());
+    window.addEventListener('focus', () => void Avafli.autoPresentIfEligible());
   }
 
   /**
@@ -660,11 +660,11 @@ export class WINR {
    *  - RTD opted-out users never see it
    */
   private static async autoPresentIfEligible(): Promise<void> {
-    if (!WINR.isConfigured || !WINR.instance) return;
+    if (!Avafli.isConfigured || !Avafli.instance) return;
     if (typeof document === 'undefined') return;
-    const instance = WINR.instance;
+    const instance = Avafli.instance;
 
-    if (WINR.serviceUnavailable || instance.serviceUnavailableError) return;
+    if (Avafli.serviceUnavailable || instance.serviceUnavailableError) return;
     if (instance.isOptedOut()) return;
 
     const experience = instance.serverSDKConfig?.experience;
@@ -678,14 +678,14 @@ export class WINR {
     if (!document.body) {
       document.addEventListener(
         'DOMContentLoaded',
-        () => void WINR.autoPresentIfEligible(),
+        () => void Avafli.autoPresentIfEligible(),
         { once: true }
       );
       return;
     }
 
     // Once per calendar day.
-    const today = WINR.dayString(new Date());
+    const today = Avafli.dayString(new Date());
     if (instance.storage.getItem(instance.lastAutoPresentKey) === today) return;
 
     // Don't stack on top of an already-presented experience.
@@ -716,8 +716,8 @@ export class WINR {
     // BACK if the presentation never made it on screen, so the DOM-ready /
     // visibility re-checks can retry instead of going silent for the day.
     instance.storage.setItem(instance.lastAutoPresentKey, today);
-    logger.info('Auto-presenting WINR experience (first visit of the day)');
-    await WINR.presentExperience().catch(() => {
+    logger.info('Auto-presenting Avafli experience (first visit of the day)');
+    await Avafli.presentExperience().catch(() => {
       if (instance.storage.getItem(instance.lastAutoPresentKey) === today) {
         instance.storage.removeItem(instance.lastAutoPresentKey);
       }
@@ -731,22 +731,22 @@ export class WINR {
    * Refresh SDK configuration from server
    */
   public static async refreshConfig(): Promise<void> {
-    if (!WINR.ensureConfigured()) return;
+    if (!Avafli.ensureConfigured()) return;
     
     try {
-      await WINR.instance!.refreshConfig();
+      await Avafli.instance!.refreshConfig();
       logger.info('SDK config refreshed successfully');
     } catch (error) {
-      const winrError = error instanceof WINRError 
+      const avafliError = error instanceof AvafliError 
         ? error 
-        : new WINRError(
-            WINRErrorCode.NetworkError,
+        : new AvafliError(
+            AvafliErrorCode.NetworkError,
             'Failed to refresh SDK config',
             error instanceof Error ? error : undefined
           );
       
-      logger.error('Failed to refresh config:', winrError);
-      throw winrError;
+      logger.error('Failed to refresh config:', avafliError);
+      throw avafliError;
     }
   }
 
@@ -755,10 +755,10 @@ export class WINR {
    * (identity-wide, PII anonymized, email suppressed) and permanently
    * silences the experience in this browser. Wire this to the opt-out
    * action in your privacy-policy flow. Parity with the mobile SDKs'
-   * `WINR.optOut()`.
+   * `Avafli.optOut()`.
    */
   public static async optOut(): Promise<void> {
-    if (!WINR.ensureConfigured()) return;
+    if (!Avafli.ensureConfigured()) return;
 
     // A right-to-delete request MUST reach the backend. If the network call
     // fails we throw and mark NOTHING locally — silencing the client on a
@@ -766,12 +766,12 @@ export class WINR {
     // registration to "catch up", because the client is now silent). The
     // caller surfaces the error and lets the user retry. Only on confirmed
     // success do we suppress locally.
-    const res = await WINR.instance!.client.post<{ success?: boolean }>('/optOut', {});
+    const res = await Avafli.instance!.client.post<{ success?: boolean }>('/optOut', {});
     if (res && res.success === false) {
       throw new Error('opt-out was not accepted by the server');
     }
-    WINR.instance!.markOptedOut();
-    analyticsAdapter.track('winr_opted_out');
+    Avafli.instance!.markOptedOut();
+    analyticsAdapter.track('avafli_opted_out');
     logger.info('User opted out — experience permanently suppressed');
   }
 
@@ -784,10 +784,10 @@ export class WINR {
    * actually tombstoned the person.
    */
   private static async optOutFromExperience(): Promise<void> {
-    if (!WINR.ensureConfigured()) throw new Error('WINR is not configured');
-    await WINR.instance!.client.post<{ success?: boolean }>('/optOut', {});
-    WINR.instance!.markOptedOut();
-    analyticsAdapter.track('winr_opted_out');
+    if (!Avafli.ensureConfigured()) throw new Error('Avafli is not configured');
+    await Avafli.instance!.client.post<{ success?: boolean }>('/optOut', {});
+    Avafli.instance!.markOptedOut();
+    analyticsAdapter.track('avafli_opted_out');
     logger.info('User opted out via in-experience privacy choices — experience permanently suppressed');
   }
 
@@ -808,11 +808,11 @@ export class WINR {
    * Register for push notifications
    */
   public static async registerForPushNotifications(): Promise<void> {
-    if (!WINR.ensureConfigured()) return;
+    if (!Avafli.ensureConfigured()) return;
 
     // Gate on the publisher opt-in, exactly like the mobile SDKs: with
     // `enablePushReminders` unset we never prompt for notification permission.
-    if (!WINR.instance!.config.options?.enablePushReminders) {
+    if (!Avafli.instance!.config.options?.enablePushReminders) {
       logger.debug(
         'Push reminders not enabled (options.enablePushReminders) — skipping registration'
       );
@@ -836,11 +836,11 @@ export class WINR {
   // ─── Private Methods ───
 
   private static ensureConfigured(): boolean {
-    if (!WINR.isConfigured || !WINR.instance) {
-      logger.error('WINR not configured. Call WINR.configure() first.');
-      throw new WINRError(
-        WINRErrorCode.NotConfigured,
-        'WINR SDK must be configured before use'
+    if (!Avafli.isConfigured || !Avafli.instance) {
+      logger.error('Avafli not configured. Call Avafli.configure() first.');
+      throw new AvafliError(
+        AvafliErrorCode.NotConfigured,
+        'Avafli SDK must be configured before use'
       );
     }
     return true;
@@ -848,7 +848,7 @@ export class WINR {
 
   private async initializeDeviceFingerprint(): Promise<void> {
     // Check if we have a cached fingerprint
-    const cached = this.storage.getItem(WINR_CONSTANTS.STORAGE_KEYS.DEVICE_FINGERPRINT);
+    const cached = this.storage.getItem(AVAFLI_CONSTANTS.STORAGE_KEYS.DEVICE_FINGERPRINT);
     if (cached) {
       this.deviceFingerprint = cached;
       return;
@@ -866,7 +866,7 @@ export class WINR {
       }
       
       this.deviceFingerprint = fingerprint;
-      this.storage.setItem(WINR_CONSTANTS.STORAGE_KEYS.DEVICE_FINGERPRINT, fingerprint);
+      this.storage.setItem(AVAFLI_CONSTANTS.STORAGE_KEYS.DEVICE_FINGERPRINT, fingerprint);
       
       logger.debug('Device fingerprint generated');
       
@@ -874,7 +874,7 @@ export class WINR {
       // Fallback to timestamp-based ID
       const fallback = `web_${Date.now()}_${Math.random().toString(36).substring(2)}`;
       this.deviceFingerprint = fallback;
-      this.storage.setItem(WINR_CONSTANTS.STORAGE_KEYS.DEVICE_FINGERPRINT, fallback);
+      this.storage.setItem(AVAFLI_CONSTANTS.STORAGE_KEYS.DEVICE_FINGERPRINT, fallback);
       
       logger.warn('Using fallback device fingerprint:', error);
     }
@@ -905,8 +905,8 @@ export class WINR {
 
   private async registerDevice(): Promise<void> {
     if (!this.deviceFingerprint) {
-      throw new WINRError(
-        WINRErrorCode.InvalidState,
+      throw new AvafliError(
+        AvafliErrorCode.InvalidState,
         'Device fingerprint not initialized'
       );
     }
@@ -917,8 +917,8 @@ export class WINR {
         deviceFingerprint: this.deviceFingerprint,
         bundleId: this.config.bundleId,
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        platformOS: WINR_CONSTANTS.PLATFORM_OS,
-        sdkVersion: WINR_CONSTANTS.SDK_VERSION,
+        platformOS: AVAFLI_CONSTANTS.PLATFORM_OS,
+        sdkVersion: AVAFLI_CONSTANTS.SDK_VERSION,
       };
 
       const response = await this.client.post<RegisterDeviceResponse>(
@@ -933,26 +933,26 @@ export class WINR {
       // to UUID v4 server-side per spec #22, tighten this back up.)
       if (!response.uuid || typeof response.uuid !== 'string') {
         logger.error('registerDevice returned no user identifier:', response.uuid);
-        throw new WINRError(
-          WINRErrorCode.InvalidState,
+        throw new AvafliError(
+          AvafliErrorCode.InvalidState,
           'Device registration returned an invalid user identifier'
         );
       }
 
       // Store authentication tokens + uuid in sessionStorage (sensitive).
-      this.secureStorage.setItem(WINR_CONSTANTS.STORAGE_KEYS.TOKEN, response.token);
-      this.secureStorage.setItem(WINR_CONSTANTS.STORAGE_KEYS.REFRESH_TOKEN, response.refreshToken);
-      this.secureStorage.setItem(WINR_CONSTANTS.STORAGE_KEYS.UUID, response.uuid);
+      this.secureStorage.setItem(AVAFLI_CONSTANTS.STORAGE_KEYS.TOKEN, response.token);
+      this.secureStorage.setItem(AVAFLI_CONSTANTS.STORAGE_KEYS.REFRESH_TOKEN, response.refreshToken);
+      this.secureStorage.setItem(AVAFLI_CONSTANTS.STORAGE_KEYS.UUID, response.uuid);
 
       // Store giveaway data and server SDK config
       if (response.giveaway === null) {
         // Clear cached giveaway data when no active giveaway
         this.currentGiveaway = null;
-        this.storage.removeItem(WINR_CONSTANTS.STORAGE_KEYS.CACHED_GIVEAWAY);
+        this.storage.removeItem(AVAFLI_CONSTANTS.STORAGE_KEYS.CACHED_GIVEAWAY);
       } else {
         // Store and cache the active giveaway
         this.currentGiveaway = response.giveaway;
-        this.storage.setItem(WINR_CONSTANTS.STORAGE_KEYS.CACHED_GIVEAWAY, JSON.stringify(response.giveaway));
+        this.storage.setItem(AVAFLI_CONSTANTS.STORAGE_KEYS.CACHED_GIVEAWAY, JSON.stringify(response.giveaway));
       }
       
       if (response.sdkConfig) {
@@ -993,7 +993,7 @@ export class WINR {
         this.setStreakState(initialState);
       }
 
-      analyticsAdapter.track('winr_device_registered', {
+      analyticsAdapter.track('avafli_device_registered', {
         isReturningUser: response.isReturningUser,
         giveawayId: response.giveaway?.id,
       });
@@ -1007,16 +1007,16 @@ export class WINR {
       // Publisher billing lapse: the backend rejects registration with a
       // "suspended"/"revoked" message. Cache this as a dedicated
       // service-unavailable state so repeat calls short-circuit and custom UI
-      // can query WINR.isAvailable, then surface it as a typed WINRError.
-      if (WINR.isSuspendedError(error)) {
-        const winrError = new WINRError(
-          WINRErrorCode.ServiceUnavailable,
-          'WINR is no longer available',
+      // can query Avafli.isAvailable, then surface it as a typed AvafliError.
+      if (Avafli.isSuspendedError(error)) {
+        const avafliError = new AvafliError(
+          AvafliErrorCode.ServiceUnavailable,
+          'Avafli is no longer available',
           error instanceof Error ? error : undefined
         );
-        this.serviceUnavailableError = winrError;
-        logger.warn('WINR unavailable — publisher account suspended or revoked');
-        throw winrError;
+        this.serviceUnavailableError = avafliError;
+        logger.warn('Avafli unavailable — publisher account suspended or revoked');
+        throw avafliError;
       }
 
       logger.error('Device registration failed:', error);
@@ -1025,10 +1025,10 @@ export class WINR {
   }
 
   private async refreshToken(): Promise<string | null> {
-    const refreshToken = this.secureStorage.getItem(WINR_CONSTANTS.STORAGE_KEYS.REFRESH_TOKEN);
+    const refreshToken = this.secureStorage.getItem(AVAFLI_CONSTANTS.STORAGE_KEYS.REFRESH_TOKEN);
     if (!refreshToken) {
-      throw new WINRError(
-        WINRErrorCode.AuthenticationRequired,
+      throw new AvafliError(
+        AvafliErrorCode.AuthenticationRequired,
         'No refresh token available'
       );
     }
@@ -1040,8 +1040,8 @@ export class WINR {
       );
 
       // Update stored tokens
-      this.secureStorage.setItem(WINR_CONSTANTS.STORAGE_KEYS.TOKEN, response.token);
-      this.secureStorage.setItem(WINR_CONSTANTS.STORAGE_KEYS.REFRESH_TOKEN, response.refreshToken);
+      this.secureStorage.setItem(AVAFLI_CONSTANTS.STORAGE_KEYS.TOKEN, response.token);
+      this.secureStorage.setItem(AVAFLI_CONSTANTS.STORAGE_KEYS.REFRESH_TOKEN, response.refreshToken);
 
       logger.debug('Token refreshed successfully');
       return response.token;
@@ -1049,8 +1049,8 @@ export class WINR {
     } catch (error) {
       logger.error('Token refresh failed:', error);
       // Clear invalid tokens
-      this.secureStorage.removeItem(WINR_CONSTANTS.STORAGE_KEYS.TOKEN);
-      this.secureStorage.removeItem(WINR_CONSTANTS.STORAGE_KEYS.REFRESH_TOKEN);
+      this.secureStorage.removeItem(AVAFLI_CONSTANTS.STORAGE_KEYS.TOKEN);
+      this.secureStorage.removeItem(AVAFLI_CONSTANTS.STORAGE_KEYS.REFRESH_TOKEN);
       throw error;
     }
   }
@@ -1073,7 +1073,7 @@ export class WINR {
   }
 
   private getStreakState(): StreakState | null {
-    const stored = this.storage.getItem(WINR_CONSTANTS.STORAGE_KEYS.STREAK_STATE);
+    const stored = this.storage.getItem(AVAFLI_CONSTANTS.STORAGE_KEYS.STREAK_STATE);
     if (!stored) return null;
     
     try {
@@ -1089,7 +1089,7 @@ export class WINR {
   }
 
   private setStreakState(state: StreakState): void {
-    this.storage.setItem(WINR_CONSTANTS.STORAGE_KEYS.STREAK_STATE, JSON.stringify(state));
+    this.storage.setItem(AVAFLI_CONSTANTS.STORAGE_KEYS.STREAK_STATE, JSON.stringify(state));
   }
 
   private getCurrentSDKConfig(): SDKConfig {

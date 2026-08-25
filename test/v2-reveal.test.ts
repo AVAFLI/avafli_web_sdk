@@ -9,7 +9,7 @@ import {
   GetActiveGiveawayResponse,
   Giveaway,
 } from '../src/types';
-import { WINRAPI } from '../src/network/api';
+import { AvafliAPI } from '../src/network/api';
 import { LocalStorageProvider } from '../src/storage/local-storage';
 
 /**
@@ -100,7 +100,7 @@ function makeController(options: {
     }),
   };
   const deps: V2ControllerDeps = {
-    api: api as unknown as WINRAPI,
+    api: api as unknown as AvafliAPI,
     storage: fakeStorage(
       options.emailSubmitted === false ? {} : { 'winr_email_submitted_com.test': 'true' }
     ),

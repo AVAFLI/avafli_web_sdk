@@ -1,11 +1,11 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi } from 'vitest';
 import { V2ControllerDeps, V2ExperienceController } from '../src/ui/v2/controller';
-import { WINRV2Strings, isGeoBlockedError } from '../src/ui/v2/strings';
+import { AvafliV2Strings, isGeoBlockedError } from '../src/ui/v2/strings';
 import { isValidClaimName, isValidClaimPhone } from '../src/ui/v2/claim';
 import { renderCapture, renderDashboard } from '../src/ui/v2/screens';
-import { Giveaway, WINRError, WINRErrorCode } from '../src/types';
-import { WINRAPI } from '../src/network/api';
+import { Giveaway, AvafliError, AvafliErrorCode } from '../src/types';
+import { AvafliAPI } from '../src/network/api';
 import { LocalStorageProvider } from '../src/storage/local-storage';
 
 /**
@@ -87,7 +87,7 @@ function makeController(options: Options = {}): {
     options.emailSubmitted === false ? {} : { 'winr_email_submitted_com.test': 'true' }
   );
   const deps: V2ControllerDeps = {
-    api: api as unknown as WINRAPI,
+    api: api as unknown as AvafliAPI,
     storage,
     bundleId: 'com.test',
     submitEmailAndAdopt,
@@ -145,8 +145,8 @@ describe('geo-blocked detection + dedicated state', () => {
 describe('session expired', () => {
   it('an AuthenticationRequired load failure renders sessionExpired, not empty', async () => {
     const { controller } = makeController({
-      loadError: new WINRError(
-        WINRErrorCode.AuthenticationRequired,
+      loadError: new AvafliError(
+        AvafliErrorCode.AuthenticationRequired,
         'Authentication failed and token refresh unsuccessful'
       ),
     });
@@ -155,7 +155,7 @@ describe('session expired', () => {
   });
 
   it('RETRY re-runs the load and recovers', async () => {
-    const error = new WINRError(WINRErrorCode.AuthenticationRequired, 'refresh failed');
+    const error = new AvafliError(AvafliErrorCode.AuthenticationRequired, 'refresh failed');
     const { controller, api } = makeController({ claimedToday: true });
     api.getActiveGiveaway.mockRejectedValueOnce(error);
     await controller.load();
@@ -181,8 +181,8 @@ describe('auto-claim failure honesty', () => {
 
     const dash = renderDashboard(controller, null, () => {});
     const notice = dash.querySelector('.wv2-dash-notice-retry');
-    expect(notice?.textContent).toContain(WINRV2Strings.claimRecordFailed);
-    expect(notice?.textContent).toContain(WINRV2Strings.retry);
+    expect(notice?.textContent).toContain(AvafliV2Strings.claimRecordFailed);
+    expect(notice?.textContent).toContain(AvafliV2Strings.retry);
   });
 
   it('retryClaim() re-attempts and clears the notice on success', async () => {
@@ -207,7 +207,7 @@ describe('auto-claim failure honesty', () => {
     });
     await controller.load();
     expect(controller.claimedToday).toBe(true);
-    expect(controller.dashboardNotice).toBe(WINRV2Strings.alreadyEnteredToday);
+    expect(controller.dashboardNotice).toBe(AvafliV2Strings.alreadyEnteredToday);
     expect(controller.claimFailedNotice).toBe(false);
   });
 
@@ -229,7 +229,7 @@ describe('auto-claim failure honesty', () => {
 
     const first = renderDashboard(controller, null, () => {});
     expect(first.querySelector('.wv2-dash-notice')?.textContent).toBe(
-      WINRV2Strings.alreadyEnteredToday
+      AvafliV2Strings.alreadyEnteredToday
     );
     const second = renderDashboard(controller, null, () => {});
     expect(second.querySelector('.wv2-dash-notice')).toBeNull();
@@ -247,7 +247,7 @@ describe('email submit failure (no longer swallowed)', () => {
 
     await controller.submitEmail('ada@example.com', CONSENT);
     expect(controller.state.kind).toBe('emailCapture');
-    expect(controller.emailSubmitError).toBe(WINRV2Strings.emailSubmitFailed);
+    expect(controller.emailSubmitError).toBe(AvafliV2Strings.emailSubmitFailed);
     expect(controller.isSubmittingEmail).toBe(false);
     expect(storage.getItem('winr_email_submitted_com.test')).toBeNull();
 
@@ -255,7 +255,7 @@ describe('email submit failure (no longer swallowed)', () => {
     const capture = renderCapture(controller);
     const errors = capture.querySelectorAll('.wv2-field-error.wv2-visible');
     expect(Array.from(errors).map((n) => n.textContent)).toContain(
-      WINRV2Strings.emailSubmitFailed
+      AvafliV2Strings.emailSubmitFailed
     );
   });
 
@@ -292,7 +292,7 @@ describe('capture screen inline email validation', () => {
     input.value = 'not-an-email';
     input.dispatchEvent(new Event('input'));
     input.dispatchEvent(new Event('blur'));
-    expect(error()).toBe(WINRV2Strings.emailInvalid);
+    expect(error()).toBe(AvafliV2Strings.emailInvalid);
 
     input.value = 'ada@example.com';
     input.dispatchEvent(new Event('input'));
@@ -311,7 +311,7 @@ describe('capture screen inline email validation', () => {
     input.dispatchEvent(new Event('input'));
     const wrap = capture.querySelector('.wv2-cta-catch')!;
     wrap.dispatchEvent(new Event('click'));
-    expect(error()).toBe(WINRV2Strings.emailInvalid);
+    expect(error()).toBe(AvafliV2Strings.emailInvalid);
     // The CTA stays dimmed AND disabled — dimming behavior is kept.
     expect(capture.querySelector<HTMLButtonElement>('.wv2-pill')!.disabled).toBe(true);
   });
@@ -332,9 +332,9 @@ describe('verification-code screen error copy', () => {
 
   it('never renders raw backend text — expired / attempts / mismatch map to fixed strings', async () => {
     const cases: Array<[string, string]> = [
-      ['deadline-exceeded: verification code expired at 2026-08-10T12:00:00Z', WINRV2Strings.codeExpired],
-      ['resource-exhausted: too many attempts (5/5) for uid 4f3a', WINRV2Strings.codeTooManyAttempts],
-      ['invalid-argument: code mismatch for pending adoption f81d', WINRV2Strings.codeIncorrect],
+      ['deadline-exceeded: verification code expired at 2026-08-10T12:00:00Z', AvafliV2Strings.codeExpired],
+      ['resource-exhausted: too many attempts (5/5) for uid 4f3a', AvafliV2Strings.codeTooManyAttempts],
+      ['invalid-argument: code mismatch for pending adoption f81d', AvafliV2Strings.codeIncorrect],
     ];
     for (const [raw, expected] of cases) {
       const controller = await toCodeEntry({ verifyError: new Error(raw) });
@@ -354,7 +354,7 @@ describe('verification-code screen error copy', () => {
     };
     await controller.resendVerificationCode();
     expect(controller.state.kind).toBe('codeEntry');
-    expect(controller.codeError).toBe(WINRV2Strings.codeResendFailed);
+    expect(controller.codeError).toBe(AvafliV2Strings.codeResendFailed);
   });
 
   it('a successful RESEND stays on the code screen with no error', async () => {

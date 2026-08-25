@@ -10,9 +10,9 @@ import {
   renderLegalLinks,
   renderLegalOverlay,
 } from '../src/ui/v2/screens';
-import { WINRV2Strings } from '../src/ui/v2/strings';
-import { Giveaway, WINR_CONSTANTS } from '../src/types';
-import { WINRAPI } from '../src/network/api';
+import { AvafliV2Strings } from '../src/ui/v2/strings';
+import { Giveaway, AVAFLI_CONSTANTS } from '../src/types';
+import { AvafliAPI } from '../src/network/api';
 import { LocalStorageProvider } from '../src/storage/local-storage';
 
 /**
@@ -52,7 +52,7 @@ function fakeStorage(): LocalStorageProvider {
 
 function makeController(giveaway: Giveaway | null = GIVEAWAY): V2ExperienceController {
   const deps: V2ControllerDeps = {
-    api: {} as unknown as WINRAPI,
+    api: {} as unknown as AvafliAPI,
     storage: fakeStorage(),
     bundleId: 'com.test',
     submitEmailAndAdopt: vi.fn(),
@@ -104,8 +104,8 @@ describe('showLegalOverlay — routing and URLs', () => {
     expect(c.legalOverlay).toEqual({
       doc: 'privacy',
       title: 'Privacy Policy',
-      url: withAppParam(WINR_CONSTANTS.PRIVACY_URL),
-      fallbackUrl: WINR_CONSTANTS.PRIVACY_URL,
+      url: withAppParam(AVAFLI_CONSTANTS.PRIVACY_URL),
+      fallbackUrl: AVAFLI_CONSTANTS.PRIVACY_URL,
     });
     expect(c.legalOverlay?.url).toContain('app=1');
     // The new-tab fallback has no parent to bridge to — no ?app=1 there.
@@ -150,10 +150,19 @@ describe('delete bridge — postMessage filtering', () => {
     expect(c.optOutPhase).toBe('confirming');
   });
 
+  it('accepts the rebranded { type: "avafli-delete" } from https://winrmedia.com (3.0)', () => {
+    const c = opened(makeController());
+    c.showLegalOverlay('privacy');
+    postToBridge('https://winrmedia.com', { type: 'avafli-delete' });
+    expect(c.legalOverlay).toBeNull();
+    expect(c.optOutPhase).toBe('confirming');
+  });
+
   it('rejects the right payload from the wrong origin', () => {
     const c = opened(makeController());
     c.showLegalOverlay('privacy');
     postToBridge('https://evil.example', { type: 'winr-delete' });
+    postToBridge('https://evil.example', { type: 'avafli-delete' });
     postToBridge('https://winrmedia.com.evil.example', { type: 'winr-delete' });
     postToBridge('http://winrmedia.com', { type: 'winr-delete' });
     expect(c.legalOverlay).not.toBeNull();
@@ -214,7 +223,7 @@ describe('legal links route into the overlay (no window.open)', () => {
     const links = renderLegalLinks(c);
     const anchors = links.querySelectorAll<HTMLAnchorElement>('.wv2-legal-row a');
     expect(anchors[0].getAttribute('href')).toBe(GIVEAWAY.rulesUrl);
-    expect(anchors[1].getAttribute('href')).toBe(WINR_CONSTANTS.PRIVACY_URL);
+    expect(anchors[1].getAttribute('href')).toBe(AVAFLI_CONSTANTS.PRIVACY_URL);
   });
 });
 
@@ -225,7 +234,7 @@ describe('renderLegalOverlay — iframe, loading veil, fallback', () => {
     const layer = renderLegalOverlay(c);
     expect(layer.querySelector('.wv2-legal-overlay-title')?.textContent).toBe('Privacy Policy');
     const frame = layer.querySelector<HTMLIFrameElement>('.wv2-legal-overlay-frame');
-    expect(frame?.getAttribute('src')).toBe(withAppParam(WINR_CONSTANTS.PRIVACY_URL));
+    expect(frame?.getAttribute('src')).toBe(withAppParam(AVAFLI_CONSTANTS.PRIVACY_URL));
     expect(layer.querySelector('.wv2-legal-overlay-veil .wv2-spinner')).not.toBeNull();
   });
 
@@ -262,13 +271,13 @@ describe('renderLegalOverlay — iframe, loading veil, fallback', () => {
       const layer = renderLegalOverlay(c);
       vi.advanceTimersByTime(LEGAL_IFRAME_TIMEOUT_MS + 1);
       expect(layer.querySelector('.wv2-legal-overlay-fallback-text')?.textContent).toBe(
-        WINRV2Strings.legalOverlayLoadFailed
+        AvafliV2Strings.legalOverlayLoadFailed
       );
       const link = layer.querySelector<HTMLAnchorElement>('.wv2-legal-overlay-fallback-link');
-      expect(link?.textContent).toBe(WINRV2Strings.legalOverlayOpenInTab);
+      expect(link?.textContent).toBe(AvafliV2Strings.legalOverlayOpenInTab);
       // The fallback opens the PLAIN privacy URL — outside the experience
       // there is no parent for the delete section to bridge to.
-      expect(link?.getAttribute('href')).toBe(WINR_CONSTANTS.PRIVACY_URL);
+      expect(link?.getAttribute('href')).toBe(AVAFLI_CONSTANTS.PRIVACY_URL);
       expect(link?.target).toBe('_blank');
       expect(link?.rel).toContain('noopener');
     } finally {

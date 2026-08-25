@@ -1,4 +1,4 @@
-import { WINRError, WINRErrorCode, Logger } from '../types';
+import { AvafliError, AvafliErrorCode, Logger } from '../types';
 
 /**
  * HTTP client with automatic token refresh and retry logic
@@ -97,8 +97,8 @@ export class NetworkClient {
               }
             } catch (refreshError) {
               this.logger?.error('Token refresh failed:', refreshError);
-              throw new WINRError(
-                WINRErrorCode.AuthenticationRequired,
+              throw new AvafliError(
+                AvafliErrorCode.AuthenticationRequired,
                 'Authentication failed and token refresh unsuccessful',
                 refreshError instanceof Error ? refreshError : undefined
               );
@@ -120,7 +120,7 @@ export class NetworkClient {
               errorMessage = (typeof errorBody === 'string' ? errorBody : '') || errorMessage;
             }
 
-            const httpErr = new WINRError(
+            const httpErr = new AvafliError(
               this.mapErrorToCode(response.status, errorMessage),
               errorMessage
             );
@@ -152,8 +152,8 @@ export class NetworkClient {
           clearTimeout(timeoutId);
           
           if (error instanceof Error && error.name === 'AbortError') {
-            throw new WINRError(
-              WINRErrorCode.NetworkError,
+            throw new AvafliError(
+              AvafliErrorCode.NetworkError,
               `Request timeout after ${timeout}ms`
             );
           }
@@ -165,12 +165,12 @@ export class NetworkClient {
         lastError = error instanceof Error ? error : new Error(String(error));
         
         // Don't retry for certain error types
-        if (error instanceof WINRError) {
+        if (error instanceof AvafliError) {
           if (
-            error.code === WINRErrorCode.AuthenticationRequired ||
+            error.code === AvafliErrorCode.AuthenticationRequired ||
             // A suspended/revoked publisher is a terminal state — retrying with
             // backoff just delays surfacing the service-unavailable error.
-            error.code === WINRErrorCode.ServiceUnavailable
+            error.code === AvafliErrorCode.ServiceUnavailable
           ) {
             throw error;
           }
@@ -196,8 +196,8 @@ export class NetworkClient {
     }
 
     // If we get here, all retries failed
-    throw new WINRError(
-      WINRErrorCode.NetworkError,
+    throw new AvafliError(
+      AvafliErrorCode.NetworkError,
       `Request failed after ${retries} attempts`,
       lastError ?? undefined
     );
@@ -270,28 +270,28 @@ export class NetworkClient {
   }
 
   /**
-   * Map an HTTP error response to a WINRErrorCode. A "suspended"/"revoked"
+   * Map an HTTP error response to a AvafliErrorCode. A "suspended"/"revoked"
    * message (publisher billing lapse) is mapped to ServiceUnavailable
    * regardless of status so the SDK can degrade gracefully; otherwise fall
    * back to the status-based mapping.
    */
-  private mapErrorToCode(status: number, message: string): WINRErrorCode {
+  private mapErrorToCode(status: number, message: string): AvafliErrorCode {
     if (/suspend|revok/i.test(message)) {
-      return WINRErrorCode.ServiceUnavailable;
+      return AvafliErrorCode.ServiceUnavailable;
     }
     return this.mapHttpStatusToErrorCode(status);
   }
 
-  private mapHttpStatusToErrorCode(status: number): WINRErrorCode {
+  private mapHttpStatusToErrorCode(status: number): AvafliErrorCode {
     switch (status) {
       case 401:
-        return WINRErrorCode.AuthenticationRequired;
+        return AvafliErrorCode.AuthenticationRequired;
       case 400:
-        return WINRErrorCode.InvalidState;
+        return AvafliErrorCode.InvalidState;
       case 404:
-        return WINRErrorCode.GiveawayNotActive;
+        return AvafliErrorCode.GiveawayNotActive;
       default:
-        return WINRErrorCode.NetworkError;
+        return AvafliErrorCode.NetworkError;
     }
   }
 

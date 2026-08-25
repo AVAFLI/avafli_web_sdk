@@ -55,8 +55,8 @@ export class LocalStorageProvider implements StorageProvider {
     if (!this.isAvailable) return;
     
     try {
-      // Only clear WINR-related keys to avoid affecting other apps
-      this.clearWINRKeys();
+      // Only clear Avafli-related keys to avoid affecting other apps
+      this.clearSdkKeys();
     } catch (error) {
       console.warn('LocalStorage clear failed:', error);
     }
@@ -69,7 +69,7 @@ export class LocalStorageProvider implements StorageProvider {
       }
 
       // Test localStorage functionality
-      const testKey = '__winr_storage_test__';
+      const testKey = '__avafli_storage_test__';
       const testValue = 'test';
       
       window.localStorage.setItem(testKey, testValue);
@@ -82,24 +82,26 @@ export class LocalStorageProvider implements StorageProvider {
     }
   }
 
-  private clearWINRKeys(): void {
+  private clearSdkKeys(): void {
     const keys = [];
     
-    // Collect all WINR-related keys
+    // Collect all Avafli-related keys. Persisted SDK keys deliberately KEEP
+    // the legacy `winr_` prefix (3.0 rebrand did not migrate stored state);
+    // `avafli_` covers anything minted under the new prefix.
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key?.startsWith('winr_')) {
+      if (key?.startsWith('winr_') || key?.startsWith('avafli_')) {
         keys.push(key);
       }
     }
     
-    // Remove WINR keys
+    // Remove Avafli keys
     keys.forEach(key => localStorage.removeItem(key));
   }
 
   private cleanup(): void {
     try {
-      // Remove old or unnecessary WINR data to free up space
+      // Remove old or unnecessary Avafli data to free up space
       const keysToCheck = [
         'winr_device_fingerprint',
         'winr_last_claim_date',
@@ -141,7 +143,7 @@ export class LocalStorageProvider implements StorageProvider {
       // Estimate used space by testing storage capacity
       while (used < 10240) { // Test up to 10MB
         try {
-          const testKey = `__winr_size_test_${used}__`;
+          const testKey = `__avafli_size_test_${used}__`;
           localStorage.setItem(testKey, test);
           localStorage.removeItem(testKey);
           used += 1;

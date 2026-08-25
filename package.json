@@ -1,15 +1,15 @@
 {
-  "name": "winr-web-sdk",
-  "version": "2.9.7",
-  "description": "Web SDK for WINR sweepstakes platform",
-  "main": "dist/winr-sdk.umd.js",
-  "module": "dist/winr-sdk.esm.js",
-  "types": "dist/winr-sdk.d.ts",
+  "name": "avafli-sdk",
+  "version": "3.0.0",
+  "description": "Avafli Engagement SDK for the web - daily-streak sweepstakes experience (formerly winr-web-sdk)",
+  "main": "dist/avafli-sdk.umd.js",
+  "module": "dist/avafli-sdk.esm.js",
+  "types": "dist/avafli-sdk.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/winr-sdk.esm.js",
-      "require": "./dist/winr-sdk.umd.js",
-      "types": "./dist/winr-sdk.d.ts"
+      "import": "./dist/avafli-sdk.esm.js",
+      "require": "./dist/avafli-sdk.umd.js",
+      "types": "./dist/avafli-sdk.d.ts"
     }
   },
   "files": [
@@ -32,7 +32,7 @@
     "prepare": "npm run clean && npm run type-check && npm run build:prod"
   },
   "keywords": [
-    "winr",
+    "avafli",
     "sweepstakes",
     "engagement",
     "sdk",
@@ -40,7 +40,7 @@
     "javascript",
     "typescript"
   ],
-  "author": "WINR Team",
+  "author": "Avafli",
   "license": "MIT",
   "devDependencies": {
     "@rollup/plugin-commonjs": "^25.0.7",

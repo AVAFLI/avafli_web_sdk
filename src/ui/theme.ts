@@ -1,7 +1,7 @@
-import { Theme, WINRBranding } from '../types';
+import { Theme, AvafliBranding } from '../types';
 
 /**
- * Default WINR theme — matches iOS WINRBranding defaults
+ * Default Avafli theme — matches iOS AvafliBranding defaults
  */
 export const defaultTheme: Theme = {
   colors: {
@@ -59,7 +59,7 @@ export const defaultTheme: Theme = {
 
 /**
  * iOS-matching color references for use across components
- * Maps to WINRBranding properties from iOS SDK
+ * Maps to AvafliBranding properties from iOS SDK
  */
 export interface IOSColors {
   backgroundColor: string;
@@ -119,7 +119,7 @@ export function createIOSColors(theme: Theme): IOSColors {
 /**
  * Create theme from branding configuration
  */
-export function createTheme(branding?: WINRBranding): Theme {
+export function createTheme(branding?: AvafliBranding): Theme {
   const theme: Theme = JSON.parse(JSON.stringify(defaultTheme));
 
   if (branding) {
@@ -147,51 +147,51 @@ export function generateCSSVariables(theme: Theme): string {
   const derived = createIOSColors(theme);
 
   const cssVars = [
-    `--winr-color-primary: ${theme.colors.primary};`,
-    `--winr-color-secondary: ${theme.colors.secondary};`,
-    `--winr-color-background: ${theme.colors.background};`,
-    `--winr-color-surface: ${theme.colors.surface};`,
-    `--winr-color-text: ${theme.colors.text};`,
-    `--winr-color-text-secondary: ${theme.colors.textSecondary};`,
-    `--winr-color-success: ${theme.colors.success};`,
-    `--winr-color-error: ${theme.colors.error};`,
-    `--winr-color-warning: ${theme.colors.warning};`,
-    `--winr-font-family: ${theme.fonts.family};`,
-    `--winr-font-size-sm: ${theme.fonts.sizes.sm};`,
-    `--winr-font-size-base: ${theme.fonts.sizes.base};`,
-    `--winr-font-size-lg: ${theme.fonts.sizes.lg};`,
-    `--winr-font-size-xl: ${theme.fonts.sizes.xl};`,
-    `--winr-font-size-2xl: ${theme.fonts.sizes['2xl']};`,
-    `--winr-font-size-3xl: ${theme.fonts.sizes['3xl']};`,
-    `--winr-font-weight-normal: ${theme.fonts.weights.normal};`,
-    `--winr-font-weight-medium: ${theme.fonts.weights.medium};`,
-    `--winr-font-weight-semibold: ${theme.fonts.weights.semibold};`,
-    `--winr-font-weight-bold: ${theme.fonts.weights.bold};`,
-    `--winr-spacing-xs: ${theme.spacing.xs};`,
-    `--winr-spacing-sm: ${theme.spacing.sm};`,
-    `--winr-spacing-md: ${theme.spacing.md};`,
-    `--winr-spacing-lg: ${theme.spacing.lg};`,
-    `--winr-spacing-xl: ${theme.spacing.xl};`,
-    `--winr-spacing-2xl: ${theme.spacing['2xl']};`,
-    `--winr-radius-sm: ${theme.borderRadius.sm};`,
-    `--winr-radius-md: ${theme.borderRadius.md};`,
-    `--winr-radius-lg: ${theme.borderRadius.lg};`,
-    `--winr-radius-xl: ${theme.borderRadius.xl};`,
-    `--winr-radius-full: ${theme.borderRadius.full};`,
-    `--winr-shadow-sm: ${theme.shadows.sm};`,
-    `--winr-shadow-md: ${theme.shadows.md};`,
-    `--winr-shadow-lg: ${theme.shadows.lg};`,
-    `--winr-shadow-xl: ${theme.shadows.xl};`,
+    `--avafli-color-primary: ${theme.colors.primary};`,
+    `--avafli-color-secondary: ${theme.colors.secondary};`,
+    `--avafli-color-background: ${theme.colors.background};`,
+    `--avafli-color-surface: ${theme.colors.surface};`,
+    `--avafli-color-text: ${theme.colors.text};`,
+    `--avafli-color-text-secondary: ${theme.colors.textSecondary};`,
+    `--avafli-color-success: ${theme.colors.success};`,
+    `--avafli-color-error: ${theme.colors.error};`,
+    `--avafli-color-warning: ${theme.colors.warning};`,
+    `--avafli-font-family: ${theme.fonts.family};`,
+    `--avafli-font-size-sm: ${theme.fonts.sizes.sm};`,
+    `--avafli-font-size-base: ${theme.fonts.sizes.base};`,
+    `--avafli-font-size-lg: ${theme.fonts.sizes.lg};`,
+    `--avafli-font-size-xl: ${theme.fonts.sizes.xl};`,
+    `--avafli-font-size-2xl: ${theme.fonts.sizes['2xl']};`,
+    `--avafli-font-size-3xl: ${theme.fonts.sizes['3xl']};`,
+    `--avafli-font-weight-normal: ${theme.fonts.weights.normal};`,
+    `--avafli-font-weight-medium: ${theme.fonts.weights.medium};`,
+    `--avafli-font-weight-semibold: ${theme.fonts.weights.semibold};`,
+    `--avafli-font-weight-bold: ${theme.fonts.weights.bold};`,
+    `--avafli-spacing-xs: ${theme.spacing.xs};`,
+    `--avafli-spacing-sm: ${theme.spacing.sm};`,
+    `--avafli-spacing-md: ${theme.spacing.md};`,
+    `--avafli-spacing-lg: ${theme.spacing.lg};`,
+    `--avafli-spacing-xl: ${theme.spacing.xl};`,
+    `--avafli-spacing-2xl: ${theme.spacing['2xl']};`,
+    `--avafli-radius-sm: ${theme.borderRadius.sm};`,
+    `--avafli-radius-md: ${theme.borderRadius.md};`,
+    `--avafli-radius-lg: ${theme.borderRadius.lg};`,
+    `--avafli-radius-xl: ${theme.borderRadius.xl};`,
+    `--avafli-radius-full: ${theme.borderRadius.full};`,
+    `--avafli-shadow-sm: ${theme.shadows.sm};`,
+    `--avafli-shadow-md: ${theme.shadows.md};`,
+    `--avafli-shadow-lg: ${theme.shadows.lg};`,
+    `--avafli-shadow-xl: ${theme.shadows.xl};`,
     // iOS-specific tokens (derived from theme)
-    `--winr-btn-color: ${derived.primaryButtonColor};`,
-    `--winr-btn-text: ${derived.primaryButtonTextColor};`,
-    `--winr-glow: ${derived.accentGlowColor};`,
-    `--winr-card-bg: ${derived.cardBackgroundColor};`,
-    `--winr-card-border: ${derived.cardBorderColor};`,
-    `--winr-muted: ${derived.mutedTextColor};`,
-    `--winr-input-bg: ${derived.inputFieldBackgroundColor};`,
-    `--winr-input-border: ${derived.inputFieldBorderColor};`,
-    `--winr-input-placeholder: ${derived.inputFieldPlaceholderColor};`,
+    `--avafli-btn-color: ${derived.primaryButtonColor};`,
+    `--avafli-btn-text: ${derived.primaryButtonTextColor};`,
+    `--avafli-glow: ${derived.accentGlowColor};`,
+    `--avafli-card-bg: ${derived.cardBackgroundColor};`,
+    `--avafli-card-border: ${derived.cardBorderColor};`,
+    `--avafli-muted: ${derived.mutedTextColor};`,
+    `--avafli-input-bg: ${derived.inputFieldBackgroundColor};`,
+    `--avafli-input-border: ${derived.inputFieldBorderColor};`,
+    `--avafli-input-placeholder: ${derived.inputFieldPlaceholderColor};`,
   ];
 
   return cssVars.join('\n  ');

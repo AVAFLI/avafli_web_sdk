@@ -5,7 +5,7 @@
  * every string here gives copy review (and future localization) a single
  * surface to sweep.
  */
-export const WINRV2Strings = {
+export const AvafliV2Strings = {
   // ─── Email capture ───
   /** Inline under the email field once touched / on a submit attempt. */
   emailInvalid: 'Please enter a valid email address.',
@@ -73,7 +73,7 @@ export const WINRV2Strings = {
   // ─── RTD opt-out (delete-my-data confirmation) ───
   optOutTitle: 'Delete my data & stop participating',
   optOutBody:
-    'This permanently deletes your WINR data, ends your giveaway participation, and cannot be undone. You can also email info@avafli.com.',
+    'This permanently deletes your Avafli data, ends your giveaway participation, and cannot be undone. You can also email info@avafli.com.',
   optOutConfirm: 'DELETE MY DATA',
   optOutCancel: 'Cancel',
   /** Brief success state shown before the experience dismisses itself. */

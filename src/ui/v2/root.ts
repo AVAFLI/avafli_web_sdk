@@ -32,7 +32,7 @@ import { accentAlpha, ensureV2Fonts, resolveAccent } from './v2-theme';
  *  - >= 768px: the SAME content as a centered modal card (max-width ~440px,
  *    rounded 24px, scale/fade in). Handled purely in CSS (v2-styles.ts).
  */
-export class WINRV2Experience {
+export class AvafliV2Experience {
   private host: HTMLElement | null = null;
   private previousBodyOverflow = '';
   private overlay: HTMLElement | null = null;
@@ -87,7 +87,7 @@ export class WINRV2Experience {
 
   public dismiss(): void {
     if (!this.host || !this.overlay) return;
-    logger.debug('Dismissing WINR V2 experience');
+    logger.debug('Dismissing Avafli V2 experience');
     // A pending Day 2+ auto-reveal must not fire against a torn-down DOM.
     this.controller.cancelAutoReveal();
     // 2.9: a story typed on the post-submit share step is never lost — every

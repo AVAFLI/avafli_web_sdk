@@ -1,18 +1,18 @@
 /**
- * WINR Web SDK - Main Entry Point
+ * Avafli Web SDK - Main Entry Point
  * 
  * Export all public APIs and types
  */
 
 // Main SDK class
-export { WINR } from './winr';
+export { Avafli } from './avafli';
 
 // Core types and interfaces
 export type {
-  WINRConfiguration,
-  WINROptions,
-  WINRBranding,
-  WINRUser,
+  AvafliConfiguration,
+  AvafliOptions,
+  AvafliBranding,
+  AvafliUser,
   StreakState,
   MilestoneConfig,
   MilestoneAward,
@@ -29,7 +29,7 @@ export type {
 } from './types';
 
 // Error handling
-export { WINRError, WINRErrorCode } from './types';
+export { AvafliError, AvafliErrorCode } from './types';
 
 // Domain classes (for advanced usage)
 export { StreakEngine } from './domain/streak-engine';
@@ -38,7 +38,7 @@ export { StreakEngine } from './domain/streak-engine';
 export { AnalyticsAdapter as AnalyticsAdapterInterface } from './types';
 
 // Constants
-export { WINR_CONSTANTS } from './types';
+export { AVAFLI_CONSTANTS } from './types';
 
 // Storage providers (for custom storage)
 export { LocalStorageProvider } from './storage/local-storage';
@@ -51,5 +51,5 @@ export { NetworkClient } from './network/client';
 export { createTheme } from './ui/theme';
 
 // Default export for UMD builds
-import { WINR } from './winr';
-export default WINR;
+import { Avafli } from './avafli';
+export default Avafli;
