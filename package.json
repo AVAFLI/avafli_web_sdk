@@ -65,10 +65,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/AVAFLI/winr_web_sdk.git"
+    "url": "git+https://github.com/AVAFLI/avafli_web_sdk.git"
   },
   "bugs": {
-    "url": "https://github.com/AVAFLI/winr_web_sdk/issues"
+    "url": "https://github.com/AVAFLI/avafli_web_sdk/issues"
   },
-  "homepage": "https://github.com/AVAFLI/winr_web_sdk#readme"
+  "homepage": "https://github.com/AVAFLI/avafli_web_sdk#readme"
 }

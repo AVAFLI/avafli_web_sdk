@@ -3,7 +3,7 @@
 
 [![npm](https://img.shields.io/npm/v/avafli-sdk.svg)](https://www.npmjs.com/package/avafli-sdk)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0%2B-blue.svg?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/AVAFLI/winr_web_sdk/blob/main/LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/AVAFLI/avafli_web_sdk/blob/main/LICENSE)
 
 > **Formerly the WINR Web SDK.** Version 3.0.0 renames the package (`winr-web-sdk` → `avafli-sdk`), the global (`WINR` → `Avafli`), and the public types (`WINR*` → `Avafli*`). The backend, your API keys, and all stored user state are unchanged — see the [3.0.0 migration table](CHANGELOG.md#300) for the exact rename map.
 
@@ -132,14 +132,14 @@ import { Avafli } from 'avafli-sdk';
 The SDK also ships as self-hosted ESM and UMD bundles (with TypeScript declarations). Build them from this repo and serve them with your app:
 
 ```bash
-git clone https://github.com/AVAFLI/winr_web_sdk.git
-cd winr_web_sdk
+git clone https://github.com/AVAFLI/avafli_web_sdk.git
+cd avafli_web_sdk
 npm install
 npm run build
 # outputs: dist/avafli-sdk.esm.js, dist/avafli-sdk.umd.js, dist/avafli-sdk.d.ts
 ```
 
-- **ESM / bundlers:** copy `dist/avafli-sdk.esm.js` (and `avafli-sdk.d.ts`) into your project, or add the repo as a git dependency (`npm install github:AVAFLI/winr_web_sdk`).
+- **ESM / bundlers:** copy `dist/avafli-sdk.esm.js` (and `avafli-sdk.d.ts`) into your project, or add the repo as a git dependency (`npm install github:AVAFLI/avafli_web_sdk`).
 - **Script tag:** self-host `dist/avafli-sdk.umd.js` and load it with a `<script>` tag — it exposes a global `Avafli`.
 
 The bundles are fully self-contained (fonts and imagery embedded, zero runtime dependencies).
