@@ -1,6 +1,14 @@
 # Changelog
 
 
+## 3.0.1 — 2026-08-28
+
+### Fixed
+- Streak display off-by-one: the dashboard staged a predicted day on top of the server's already-advanced `streakDay`, so tiles and the come-back bar could run one day ahead of the header. All three surfaces now render from server truth, and any staged/server mismatch triggers a full repaint.
+- Claim results are now persisted into the cached streak state, so next-day opens no longer flash pre-claim numbers.
+- The day-tile celebration burst plays only at the reveal moment (no longer replays on reopens).
+- Checkbox marks now use a luminance-guarded on-accent color (legible on light publisher brand colors).
+
 ## 3.0.0 — 2026-08-25
 
 **Full rebrand: WINR → Avafli.** New npm package name (`avafli-sdk`), new
