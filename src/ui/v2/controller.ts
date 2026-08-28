@@ -1,4 +1,5 @@
 import {
+  ClaimDailyEntriesResponse,
   DailyEntryGrant,
   GetActiveGiveawayResponse,
   Giveaway,
@@ -613,6 +614,33 @@ export class V2ExperienceController {
     }
   }
 
+  /**
+   * Persists the claim response into the cached streak state, so the NEXT
+   * open's cache-first frame paints today's post-claim numbers instead of
+   * whatever the last getActiveGiveaway happened to report (which never
+   * includes the claim that followed it). Mirrors what iOS/Android/Flutter
+   * already do on claim success. Best-effort — a storage failure only costs
+   * the cache frame, never the claim.
+   */
+  private persistClaimedStreakState(response: ClaimDailyEntriesResponse): void {
+    try {
+      const existing = this.readCachedStreakState();
+      this.deps.storage.setItem(
+        this.streakStateKey,
+        JSON.stringify({
+          ...existing,
+          currentDay: response.streakDay,
+          lastClaimedDate: new Date(),
+          totalEntriesEarned: response.totalEntries,
+          ...(response.weeklyCurrent !== undefined && { weeklyCurrent: response.weeklyCurrent }),
+          ...(response.monthlyCurrent !== undefined && { monthlyCurrent: response.monthlyCurrent }),
+        })
+      );
+    } catch (error) {
+      logger.debug('Persisting post-claim streak state failed (cache frame only):', error);
+    }
+  }
+
   /** Warms the publisher's remote art (prize hero + logo) — see prewarmImage. */
   public prewarmPublisherArt(): void {
     prewarmImage(this.giveaway?.prizeImageUrl);
@@ -762,14 +790,16 @@ export class V2ExperienceController {
       return;
     }
 
-    // Day 2+ (an existing streak of at least 2 pre-claim, unclaimed today):
+    // Day 2+ (today's claim is day 2 or later per the server, unclaimed):
     // the celebration is the dashboard's FIRST VISIBLE FRAME. Stage a
     // PREDICTED grant from the pre-claim response (no waiting on the claim
     // round-trip), enter the dashboard, arm the first-mount reveal, and
-    // reconcile with the real claim in the background. Gated to
-    // streakDay >= 2 — Day 1 must NEVER stage the predicted celebration (its
-    // pre-claim streakDay is 0/unset-default-1 and the reveal is staged from
-    // the awaited claim response below instead).
+    // reconcile with the real claim in the background. `streakDay` here is
+    // the server's "day today's claim will be" (getActiveGiveaway already
+    // advanced it past the last-claimed day), so the gate reads directly:
+    // >= 2 means an alive streak. Day 1 (brand-new or broken streak —
+    // server streakDay 0/1) must NEVER stage the predicted celebration; its
+    // reveal is staged from the awaited claim response below instead.
     if (!this.claimedToday && this.streakDay >= 2) {
       this.stagePredictedReveal();
       this.transition({ kind: 'dashboard' });
@@ -793,22 +823,27 @@ export class V2ExperienceController {
   }
 
   /**
-   * Stages the Day 2+ celebration from the PRE-claim status response alone:
-   * today's claim advances the streak to `streakDay + 1`, so the predicted
-   * grant is the ladder value for that day and the predicted total is
-   * preTotal + predicted. The background claim reconciles both silently.
+   * Stages the Day 2+ celebration from the PRE-claim status response alone.
+   *
+   * SERVER CONTRACT (getActiveGiveaway, the source of truth): when today is
+   * still unclaimed, `streakDay` is ALREADY the day today's claim will be —
+   * the backend advances it past the last-claimed day ("next day to claim"),
+   * and claimDailyEntries later returns that SAME number. So the predicted
+   * grant is simply `ladderValue(streakDay)` — never `streakDay + 1`. A +1
+   * here double-advances the day (the off-by-one that shipped as "6 DAY
+   * STREAK under a checked DAY-7 tile" on the live demo): the tiles and
+   * come-back bar render one day ahead, and the header then reconciles back
+   * to server truth while they don't.
    */
   private stagePredictedReveal(): void {
-    const preStreakDay = this.streakDay;
+    const claimDay = this.streakDay; // today's claim day, per the server
     const preTotal = this.totalEntries;
-    this.preRevealSnapshot = { streakDay: preStreakDay, totalEntries: preTotal };
+    this.preRevealSnapshot = { streakDay: claimDay, totalEntries: preTotal };
 
-    const predictedDay = preStreakDay + 1;
-    const predicted = this.ladderValue(predictedDay);
+    const predicted = this.ladderValue(claimDay);
     this.pendingRevealGrant = { baseEntries: predicted, bonusEntries: 0 };
     this.claimRevealed = false;
     this.preClaimTotalEntries = preTotal;
-    this.streakDay = predictedDay;
     this.totalEntries = preTotal + predicted;
   }
 
@@ -823,6 +858,7 @@ export class V2ExperienceController {
     if (this.isClaiming) return;
     this.isClaiming = true;
     try {
+      const stagedDay = this.streakDay; // the day the celebration was staged for
       const response = await this.deps.api.claimDailyEntries();
 
       let bonus = 0;
@@ -834,10 +870,18 @@ export class V2ExperienceController {
       this.claimedToday = true;
       this.claimFailedNotice = false;
       this.streakDay = response.streakDay;
+      // Server truth, verbatim: totalEntries is the backend's PER-GIVEAWAY
+      // balance, which can legitimately differ from a local
+      // ladder-sum-through-day-N: earlier streak RUNS in the same giveaway
+      // (totals survive a streak reset — e.g. days 1-5 then a break then
+      // days 1-9 shows 600, not 450), legacy lifetime seeding at the
+      // giveaway_totals migration, cross-device adoption merges, and admin
+      // adjustments. Never recompute or "correct" it client-side.
       this.totalEntries = response.totalEntries;
       this.pendingRevealGrant = { baseEntries: response.entries, bonusEntries: bonus };
       this.preClaimTotalEntries = response.totalEntries - (response.entries + bonus);
       this.preRevealSnapshot = null;
+      this.persistClaimedStreakState(response);
 
       analyticsAdapter.track('avafli_daily_entry_claimed', {
         day: response.streakDay,
@@ -864,7 +908,17 @@ export class V2ExperienceController {
         ...(response.milestone ? { milestone: response.milestone } : {}),
       });
 
-      this.onRevealReconcile?.();
+      if (response.streakDay !== stagedDay && this.state.kind === 'dashboard') {
+        // The server disagrees with the staged day (midnight rollover, a
+        // cross-device claim, a reset race). The quiet in-place reconcile
+        // only rewrites the header label and total — the TILES and come-back
+        // bar were rendered at the staged day and would stay one day off
+        // (the exact class of bug the header/tile disagreement was). A full
+        // repaint from server truth keeps every surface in agreement.
+        this.transition({ kind: 'dashboard' });
+      } else {
+        this.onRevealReconcile?.();
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
 
@@ -975,6 +1029,7 @@ export class V2ExperienceController {
       this.claimFailedNotice = false;
       this.streakDay = response.streakDay;
       this.totalEntries = response.totalEntries;
+      this.persistClaimedStreakState(response);
 
       analyticsAdapter.track('avafli_daily_entry_claimed', {
         day: response.streakDay,
@@ -1342,6 +1397,7 @@ export class V2ExperienceController {
       this.claimedToday = true;
       this.streakDay = response.streakDay;
       this.totalEntries = response.totalEntries;
+      this.persistClaimedStreakState(response);
       logger.debug(`Silent daily claim during winner flow: +${response.entries}`);
     } catch (error) {
       logger.debug('Silent daily claim declined during winner flow:', error);

@@ -20,7 +20,7 @@ import {
   renderWinnerSplash,
 } from './screens';
 import { v2Styles } from './v2-styles';
-import { accentAlpha, ensureV2Fonts, resolveAccent } from './v2-theme';
+import { accentAlpha, contrastingMark, ensureV2Fonts, resolveAccent } from './v2-theme';
 
 /**
  * Root of the V2 experience — the web equivalent of iOS WINRV2ExperienceRoot.
@@ -190,6 +190,10 @@ export class AvafliV2Experience {
   private applyAccent(overlay: HTMLElement): void {
     const accent = resolveAccent(this.controller.sdkConfig?.branding?.primaryColor);
     overlay.style.setProperty('--wv2-accent', accent);
+    // Marks drawn ON accent fills (checkbox check strokes): white, or
+    // gunmetal over a light publisher primary — the same luminance guard the
+    // iOS/Android/Flutter checkboxes already apply.
+    overlay.style.setProperty('--wv2-on-accent', contrastingMark(accent));
     overlay.style.setProperty('--wv2-accent-95', accentAlpha(accent, 0.95));
     overlay.style.setProperty('--wv2-accent-75', accentAlpha(accent, 0.75));
     overlay.style.setProperty('--wv2-accent-55', accentAlpha(accent, 0.55));

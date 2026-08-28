@@ -430,8 +430,9 @@ function renderConsentRow(
   row.setAttribute('aria-checked', String(checked));
 
   // 2.9.4 (Ryan): the boxes carry the publisher's primary color — checked is
-  // an accent-filled square with a contrasting white check (matching the
-  // review screen's consent box and the CTA pill), unchecked an
+  // an accent-filled square with a luminance-guarded contrasting check
+  // (white, or gunmetal over a light primary — matching the review screen's
+  // consent box and the native SDKs' checkbox guards), unchecked an
   // accent-tinted outline. currentColor drives both icon variants.
   const box = icon(checked ? checkSquareIcon : squareIcon, 'wv2-ic');
   box.style.color = 'var(--wv2-accent)';
@@ -1167,16 +1168,16 @@ function renderStreakTile(
 
   if (state === 'active') {
     // Joe's active-tile motion: breathing glow (CSS) + confetti specks
-    // scattered around the tile.
+    // scattered around the tile — the tile's RESTING celebrated state.
     const confetti = createConfetti({ style: 'celebration', count: 12, speed: 0.7 });
     confetti.classList.add('wv2-tile-confetti');
     box.appendChild(confetti);
   }
   box.appendChild(tile);
-  if (state === 'active') {
-    // …plus the one-shot Figma confetti-burst GIF overflowing the tile.
-    mountTileBurst(box);
-  }
+  // NOTE (iOS parity): the one-shot confetti-burst GIF is NOT mounted here.
+  // It belongs to the single reveal beat (doReveal's ready → active flip) —
+  // a tile that MOUNTS as `active` (already-claimed reopen, back-nav from
+  // how-it-works, a server-mismatch repaint) must not replay the explosion.
   return box;
 }
 
@@ -2200,7 +2201,7 @@ export function renderClaimSteps(
 /** Bare checkmark stroke for the review consent boxes. */
 const checkIconSvg =
   '<svg viewBox="0 0 14 11" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block;width:13px;height:10px">' +
-  '<path d="M1.5 5.5L5.2 9.2L12.5 1.5" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  '<path d="M1.5 5.5L5.2 9.2L12.5 1.5" stroke="var(--wv2-on-accent, #fff)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
 // ─── Share step ("PLEASE SHARE A LITTLE") — POST-submit, never blocking ───
 

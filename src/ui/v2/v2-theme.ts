@@ -50,6 +50,22 @@ export function accentAlpha(accentHex: string, alpha: number): string {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
+/**
+ * White or near-black (gunmetal) — whichever contrasts against the accent.
+ * Used for marks drawn ON an accent-filled surface (the consent checkboxes'
+ * check strokes) so a light publisher primary doesn't produce a
+ * white-on-white check. Relative-luminance cut at 0.6 — mirrors iOS
+ * `AvafliV2Accent.contrastingMark` (and the Android/Flutter guards) exactly.
+ */
+export function contrastingMark(accentHex: string): string {
+  const h = accentHex.replace('#', '');
+  const r = parseInt(h.slice(0, 2), 16) / 255;
+  const g = parseInt(h.slice(2, 4), 16) / 255;
+  const b = parseInt(h.slice(4, 6), 16) / 255;
+  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return luminance > 0.6 ? V2_COLORS.gunmetal : '#fff';
+}
+
 // ─── Fonts (Inter + Oswald, bundled) ───
 
 export const V2_INTER =

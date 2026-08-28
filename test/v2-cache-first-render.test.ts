@@ -99,7 +99,9 @@ function makeController(options: {
     }),
     claimDailyEntries: vi.fn(async () => {
       if (options.holdClaim) await new Promise<void>(() => {});
-      return { entries: 130, streakDay: 5, totalEntries: 360 };
+      // Server contract: the claim returns the SAME day getActiveGiveaway
+      // reported for an unclaimed open (both are "today's claim day").
+      return { entries: 240, streakDay: 5, totalEntries: 470 };
     }),
   };
   const deps: V2ControllerDeps = {
@@ -226,7 +228,7 @@ describe('cache-first render', () => {
 
   it('the fresh response reconciles the cache frame in place, celebrating exactly once', async () => {
     const { controller } = makeController({
-      giveawayResponse: { claimedToday: false, streakDay: 4, totalEntries: 230 },
+      giveawayResponse: { claimedToday: false, streakDay: 5, totalEntries: 230 },
       holdClaim: true,
     });
     controller.hydrateFromCache();
@@ -234,8 +236,11 @@ describe('cache-first render', () => {
 
     await controller.load();
 
-    // Day 2+ path: the predicted grant is staged from SERVER truth (day 5 =
-    // ladder 240), applied ONCE — the cache frame never bumped the streak.
+    // Day 2+ path: the predicted grant is staged from SERVER truth — the
+    // server's streakDay (5) IS today's claim day (already advanced past the
+    // cached day-4 count), so the prediction is ladder(5) = 240, applied
+    // ONCE — the cache frame never bumped the streak, and the client never
+    // adds another +1 on top of the server's.
     expect(controller.hydratedFromCache).toBe(false);
     expect(controller.streakDay).toBe(5);
     expect(controller.pendingRevealGrant).toEqual({ baseEntries: 240, bonusEntries: 0 });

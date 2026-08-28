@@ -17,17 +17,23 @@ import { LocalStorageProvider } from '../src/storage/local-storage';
  * VISIBLE FRAME — there is no celebration modal (deleted; Day 1 is unified
  * with Day 2+).
  *
- *  - Pre-claim streakDay < 2 (day 1, and the day-2 claim of a 1-day streak)
- *    → the claim is AWAITED while the previous screen holds (email capture
- *    spinner / loading), and the grant is staged straight from the claim
- *    response before the dashboard mounts. Day 1's toast headline is
- *    "YOU'RE IN!".
- *  - Pre-claim streakDay >= 2 (day 3+) → a PREDICTED grant (ladder value for
- *    the streak day being claimed today) is staged from the pre-claim status
- *    response BEFORE entering the dashboard; the celebration fires on first
- *    mount (~0.15s) and the real claim runs in the background, reconciling
- *    totals/streak silently (no second celebration). The pill reads GOT IT
- *    the whole time.
+ * SERVER CONTRACT (mirrors functions/src getActiveGiveaway): when today is
+ * unclaimed, `streakDay` is ALREADY the day today's claim will be (the
+ * backend advances it past the last-claimed day), and claimDailyEntries
+ * returns that SAME day. Fixtures here model that: giveawayResponse.streakDay
+ * === claim.streakDay for an alive streak, and claim.entries === ladder value
+ * for that day.
+ *
+ *  - streakDay < 2 (day-1 claim: brand-new or broken streak) → the claim is
+ *    AWAITED while the previous screen holds (email capture spinner /
+ *    loading), and the grant is staged straight from the claim response
+ *    before the dashboard mounts. Day 1's toast headline is "YOU'RE IN!".
+ *  - streakDay >= 2 (the day-2+ claim) → a PREDICTED grant (the ladder value
+ *    for that same server-reported day — never day+1) is staged from the
+ *    pre-claim status response BEFORE entering the dashboard; the
+ *    celebration fires on first mount (~0.15s) and the real claim runs in
+ *    the background, reconciling totals/streak silently (no second
+ *    celebration). The pill reads GOT IT the whole time.
  *  - "Already claimed" (cross-device) re-syncs once; other claim failures
  *    settle back to the pre-claim server truth quietly.
  */
@@ -69,6 +75,7 @@ function makeController(options: {
 }): {
   controller: V2ExperienceController;
   api: { getActiveGiveaway: ReturnType<typeof vi.fn> };
+  storage: LocalStorageProvider;
   releaseClaim: () => Promise<void>;
   settle: () => Promise<void>;
 } {
@@ -99,11 +106,12 @@ function makeController(options: {
       } as ClaimDailyEntriesResponse;
     }),
   };
+  const storage = fakeStorage(
+    options.emailSubmitted === false ? {} : { 'winr_email_submitted_com.test': 'true' }
+  );
   const deps: V2ControllerDeps = {
     api: api as unknown as AvafliAPI,
-    storage: fakeStorage(
-      options.emailSubmitted === false ? {} : { 'winr_email_submitted_com.test': 'true' }
-    ),
+    storage,
     bundleId: 'com.test',
     submitEmailAndAdopt: async () => ({ success: true }),
     hasRegisteredUuid: () => true,
@@ -116,7 +124,7 @@ function makeController(options: {
     release?.();
     await settle();
   };
-  return { controller: new V2ExperienceController(deps), api, releaseClaim, settle };
+  return { controller: new V2ExperienceController(deps), api, storage, releaseClaim, settle };
 }
 
 describe('V2 Day 2+ reveal flow', () => {
@@ -168,10 +176,10 @@ describe('V2 Day 2+ reveal flow', () => {
     expect(controller.pendingRevealGrant).toEqual({ baseEntries: 10, bonusEntries: 0 });
   });
 
-  it('a 1-day pre-claim streak (the day-2 claim) also awaits the claim — prediction is gated to streakDay >= 2', async () => {
+  it('a broken/new streak (server streakDay 1) awaits the claim — prediction is gated to streakDay >= 2', async () => {
     const { controller, releaseClaim } = makeController({
-      giveawayResponse: { streakDay: 1, totalEntries: 10 },
-      claim: { entries: 30, streakDay: 2, totalEntries: 40 },
+      giveawayResponse: { streakDay: 1, totalEntries: 0 },
+      claim: { entries: 10, streakDay: 1, totalEntries: 10 },
       holdClaim: true,
     });
     const loadPromise = controller.load();
@@ -183,10 +191,30 @@ describe('V2 Day 2+ reveal flow', () => {
     await releaseClaim();
     await loadPromise;
     expect(controller.state.kind).toBe('dashboard');
-    expect(controller.pendingRevealGrant).toEqual({ baseEntries: 30, bonusEntries: 0 });
-    expect(controller.preClaimTotalEntries).toBe(10);
+    expect(controller.pendingRevealGrant).toEqual({ baseEntries: 10, bonusEntries: 0 });
+    expect(controller.preClaimTotalEntries).toBe(0);
     vi.advanceTimersByTime(DELAY);
     expect(controller.claimRevealed).toBe(true);
+  });
+
+  it('the day-2 claim stages the prediction — the server already reports today as day 2', async () => {
+    const { controller, releaseClaim } = makeController({
+      giveawayResponse: { streakDay: 2, totalEntries: 10 },
+      claim: { entries: 30, streakDay: 2, totalEntries: 40 },
+      holdClaim: true,
+    });
+    await controller.load();
+
+    // No waiting on the claim: predicted grant = ladder(day 2) = 30, and the
+    // staged day is the SERVER'S day — never advanced again client-side.
+    expect(controller.state.kind).toBe('dashboard');
+    expect(controller.pendingRevealGrant).toEqual({ baseEntries: 30, bonusEntries: 0 });
+    expect(controller.streakDay).toBe(2);
+    expect(controller.preClaimTotalEntries).toBe(10);
+
+    await releaseClaim();
+    expect(controller.streakDay).toBe(2);
+    expect(controller.totalEntries).toBe(40);
   });
 
   it('email submit HOLDS the capture screen (spinner) through the claim, then the dashboard mounts as the celebration', async () => {
@@ -260,14 +288,16 @@ describe('V2 Day 2+ reveal flow', () => {
 
   it('day 2+ stages a PREDICTED grant from the pre-claim response — no waiting on the claim', async () => {
     const { controller, releaseClaim } = makeController({
-      giveawayResponse: { streakDay: 4, totalEntries: 340 },
-      claim: { entries: 130, streakDay: 5, totalEntries: 470 },
+      giveawayResponse: { streakDay: 5, totalEntries: 340 },
+      claim: { entries: 240, streakDay: 5, totalEntries: 580 },
       holdClaim: true,
     });
     await controller.load();
 
     // The claim round-trip is STILL IN FLIGHT, yet the celebration is fully
-    // staged: predicted grant = ladder(day 5) = 240, predicted totals.
+    // staged: predicted grant = ladder(day 5) = 240 — the SAME day the
+    // server reported (it already advanced the counter; a client-side +1
+    // was the header/tile off-by-one bug), predicted totals on top.
     expect(controller.state.kind).toBe('dashboard');
     expect(controller.pendingRevealGrant).toEqual({ baseEntries: 240, bonusEntries: 0 });
     expect(controller.streakDay).toBe(5);
@@ -281,14 +311,14 @@ describe('V2 Day 2+ reveal flow', () => {
     await releaseClaim();
     expect(controller.claimedToday).toBe(true);
     expect(controller.streakDay).toBe(5);
-    expect(controller.totalEntries).toBe(470);
-    expect(controller.pendingRevealGrant).toEqual({ baseEntries: 130, bonusEntries: 0 });
+    expect(controller.totalEntries).toBe(580);
+    expect(controller.pendingRevealGrant).toEqual({ baseEntries: 240, bonusEntries: 0 });
     expect(controller.preClaimTotalEntries).toBe(340);
   });
 
   it('milestone bonuses reconcile into the grant when the real claim lands', async () => {
     const { controller, releaseClaim } = makeController({
-      giveawayResponse: { streakDay: 6, totalEntries: 770 },
+      giveawayResponse: { streakDay: 7, totalEntries: 770 },
       claim: {
         entries: 300,
         streakDay: 7,
@@ -311,7 +341,7 @@ describe('V2 Day 2+ reveal flow', () => {
 
   it('the celebration fires ON ITS OWN ~150ms after first mount — no click, no network wait', async () => {
     const { controller } = makeController({
-      giveawayResponse: { streakDay: 2, totalEntries: 40 },
+      giveawayResponse: { streakDay: 3, totalEntries: 40 },
       claim: { entries: 60, streakDay: 3, totalEntries: 100 },
       holdClaim: true, // the claim NEVER lands in this test — reveal anyway
     });
@@ -329,7 +359,7 @@ describe('V2 Day 2+ reveal flow', () => {
 
   it('re-arming and double-firing are harmless (reveal is one-shot)', async () => {
     const { controller } = makeController({
-      giveawayResponse: { streakDay: 2, totalEntries: 40 },
+      giveawayResponse: { streakDay: 3, totalEntries: 40 },
       claim: { entries: 60, streakDay: 3, totalEntries: 100 },
     });
 
@@ -353,7 +383,7 @@ describe('V2 Day 2+ reveal flow', () => {
 
   it('dismissal before the reveal disarms the timer — it must no-op safely', async () => {
     const { controller } = makeController({
-      giveawayResponse: { streakDay: 2, totalEntries: 40 },
+      giveawayResponse: { streakDay: 3, totalEntries: 40 },
       claim: { entries: 60, streakDay: 3, totalEntries: 100 },
     });
     await controller.load();
@@ -367,7 +397,7 @@ describe('V2 Day 2+ reveal flow', () => {
 
   it('come-back bar entries are ladder(N+1) in both reveal states', async () => {
     const { controller } = makeController({
-      giveawayResponse: { streakDay: 2, totalEntries: 40 },
+      giveawayResponse: { streakDay: 3, totalEntries: 40 },
       claim: { entries: 60, streakDay: 3, totalEntries: 100 },
     });
     await controller.load();
@@ -381,8 +411,8 @@ describe('V2 Day 2+ reveal flow', () => {
 
   it('the pill reads GOT IT, the toast is the FIRST visible bar state, and the celebration mutates in place', async () => {
     const { controller, settle } = makeController({
-      giveawayResponse: { streakDay: 4, totalEntries: 340 },
-      claim: { entries: 130, streakDay: 5, totalEntries: 470 },
+      giveawayResponse: { streakDay: 5, totalEntries: 340 },
+      claim: { entries: 240, streakDay: 5, totalEntries: 580 },
     });
     await controller.load();
     await settle(); // background claim reconciled before the dashboard mounts
@@ -404,7 +434,7 @@ describe('V2 Day 2+ reveal flow', () => {
     expect(comeback?.classList.contains('wv2-untoasting')).toBe(false);
     expect(comeback?.querySelector('.wv2-cb-added')?.textContent).toBe('YOU’RE ON A ROLL!');
     expect(comeback?.querySelector('.wv2-cb-roll')?.textContent).toBe(
-      'Your 130 entries have been added automatically.'
+      'Your 240 entries have been added automatically.'
     );
 
     // The celebration fires on its own at the first-mount beat.
@@ -428,8 +458,8 @@ describe('V2 Day 2+ reveal flow', () => {
 
   it('the reveal restores the drawn check + confetti field and pops the one-shot confetti-burst GIF', async () => {
     const { controller, settle } = makeController({
-      giveawayResponse: { streakDay: 4, totalEntries: 340 },
-      claim: { entries: 130, streakDay: 5, totalEntries: 470 },
+      giveawayResponse: { streakDay: 5, totalEntries: 340 },
+      claim: { entries: 240, streakDay: 5, totalEntries: 580 },
     });
     await controller.load();
     await settle();
@@ -464,8 +494,8 @@ describe('V2 Day 2+ reveal flow', () => {
 
   it('burst teardown guard: dismissing mid-burst never touches removed DOM', async () => {
     const { controller, settle } = makeController({
-      giveawayResponse: { streakDay: 4, totalEntries: 340 },
-      claim: { entries: 130, streakDay: 5, totalEntries: 470 },
+      giveawayResponse: { streakDay: 5, totalEntries: 340 },
+      claim: { entries: 240, streakDay: 5, totalEntries: 580 },
     });
     await controller.load();
     await settle();
@@ -550,5 +580,64 @@ describe('V2 Day 2+ reveal flow', () => {
 
     expect(controller.state.kind).toBe('dashboard');
     expect(controller.pendingRevealGrant).toBeNull();
+  });
+
+  it('a server day that DISAGREES with the staged day forces a full dashboard repaint — tiles never stay a day ahead', async () => {
+    // Staged for day 5, but the server (source of truth) claims day 4 — e.g.
+    // a midnight rollover between the status fetch and the claim. The quiet
+    // in-place reconcile only rewrites the header/total, so a repaint is the
+    // only way the RAIL and come-back bar agree with the header again.
+    const { controller, releaseClaim } = makeController({
+      giveawayResponse: { streakDay: 5, totalEntries: 340 },
+      claim: { entries: 130, streakDay: 4, totalEntries: 470 },
+      holdClaim: true,
+    });
+    await controller.load();
+    expect(controller.streakDay).toBe(5); // staged
+
+    const renders: string[] = [];
+    controller.onChange = (state) => renders.push(state.kind);
+
+    await releaseClaim();
+    expect(controller.streakDay).toBe(4); // server truth
+    expect(controller.totalEntries).toBe(470);
+    expect(renders).toContain('dashboard'); // full repaint, not in-place only
+  });
+
+  it('a matching reconcile stays IN PLACE — no dashboard re-render (no animation replay)', async () => {
+    const { controller, releaseClaim } = makeController({
+      giveawayResponse: { streakDay: 5, totalEntries: 340 },
+      claim: { entries: 240, streakDay: 5, totalEntries: 580 },
+      holdClaim: true,
+    });
+    await controller.load();
+
+    const renders: string[] = [];
+    controller.onChange = (state) => renders.push(state.kind);
+
+    await releaseClaim();
+    expect(controller.streakDay).toBe(5);
+    expect(renders).toEqual([]); // reconciled via onRevealReconcile only
+  });
+
+  it('a successful claim persists the post-claim streak state for the NEXT cache-first frame', async () => {
+    const { controller, releaseClaim, storage } = makeController({
+      giveawayResponse: { streakDay: 5, totalEntries: 340 },
+      claim: { entries: 240, streakDay: 5, totalEntries: 580, weeklyCurrent: 5, monthlyCurrent: 5 },
+      holdClaim: true,
+    });
+    await controller.load();
+    // Nothing persisted while the claim is still in flight.
+    expect(storage.getItem('winr_streak_state')).toBeNull();
+
+    await releaseClaim();
+    const persisted = JSON.parse(storage.getItem('winr_streak_state') ?? '{}');
+    expect(persisted.currentDay).toBe(5);
+    expect(persisted.totalEntriesEarned).toBe(580);
+    expect(persisted.weeklyCurrent).toBe(5);
+    expect(persisted.monthlyCurrent).toBe(5);
+    // lastClaimedDate marks TODAY so the next open's cache frame knows the
+    // claim already happened.
+    expect(new Date(persisted.lastClaimedDate).toDateString()).toBe(new Date().toDateString());
   });
 });
