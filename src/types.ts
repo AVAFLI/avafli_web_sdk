@@ -711,7 +711,7 @@ export interface PresentationOptions {
 // ─── Constants ───
 
 export const AVAFLI_CONSTANTS = {
-  SDK_VERSION: '3.0.2',
+  SDK_VERSION: '3.0.3',
   PLATFORM_OS: 'Web',
   /**
    * Canonical Avafli privacy policy. 2.9.3: every "Privacy Policy" link used to

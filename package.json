@@ -1,6 +1,6 @@
 {
   "name": "avafli-sdk",
-  "version": "3.0.2",
+  "version": "3.0.3",
   "description": "Avafli Engagement SDK for the web - daily-streak sweepstakes experience",
   "main": "dist/avafli-sdk.umd.js",
   "module": "dist/avafli-sdk.esm.js",

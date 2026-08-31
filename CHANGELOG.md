@@ -1,10 +1,14 @@
 # Changelog
 
 
-## Unreleased
+## 3.0.3 — 2026-09-01
 
 ### Changed
 - The dashboard's "WE HAVE A WINNER!" banner is now gated on `sdkConfig.experience.winnerBannerEnabled` and default hidden — it renders only when the server sends the flag as exactly `true` (and a `latestWinner` exists). With the banner hidden, the winner-feed modal has no entry point (intended). Keeps the GOT IT button above the fold on mobile; admin flips it on per publisher when there's a winner worth showcasing.
+
+### Docs
+- README and docs now show the current API key prefixes (`avafli_test_` / `avafli_live_`).
+- README and the npm package description drop the rename-era "formerly winr-web-sdk / Formerly WINR" callouts and migration section (the 3.0.0 CHANGELOG entry keeps the migration notes).
 
 ## 3.0.2 — 2026-08-31
 
