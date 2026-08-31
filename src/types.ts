@@ -153,7 +153,9 @@ export interface Giveaway {
   streakMode?: 'daily' | 'visit';
   /**
    * Most recent drawn winner for this giveaway chain — drives the
-   * "WE HAVE A WINNER!" banner + winners dialog. Absent → no banner.
+   * "WE HAVE A WINNER!" banner + winners dialog. Absent → no banner. The
+   * banner also requires `sdkConfig.experience.winnerBannerEnabled === true`
+   * (default hidden).
    */
   latestWinner?: GiveawayWinner;
 }
@@ -354,6 +356,13 @@ export interface ExperienceConfig {
   unregisteredImpressionCap?: number;
   /** Dismissal requires an explicit click; never auto-fade (default true). */
   requireDismissClick?: boolean;
+  /**
+   * Shows the "WE HAVE A WINNER!" banner on the dashboard; default OFF
+   * (Aug 31 GTM decision — keeps the GOT IT button above the fold on
+   * mobile). Admin flips it on per publisher when there's a winner worth
+   * showcasing.
+   */
+  winnerBannerEnabled?: boolean;
 }
 
 export interface SDKConfig {

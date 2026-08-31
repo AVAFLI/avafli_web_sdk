@@ -713,7 +713,13 @@ export function renderDashboard(
   scroll.style.marginTop = '15px';
   const body = el('div', 'wv2-dash-body');
 
-  if (c.giveaway?.latestWinner) {
+  // Winner banner: server-flag-gated, DEFAULT HIDDEN (Aug 31 GTM decision —
+  // keeps the GOT IT button above the fold on mobile). Renders only when
+  // `sdkConfig.experience.winnerBannerEnabled` is exactly true AND a
+  // latestWinner exists. Hidden ⇒ the winner-feed modal has no entry point,
+  // which is intended (it's the banner's child). The row is simply omitted;
+  // `.wv2-dash-body` spaces children via flex `gap`, so no orphan margin.
+  if (c.giveaway?.latestWinner && c.sdkConfig?.experience?.winnerBannerEnabled === true) {
     body.appendChild(renderWinnerBanner(onWinnerTap));
   }
 
