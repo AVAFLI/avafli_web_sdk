@@ -1,6 +1,11 @@
 # Changelog
 
 
+## 3.0.2 — 2026-08-31
+
+### Changed
+- Legal pages now load from sdk.avafli.com; no winrmedia.com references remain. The in-experience privacy page is `https://sdk.avafli.com/sdk/privacy` (still opened with `?app=1`), and the delete-my-data postMessage bridge accepts only the `https://sdk.avafli.com` origin — `https://winrmedia.com` is no longer an accepted origin.
+
 ## 3.0.1 — 2026-08-28
 
 ### Fixed

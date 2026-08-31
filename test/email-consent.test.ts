@@ -260,7 +260,7 @@ describe('capture screen legal footer (2.9.3 dedupe)', () => {
     // Official Rules keeps rulesUrl; Privacy Policy opens the REAL policy
     // (2.9.3 fix — it used to open rulesUrl because no privacy URL existed).
     expect(links[0]!.href).toBe('https://example.com/rules');
-    expect(links[1]!.href).toBe('https://winrmedia.com/sdk/privacy');
+    expect(links[1]!.href).toBe('https://sdk.avafli.com/sdk/privacy');
 
     // 2.9.5 tap behavior: preventDefault + the IN-EXPERIENCE legal overlay —
     // never window.open. Privacy opens with ?app=1 (the flag that turns on
@@ -272,7 +272,7 @@ describe('capture screen legal footer (2.9.3 dedupe)', () => {
     controller.closeLegalOverlay();
     links[1]!.dispatchEvent(new Event('click', { cancelable: true }));
     expect(controller.legalOverlay?.doc).toBe('privacy');
-    expect(controller.legalOverlay?.url).toBe('https://winrmedia.com/sdk/privacy?app=1');
+    expect(controller.legalOverlay?.url).toBe('https://sdk.avafli.com/sdk/privacy?app=1');
     controller.closeLegalOverlay();
     expect(open).not.toHaveBeenCalled();
     open.mockRestore();

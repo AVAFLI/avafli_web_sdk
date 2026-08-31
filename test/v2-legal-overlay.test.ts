@@ -22,7 +22,7 @@ import { LocalStorageProvider } from '../src/storage/local-storage';
  * which posts `{ type: "winr-delete" }` back to the SDK via postMessage.
  *
  * The bridge is deliberately paranoid: it accepts ONLY events whose origin
- * is exactly https://winrmedia.com AND whose data is `{ type: "winr-delete" }`,
+ * is exactly https://sdk.avafli.com AND whose data is `{ type: "winr-delete" }`,
  * and only while the overlay is open (the listener detaches on close).
  */
 
@@ -81,14 +81,14 @@ function opened(c: V2ExperienceController): V2ExperienceController {
 
 describe('withAppParam — privacy URL construction', () => {
   it('appends ?app=1 to a bare URL', () => {
-    expect(withAppParam('https://winrmedia.com/sdk/privacy')).toBe(
-      'https://winrmedia.com/sdk/privacy?app=1'
+    expect(withAppParam('https://sdk.avafli.com/sdk/privacy')).toBe(
+      'https://sdk.avafli.com/sdk/privacy?app=1'
     );
   });
 
   it('extends an existing query string instead of adding a second "?"', () => {
-    expect(withAppParam('https://winrmedia.com/sdk/privacy?lang=en')).toBe(
-      'https://winrmedia.com/sdk/privacy?lang=en&app=1'
+    expect(withAppParam('https://sdk.avafli.com/sdk/privacy?lang=en')).toBe(
+      'https://sdk.avafli.com/sdk/privacy?lang=en&app=1'
     );
   });
 
@@ -142,18 +142,18 @@ describe('showLegalOverlay — routing and URLs', () => {
 });
 
 describe('delete bridge — postMessage filtering', () => {
-  it('accepts { type: "winr-delete" } from https://winrmedia.com: closes the overlay and raises the confirmation', () => {
+  it('accepts { type: "winr-delete" } from https://sdk.avafli.com: closes the overlay and raises the confirmation', () => {
     const c = opened(makeController());
     c.showLegalOverlay('privacy');
-    postToBridge('https://winrmedia.com', { type: 'winr-delete' });
+    postToBridge('https://sdk.avafli.com', { type: 'winr-delete' });
     expect(c.legalOverlay).toBeNull();
     expect(c.optOutPhase).toBe('confirming');
   });
 
-  it('accepts the rebranded { type: "avafli-delete" } from https://winrmedia.com (3.0)', () => {
+  it('accepts the rebranded { type: "avafli-delete" } from https://sdk.avafli.com (3.0)', () => {
     const c = opened(makeController());
     c.showLegalOverlay('privacy');
-    postToBridge('https://winrmedia.com', { type: 'avafli-delete' });
+    postToBridge('https://sdk.avafli.com', { type: 'avafli-delete' });
     expect(c.legalOverlay).toBeNull();
     expect(c.optOutPhase).toBe('confirming');
   });
@@ -163,8 +163,11 @@ describe('delete bridge — postMessage filtering', () => {
     c.showLegalOverlay('privacy');
     postToBridge('https://evil.example', { type: 'winr-delete' });
     postToBridge('https://evil.example', { type: 'avafli-delete' });
-    postToBridge('https://winrmedia.com.evil.example', { type: 'winr-delete' });
-    postToBridge('http://winrmedia.com', { type: 'winr-delete' });
+    postToBridge('https://sdk.avafli.com.evil.example', { type: 'winr-delete' });
+    postToBridge('http://sdk.avafli.com', { type: 'winr-delete' });
+    // 3.0.2: the retired winrmedia.com origin is no longer accepted.
+    postToBridge('https://winrmedia.com', { type: 'winr-delete' });
+    postToBridge('https://winrmedia.com', { type: 'avafli-delete' });
     expect(c.legalOverlay).not.toBeNull();
     expect(c.optOutPhase).toBe('idle');
   });
@@ -172,10 +175,10 @@ describe('delete bridge — postMessage filtering', () => {
   it('rejects the right origin with the wrong shape', () => {
     const c = opened(makeController());
     c.showLegalOverlay('privacy');
-    postToBridge('https://winrmedia.com', { type: 'winr-delete-everything' });
-    postToBridge('https://winrmedia.com', 'winr-delete');
-    postToBridge('https://winrmedia.com', null);
-    postToBridge('https://winrmedia.com', 42);
+    postToBridge('https://sdk.avafli.com', { type: 'winr-delete-everything' });
+    postToBridge('https://sdk.avafli.com', 'winr-delete');
+    postToBridge('https://sdk.avafli.com', null);
+    postToBridge('https://sdk.avafli.com', 42);
     expect(c.legalOverlay).not.toBeNull();
     expect(c.optOutPhase).toBe('idle');
   });
@@ -184,7 +187,7 @@ describe('delete bridge — postMessage filtering', () => {
     const c = makeController();
     c.showLegalOverlay('privacy');
     c.closeLegalOverlay();
-    postToBridge('https://winrmedia.com', { type: 'winr-delete' });
+    postToBridge('https://sdk.avafli.com', { type: 'winr-delete' });
     expect(c.optOutPhase).toBe('idle');
   });
 
@@ -193,7 +196,7 @@ describe('delete bridge — postMessage filtering', () => {
     // but the bridge is scoped to "overlay open", not to the privacy doc.
     const c = opened(makeController());
     c.showLegalOverlay('rules');
-    postToBridge('https://winrmedia.com', { type: 'winr-delete' });
+    postToBridge('https://sdk.avafli.com', { type: 'winr-delete' });
     expect(c.legalOverlay).toBeNull();
     expect(c.optOutPhase).toBe('confirming');
   });

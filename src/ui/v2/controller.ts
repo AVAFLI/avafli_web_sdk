@@ -93,7 +93,7 @@ export type WinnerClaimStep =
 export type LegalDoc = 'rules' | 'privacy';
 
 /**
- * Appends `app=1` to a URL — the flag that makes winrmedia.com/sdk/privacy
+ * Appends `app=1` to a URL — the flag that makes sdk.avafli.com/sdk/privacy
  * render its in-experience "Delete my data" section (parallel build on the
  * website side). URL-API based so a target that already carries a query
  * string extends correctly instead of getting a second `?`.
@@ -1528,13 +1528,13 @@ export class V2ExperienceController {
   //
   // 2.9.5: legal documents open INSIDE the experience — an iframe overlay
   // covering the drawer/lightbox — instead of a new tab. The privacy page
-  // loads with `?app=1`, which makes winrmedia.com/sdk/privacy render its
+  // loads with `?app=1`, which makes sdk.avafli.com/sdk/privacy render its
   // "Delete my data" section; in the framed case that section posts
   // `{ type: "winr-delete" }` to the parent, and the bridge below routes it
   // into the EXISTING destructive opt-out confirmation + erasure flow.
 
   /** The only postMessage origin the delete bridge accepts. */
-  public static readonly LEGAL_BRIDGE_ORIGIN = 'https://winrmedia.com';
+  public static readonly LEGAL_BRIDGE_ORIGIN = 'https://sdk.avafli.com';
 
   /**
    * The open legal overlay, or null. `url` is what the iframe loads;
@@ -1585,10 +1585,10 @@ export class V2ExperienceController {
   /**
    * Delete bridge — active only while the overlay is open. Accepts ONLY
    * events whose origin is exactly {@link LEGAL_BRIDGE_ORIGIN} AND whose
-   * data is `{ type: "winr-delete" }` or `{ type: "avafli-delete" }` (3.0:
-   * the legal pages still live on winrmedia.com and post the legacy type;
-   * the rebranded type is accepted so the pages can migrate without a
-   * lockstep SDK release); everything else is ignored. A valid message
+   * data is `{ type: "avafli-delete" }` or the legacy `{ type: "winr-delete" }`
+   * (still accepted so the sdk.avafli.com page copy can migrate its message
+   * type without a lockstep SDK release); everything else is ignored. A valid
+   * message
    * closes the overlay and raises the existing destructive confirmation
    * (the authenticated erasure flow is unchanged).
    */

@@ -702,7 +702,7 @@ export interface PresentationOptions {
 // ─── Constants ───
 
 export const AVAFLI_CONSTANTS = {
-  SDK_VERSION: '3.0.1',
+  SDK_VERSION: '3.0.2',
   PLATFORM_OS: 'Web',
   /**
    * Canonical Avafli privacy policy. 2.9.3: every "Privacy Policy" link used to
@@ -714,7 +714,7 @@ export const AVAFLI_CONSTANTS = {
    * appended, which makes the page render its "Delete my data" section (the
    * page posts `{ type: "winr-delete" }` back to the SDK via postMessage).
    */
-  PRIVACY_URL: 'https://winrmedia.com/sdk/privacy',
+  PRIVACY_URL: 'https://sdk.avafli.com/sdk/privacy',
   getApiBaseUrl: (_environment: 'production' = 'production'): string => {
     return 'https://us-central1-winr-9c11f.cloudfunctions.net';
   },

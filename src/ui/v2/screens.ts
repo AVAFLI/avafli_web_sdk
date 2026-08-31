@@ -253,7 +253,7 @@ function renderLegalInlineLink(
 /**
  * How long the legal overlay waits for the iframe's `load` event before
  * offering the "Open in new tab" fallback. Best-effort: some publisher CSPs
- * (frame-src) block framing winrmedia.com, and a blocked frame may never
+ * (frame-src) block framing sdk.avafli.com, and a blocked frame may never
  * fire `load` — the timeout is the only portable signal.
  */
 export const LEGAL_IFRAME_TIMEOUT_MS = 8000;
