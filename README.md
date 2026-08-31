@@ -5,8 +5,6 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0%2B-blue.svg?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/AVAFLI/avafli_web_sdk/blob/main/LICENSE)
 
-> **Formerly the WINR Web SDK.** Version 3.0.0 renames the package (`winr-web-sdk` → `avafli-sdk`), the global (`WINR` → `Avafli`), and the public types (`WINR*` → `Avafli*`). The backend, your API keys, and all stored user state are unchanged — see the [3.0.0 migration table](CHANGELOG.md#300) for the exact rename map.
-
 ---
 
 ## Overview
@@ -123,9 +121,6 @@ npm install avafli-sdk
 ```typescript
 import { Avafli } from 'avafli-sdk';
 ```
-
-> Migrating from 2.9.x? The old package `winr-web-sdk` is frozen at 2.9.x —
-> see the [3.0.0 migration table](CHANGELOG.md#300).
 
 ### Self-hosted bundles
 
@@ -276,7 +271,7 @@ await Avafli.configure({
 });
 ```
 
-**Events emitted by the SDK** (3.0.0 renamed the `winr_` event prefix to `avafli_`):
+**Events emitted by the SDK:**
 - `avafli_device_registered` — Device registered with Avafli
 - `avafli_modal_presented` — The Avafli experience auto-opened
 - `avafli_email_captured` — User completed the email/consent capture
