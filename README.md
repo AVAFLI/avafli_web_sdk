@@ -34,7 +34,7 @@ import { Avafli } from 'avafli-sdk';
 
 // 1. Configure the SDK
 await Avafli.configure({
-  apiKey: 'YOUR_API_KEY', // debug builds: use your winr_test_ sandbox key
+  apiKey: 'YOUR_API_KEY', // debug builds: use your avafli_test_ sandbox key
   bundleId: 'com.example.myapp',
   user: {
     id: 'user_123',            // only id is required — pass whatever identity you have
@@ -59,7 +59,7 @@ await Avafli.configure({
 <script>
   (async function () {
     await Avafli.configure({
-      apiKey: 'YOUR_API_KEY', // debug builds: use your winr_test_ sandbox key
+      apiKey: 'YOUR_API_KEY', // debug builds: use your avafli_test_ sandbox key
       bundleId: 'com.example.myapp',
       user: { id: 'user_123', firstName: 'Jane', lastName: 'Doe' },
     });
@@ -98,7 +98,7 @@ user: { id: 'user_123', firstName: 'Jane', lastName: 'Doe', email: 'jane@example
 
 ```typescript
 await Avafli.configure({
-  apiKey: 'winr_live_…',
+  apiKey: 'avafli_live_…',
   bundleId: 'com.example.myapp',
   // no user — guest session
 });
@@ -147,7 +147,7 @@ Initialize the SDK with your user and environment settings:
 
 ```typescript
 await Avafli.configure({
-  apiKey: 'winr_live_xxxxxxxxxx',
+  apiKey: 'avafli_live_xxxxxxxxxx',
   bundleId: 'com.example.myapp',
   user: {
     id: 'user_abc123',
@@ -194,8 +194,8 @@ rebrand):
 
 | Key | Use it in |
 | --- | --------- |
-| `winr_live_…` | Release builds — your real giveaway |
-| `winr_test_…` | Debug/dev builds and CI — an isolated sandbox |
+| `avafli_live_…` | Release builds — your real giveaway |
+| `avafli_test_…` | Debug/dev builds and CI — an isolated sandbox |
 
 The sandbox key hits the **same production backend** with identical behavior —
 registration, streaks, entries, the full experience — but every user and entry
