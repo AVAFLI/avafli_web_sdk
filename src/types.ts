@@ -601,6 +601,15 @@ export enum AvafliErrorCode {
 }
 
 export class AvafliError extends Error {
+  /**
+   * HTTP status of the backend response this error represents, when there WAS
+   * a response. Undefined means the request never completed (offline, DNS,
+   * abort/timeout) — the discriminator the offline retry queue keys off:
+   * `NetworkError` alone is ambiguous (mapHttpStatusToErrorCode defaults
+   * 5xx/unknown statuses to it too). Stamped by the network client.
+   */
+  public httpStatus?: number;
+
   constructor(
     public code: AvafliErrorCode,
     message: string,
@@ -743,6 +752,11 @@ export const AVAFLI_CONSTANTS = {
     GUEST_ID: 'winr_guest_id',
     UNREGISTERED_IMPRESSIONS: 'winr_unregistered_impressions',
     OPTED_OUT: 'winr_opted_out',
+    // Offline resilience: pending same-day register/claim retry intents and
+    // the bounded offline analytics ring buffer (suffixed with the bundleId
+    // at the call site, like the auto-present keys).
+    OFFLINE_PENDING_INTENTS: 'winr_offline_pending_intents',
+    OFFLINE_ANALYTICS_BUFFER: 'winr_offline_analytics_buffer',
   },
   DEFAULT_MILESTONES: [
     { day: 5, bonusEntries: 10 },

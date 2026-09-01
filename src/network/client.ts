@@ -124,9 +124,10 @@ export class NetworkClient {
               this.mapErrorToCode(response.status, errorMessage),
               errorMessage
             );
-            // Tag the status so the retry loop can tell a definitive client error
-            // (4xx — already-claimed, consent, geo, validation) from a transient one.
-            (httpErr as unknown as { httpStatus: number }).httpStatus = response.status;
+            // Tag the status so the retry loop (and the offline retry queue)
+            // can tell a real backend response — 4xx rejection OR 5xx — from
+            // a transport failure that never completed.
+            httpErr.httpStatus = response.status;
             throw httpErr;
           }
 
@@ -196,11 +197,19 @@ export class NetworkClient {
     }
 
     // If we get here, all retries failed
-    throw new AvafliError(
+    const exhausted = new AvafliError(
       AvafliErrorCode.NetworkError,
       `Request failed after ${retries} attempts`,
       lastError ?? undefined
     );
+    // Propagate the last HTTP status (a retried-out 5xx) so the ABSENCE of
+    // httpStatus on this wrapper reliably means "the request never
+    // completed" — the transport-only signal the offline retry queue needs.
+    const lastStatus = (lastError as { httpStatus?: number } | null)?.httpStatus;
+    if (typeof lastStatus === 'number') {
+      exhausted.httpStatus = lastStatus;
+    }
+    throw exhausted;
   }
 
   /**

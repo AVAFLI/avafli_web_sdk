@@ -177,6 +177,18 @@ export interface V2ControllerDeps {
    * branding). Called after each giveaway refresh.
    */
   resolveSdkConfig?: () => SDKConfig;
+  /**
+   * Offline resilience: a claim attempt failed at the TRANSPORT level (the
+   * request never completed). The SDK queues a same-day automatic retry —
+   * backend rejections must NOT be reported here (the wiring classifies).
+   */
+  onClaimTransportFailure?: (error: unknown) => void;
+  /**
+   * Offline resilience: today's claim is definitively settled server-side
+   * (success, or the backend's already-claimed dedup) — any queued retry is
+   * moot.
+   */
+  onClaimSettled?: () => void;
 }
 
 /**
@@ -882,6 +894,7 @@ export class V2ExperienceController {
       this.preClaimTotalEntries = response.totalEntries - (response.entries + bonus);
       this.preRevealSnapshot = null;
       this.persistClaimedStreakState(response);
+      this.deps.onClaimSettled?.();
 
       analyticsAdapter.track('avafli_daily_entry_claimed', {
         day: response.streakDay,
@@ -963,6 +976,8 @@ export class V2ExperienceController {
         // Local state thought today was UNCLAIMED (that's why a claim ran) —
         // tell the user what happened instead of silently flipping state.
         logger.info('Already claimed today — updating local state');
+        // The entry exists server-side — a queued offline retry is moot.
+        this.deps.onClaimSettled?.();
         this.claimedToday = true;
         this.dashboardNotice = AvafliV2Strings.alreadyEnteredToday;
         this.cancelAutoReveal();
@@ -988,6 +1003,13 @@ export class V2ExperienceController {
       // Other failures settle back to the pre-claim server truth. Never fake
       // a local success — and never fail silently either: the dashboard gets
       // a retryable "couldn't record today's entry" notice.
+      //
+      // Offline resilience: also queue a same-day automatic retry
+      // (connectivity regain / foreground / capped backoff) so a transient
+      // drop can't cost the streak if the person closes the drawer without
+      // tapping TRY AGAIN. No-op for backend rejections (the wiring
+      // classifies transport-only).
+      this.deps.onClaimTransportFailure?.(error);
       logger.info('Auto-claim declined:', error);
       this.claimedToday = false;
       this.claimFailedNotice = true;
@@ -1030,6 +1052,7 @@ export class V2ExperienceController {
       this.streakDay = response.streakDay;
       this.totalEntries = response.totalEntries;
       this.persistClaimedStreakState(response);
+      this.deps.onClaimSettled?.();
 
       analyticsAdapter.track('avafli_daily_entry_claimed', {
         day: response.streakDay,
@@ -1105,6 +1128,8 @@ export class V2ExperienceController {
 
       if (/already claimed|already entered/i.test(message)) {
         logger.info('Already claimed today — updating local state');
+        // The entry exists server-side — a queued offline retry is moot.
+        this.deps.onClaimSettled?.();
         this.claimedToday = true;
         this.dashboardNotice = AvafliV2Strings.alreadyEnteredToday;
         this.transition({ kind: 'dashboard' });
@@ -1119,6 +1144,10 @@ export class V2ExperienceController {
       // Transport/other failure: the dashboard shows the honest UNCLAIMED
       // state plus a retryable notice. Never fake a local success for an
       // auto-claim — and never swallow the failure silently.
+      //
+      // Offline resilience: queue the same-day automatic retry (transport
+      // failures only — the wiring classifies).
+      this.deps.onClaimTransportFailure?.(error);
       logger.info('Auto-claim declined:', error);
       this.claimedToday = false;
       this.claimFailedNotice = true;
@@ -1398,9 +1427,29 @@ export class V2ExperienceController {
       this.streakDay = response.streakDay;
       this.totalEntries = response.totalEntries;
       this.persistClaimedStreakState(response);
+      this.deps.onClaimSettled?.();
       logger.debug(`Silent daily claim during winner flow: +${response.entries}`);
     } catch (error) {
       logger.debug('Silent daily claim declined during winner flow:', error);
+      // Offline resilience: transport failures queue a same-day retry (the
+      // wiring classifies; backend rejections are a no-op).
+      this.deps.onClaimTransportFailure?.(error);
+    }
+  }
+
+  /**
+   * A background offline-claim retry landed while the drawer is open —
+   * reconcile through the existing load path (no new UI): the fresh
+   * getActiveGiveaway repaints the dashboard in its claimed state and
+   * retires the failure notice.
+   */
+  public noteOfflineClaimRecovered(): void {
+    if (this.isClaiming) return;
+    this.claimedToday = true;
+    this.claimFailedNotice = false;
+    this.dashboardNotice = null;
+    if (this.state.kind === 'dashboard') {
+      void this.load();
     }
   }
 

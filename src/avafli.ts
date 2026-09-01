@@ -25,6 +25,14 @@ import { LocalStorageProvider } from './storage/local-storage';
 import { SessionStorageProvider } from './storage/session-storage';
 import { logger } from './services/logger';
 import { analyticsAdapter } from './services/analytics';
+import {
+  BufferingAnalyticsAdapter,
+  OfflineRetryCoordinator,
+  PendingIntentKind,
+  RetryOutcome,
+  isAlreadyClaimedRejection,
+  isRetriableNetworkError,
+} from './offline/offline-resilience';
 
 /** Name validation regex (first_name / last_name per spec). */
 const NAME_REGEX = /^[a-zA-Z '-]{1,50}$/;
@@ -76,6 +84,20 @@ export class Avafli {
    */
   private static serviceUnavailable: AvafliError | null = null;
 
+  // ─── Offline resilience (launch item 15) ───
+  // Persisted same-day retry queue + offline analytics buffering. Static:
+  // a transport-failed configure() tears the instance down, yet the queued
+  // registration retry must survive to re-run it.
+  private static offlineCoordinator: OfflineRetryCoordinator | null = null;
+  private static offlineBundleId: string | null = null;
+  private static offlineAnalytics: BufferingAnalyticsAdapter | null = null;
+  private static offlineListenersAttached = false;
+  /**
+   * The configuration to replay when a transport-failed configure() left the
+   * SDK unconfigured — the registration retry re-runs configure() with it.
+   */
+  private static pendingConfigForRetry: AvafliConfiguration | null = null;
+
   private client: NetworkClient;
   private api: AvafliAPI;
   private config: AvafliConfiguration;
@@ -112,6 +134,12 @@ export class Avafli {
   private secureStorage: SessionStorageProvider;
   private deviceFingerprint: string | null = null;
   private currentExperience: AvafliV2Experience | null = null;
+  /**
+   * The live experience's controller, while the drawer is on screen — lets a
+   * background offline-claim retry reconcile the open dashboard through the
+   * controller's existing load path (no new UI).
+   */
+  private currentController: V2ExperienceController | null = null;
   private serverSDKConfig: SDKConfig | null = null;
   /**
    * RTD opt-out — from the backend or the persisted local flag. Once true the
@@ -320,19 +348,28 @@ export class Avafli {
 
       // Create singleton instance
       Avafli.instance = new Avafli(config);
-      
+
+      // Offline resilience machinery (retry queue + analytics buffer +
+      // connectivity/foreground listeners) — built BEFORE the registration
+      // attempt so a transport failure below can queue its retry.
+      Avafli.ensureOfflineMachinery(config, Avafli.instance.storage);
+
       // Initialize device fingerprint
       await Avafli.instance.initializeDeviceFingerprint();
-      
+
       // Register device
       await Avafli.instance.registerDevice();
       
       Avafli.isConfigured = true;
       logger.info('Avafli SDK configured successfully');
       
-      // Initialize analytics if provided
+      // Initialize analytics if provided — routed through the offline
+      // buffering wrapper so events emitted while offline are queued
+      // (bounded, persisted) and flushed with their original timestamps.
       if (config.options?.analyticsAdapter) {
-        analyticsAdapter.setAdapter(config.options.analyticsAdapter);
+        analyticsAdapter.setAdapter(
+          Avafli.offlineAnalytics ?? config.options.analyticsAdapter
+        );
       }
 
       // Auto-setup user from configuration
@@ -370,7 +407,24 @@ export class Avafli {
         void Avafli.autoPresentIfEligible();
       }
 
+      // Registration is definitively on the backend — drop any queued retry,
+      // then fire the launch trigger for a same-day claim intent persisted
+      // before a reload.
+      Avafli.pendingConfigForRetry = null;
+      Avafli.offlineCoordinator?.clear('registration');
+      Avafli.offlineCoordinator?.noteLaunch();
+
     } catch (error) {
+      // NETWORK-class (transport) failure: keep the config and queue a
+      // same-day registration retry — connectivity regain / foreground /
+      // capped backoff will re-run configure(). Backend rejections are NOT
+      // queued; they'd only be rejected again. The configure() promise still
+      // rejects exactly as before (publisher-facing contract unchanged).
+      if (isRetriableNetworkError(error)) {
+        Avafli.pendingConfigForRetry = config;
+        Avafli.offlineCoordinator?.enqueue('registration');
+        logger.info('Registration failed offline — same-day automatic retry queued');
+      }
       Avafli.instance = null;
       Avafli.isConfigured = false;
 
@@ -405,6 +459,153 @@ export class Avafli {
 
       logger.error('Avafli configuration failed:', avafliError);
       throw avafliError;
+    }
+  }
+
+  // ─── Offline resilience machinery ───
+
+  /**
+   * Builds (or reuses) the offline retry coordinator + buffering analytics
+   * adapter, and attaches the connectivity/foreground listeners once. Reused
+   * across re-configures of the same bundleId so the hard per-session
+   * attempt caps aren't reset.
+   */
+  private static ensureOfflineMachinery(
+    config: AvafliConfiguration,
+    storage: LocalStorageProvider
+  ): void {
+    if (!Avafli.offlineCoordinator || Avafli.offlineBundleId !== config.bundleId) {
+      Avafli.offlineCoordinator?.shutdown();
+      const coordinator = new OfflineRetryCoordinator({
+        store: storage,
+        bundleId: config.bundleId,
+      });
+      coordinator.retryHandler = (kind) => Avafli.performOfflineRetry(kind);
+      Avafli.offlineCoordinator = coordinator;
+      Avafli.offlineBundleId = config.bundleId;
+      Avafli.offlineAnalytics = null;
+    }
+
+    const publisherAdapter = config.options?.analyticsAdapter;
+    if (publisherAdapter && Avafli.offlineAnalytics?.inner !== publisherAdapter) {
+      Avafli.offlineAnalytics = new BufferingAnalyticsAdapter({
+        inner: publisherAdapter,
+        store: storage,
+        bundleId: config.bundleId,
+      });
+    }
+
+    if (!Avafli.offlineListenersAttached && typeof window !== 'undefined') {
+      Avafli.offlineListenersAttached = true;
+      // Connectivity-regain trigger: the browser's own `online` event.
+      window.addEventListener('online', () => {
+        Avafli.offlineCoordinator?.noteConnectivityRegained();
+        Avafli.offlineAnalytics?.flushIfOnline();
+      });
+      // Foreground triggers (mirrors the auto-open listeners).
+      if (typeof document !== 'undefined') {
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') {
+            Avafli.offlineCoordinator?.noteForeground();
+            Avafli.offlineAnalytics?.flushIfOnline();
+          }
+        });
+      }
+      window.addEventListener('focus', () => {
+        Avafli.offlineCoordinator?.noteForeground();
+      });
+    }
+
+    // Next-load flush of analytics buffered during a previous offline run.
+    Avafli.offlineAnalytics?.flushIfOnline();
+  }
+
+  /**
+   * A claim transport failure in the experience — queues a same-day
+   * automatic retry when (and only when) it was a NETWORK-class failure;
+   * backend rejections never queue.
+   */
+  private static enqueueOfflineClaimRetry(error: unknown): void {
+    if (!isRetriableNetworkError(error)) return;
+    Avafli.offlineCoordinator?.enqueue('claim');
+  }
+
+  /** Today's claim is definitively on the backend — drop any queued retry. */
+  private static clearOfflineClaimRetry(): void {
+    Avafli.offlineCoordinator?.clear('claim');
+  }
+
+  /**
+   * Executes one queued offline retry.
+   *
+   * Duplicate-claim safety (verified in the backend claim transaction):
+   * `claimDailyEntries` dedups server-side by the canonical user's local-day
+   * entry window and `daily_last_claimed === today`, throwing an
+   * `already-exists` callable error — so a duplicate retry can never
+   * double-grant, and an already-claimed rejection is treated as SUCCESS.
+   */
+  private static async performOfflineRetry(
+    kind: PendingIntentKind
+  ): Promise<RetryOutcome> {
+    if (kind === 'registration') {
+      if (Avafli.isConfigured) return 'success';
+      const config = Avafli.pendingConfigForRetry;
+      if (!config) return 'permanentFailure';
+      try {
+        // Re-runs the whole configure() (a transport-failed configure tears
+        // the instance down) — success re-arms auto-open and the listeners.
+        await Avafli.configure(config);
+        return 'success';
+      } catch (error) {
+        return isRetriableNetworkError(error)
+          ? 'retriableFailure'
+          : 'permanentFailure';
+      }
+    }
+
+    // kind === 'claim'
+    const instance = Avafli.instance;
+    if (!instance || !Avafli.isConfigured) return 'retriableFailure';
+    if (!instance.secureStorage.getItem(AVAFLI_CONSTANTS.STORAGE_KEYS.TOKEN)) {
+      // Registration has to land first — its own retry restores the session;
+      // keep the claim queued for the next trigger.
+      return 'retriableFailure';
+    }
+    try {
+      const response = await instance.api.claimDailyEntries();
+      // Persist the claimed state the same way the controller does (server
+      // truth verbatim — never recompute totals client-side).
+      instance.currentClaimedToday = true;
+      const existing = instance.getStreakState();
+      instance.setStreakState({
+        currentDay: response.streakDay,
+        lastClaimedDate: new Date(),
+        totalEntriesEarned: response.totalEntries,
+        weeklyCurrent: response.weeklyCurrent ?? existing?.weeklyCurrent ?? 0,
+        monthlyCurrent: response.monthlyCurrent ?? existing?.monthlyCurrent ?? 0,
+      } as StreakState);
+      // Publisher-facing analytics for the recovered claim (the global
+      // adapter already routes through the buffering wrapper).
+      analyticsAdapter.track('avafli_daily_entry_claimed', {
+        day: response.streakDay,
+        entries: response.entries,
+        recovered_offline: true,
+      });
+      logger.info(`Offline claim retry recorded today's entry (+${response.entries})`);
+      // An open experience reconciles via its existing load path.
+      instance.currentController?.noteOfflineClaimRecovered();
+      return 'success';
+    } catch (error) {
+      if (isAlreadyClaimedRejection(error)) {
+        // Server-side daily dedup already holds today's entry — the original
+        // attempt (or another device) landed.
+        instance.currentClaimedToday = true;
+        logger.info('Offline claim retry: already claimed — treating as success');
+        return 'success';
+      }
+      return isRetriableNetworkError(error)
+        ? 'retriableFailure'
+        : 'permanentFailure';
     }
   }
 
@@ -485,6 +686,7 @@ export class Avafli {
     if (Avafli.instance!.currentExperience) {
       Avafli.instance!.currentExperience.dismiss();
       Avafli.instance!.currentExperience = null;
+      Avafli.instance!.currentController = null;
 
       analyticsAdapter.track('avafli_modal_dismissed');
       logger.debug('Modal dismissed');
@@ -536,18 +738,25 @@ export class Avafli {
       cachedClaimedToday: this.currentClaimedToday,
       onGiveawayRefreshed: (response) => this.onGiveawayResponse(response),
       resolveSdkConfig: () => this.getCurrentSDKConfig(),
+      // Offline resilience: transport-failed claims queue a same-day
+      // automatic retry; settled claims (success or server-side dedup)
+      // clear it.
+      onClaimTransportFailure: (error) => Avafli.enqueueOfflineClaimRetry(error),
+      onClaimSettled: () => Avafli.clearOfflineClaimRetry(),
     });
 
     const wrappedOptions: PresentationOptions = {
       ...(options ?? {}),
       onClose: () => {
         this.currentExperience = null;
+        this.currentController = null;
         options?.onClose?.();
       },
     };
 
     const experience = new AvafliV2Experience(controller, wrappedOptions);
     this.currentExperience = experience;
+    this.currentController = controller;
     return experience;
   }
 
