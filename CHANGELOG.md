@@ -1,7 +1,7 @@
 # Changelog
 
 
-## Unreleased
+## 3.1.0 — 2026-09-01
 
 ### Added
 - Offline resilience: same-day automatic retry of registration/claims on connectivity regain; offline analytics event buffering. A NETWORK-class (transport) failure of `registerDevice` or `claimDailyEntries` — the request never completed; a real HTTP response, 4xx or 5xx, never queues — persists a pending intent (`winr_offline_pending_intents_<bundleId>` in localStorage) and retries it automatically on the window `online` event, tab foreground, and a capped exponential backoff (hard max 5 attempts per page session). A transport-failed `configure()` keeps its configuration and the registration retry re-runs it. The intent is dropped when its local calendar day ends — cross-midnight replay is deliberately out of scope (server-authoritative day windows). Duplicate retries are safe: the backend dedups daily claims and an "already claimed" answer is treated as success. Publisher analytics events emitted while offline are buffered (bounded ring of 100, persisted under `winr_offline_analytics_buffer_<bundleId>`) and flushed on reconnect / next load carrying their original timestamps (`original_timestamp` / `original_timestamp_ms`). `AvafliError` now carries a typed optional `httpStatus`. No new UI — an open experience reconciles through the controller's existing load path when a queued claim lands.
