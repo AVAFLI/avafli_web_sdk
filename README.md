@@ -35,7 +35,7 @@ import { Avafli } from 'avafli-sdk';
 // 1. Configure the SDK
 await Avafli.configure({
   apiKey: 'YOUR_API_KEY', // debug builds: use your avafli_test_ sandbox key
-  bundleId: 'com.example.myapp',
+  bundleId: 'yourdomain.com',
   user: {
     id: 'user_123',            // only id is required — pass whatever identity you have
     firstName: 'Jane',
@@ -43,7 +43,7 @@ await Avafli.configure({
     email: 'jane@example.com', // include it when you have it — pre-fills & locks the capture form (consent stays explicit)
   },
   // Nobody signed in? omit `user` entirely — the SDK runs a stable guest session
-  debug: false, // true while integrating
+  options: { debug: false }, // debug: true while integrating
 });
 
 // 2. That's it — the experience presents itself on the first visit of
@@ -55,12 +55,13 @@ await Avafli.configure({
 ### Script Tag (UMD)
 
 ```html
-<script src="/vendor/avafli/avafli-sdk.umd.js"></script>
+<script src="https://sdk.avafli.com/avafli-sdk.umd.js"></script>
+<!-- or self-host: copy dist/avafli-sdk.umd.js into your static assets -->
 <script>
   (async function () {
     await Avafli.configure({
       apiKey: 'YOUR_API_KEY', // debug builds: use your avafli_test_ sandbox key
-      bundleId: 'com.example.myapp',
+      bundleId: 'yourdomain.com',
       user: { id: 'user_123', firstName: 'Jane', lastName: 'Doe' },
     });
   })();
@@ -99,7 +100,7 @@ user: { id: 'user_123', firstName: 'Jane', lastName: 'Doe', email: 'jane@example
 ```typescript
 await Avafli.configure({
   apiKey: 'avafli_live_…',
-  bundleId: 'com.example.myapp',
+  bundleId: 'yourdomain.com',
   // no user — guest session
 });
 ```
@@ -148,7 +149,7 @@ Initialize the SDK with your user and environment settings:
 ```typescript
 await Avafli.configure({
   apiKey: 'avafli_live_xxxxxxxxxx',
-  bundleId: 'com.example.myapp',
+  bundleId: 'yourdomain.com',
   user: {
     id: 'user_abc123',
     firstName: 'Jane',
@@ -157,7 +158,7 @@ await Avafli.configure({
   },
   options: {
     environment: 'production',
-    debug: false,
+    options: { debug: false },
     analyticsAdapter: myAdapter,
   },
 });
@@ -168,7 +169,7 @@ await Avafli.configure({
 | Parameter | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
 | `apiKey` | `string` | ✅ | Your Avafli API key from the dashboard |
-| `bundleId` | `string` | ✅ | App bundle ID (e.g., com.example.myapp) |
+| `bundleId` | `string` | ✅ | Your site's domain (e.g., yourdomain.com) — must be registered under Bundle IDs in the publisher dashboard |
 | `user` | `AvafliUser?` | — | The signed-in user; omit for a guest session |
 | `options` | `AvafliOptions?` | — | Optional behavior toggles |
 
@@ -265,7 +266,7 @@ const analytics: AnalyticsAdapter = {
 
 await Avafli.configure({
   apiKey: 'YOUR_API_KEY',
-  bundleId: 'com.example.myapp',
+  bundleId: 'yourdomain.com',
   user: { id: 'user_123', firstName: 'Jane', lastName: 'Doe' },
   options: { analyticsAdapter: analytics },
 });
