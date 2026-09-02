@@ -84,6 +84,18 @@ img { display: block; }
 .wv2-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; -ms-overflow-style: none; overscroll-behavior: contain; }
 .wv2-scroll::-webkit-scrollbar { display: none; }
 
+/* Software-keyboard inset (keyboard.ts publishes --wv2-kb on the overlay):
+   the keyboard's overlap with the sheet becomes extra scrollable bottom
+   padding on every screen-level scroll container, so nothing — CTAs,
+   "Send a new code", legal footers — is ever trapped behind the keyboard.
+   Zero (default) whenever the keyboard is closed, so no stale gap remains.
+   scroll-padding keeps native ensure-visible (autofill, tab focus) clear of
+   the keyboard too. */
+.wv2-scroll, .wv2-claim-page {
+  padding-bottom: var(--wv2-kb, 0px);
+  scroll-padding-bottom: calc(var(--wv2-kb, 0px) + 16px);
+}
+
 /* 2.9: the capture screen's radial accent glow (.wv2-top-glow) was removed —
    email capture now sits on the same flat gunmetal as the dashboard drawer. */
 
@@ -187,13 +199,14 @@ img { display: block; }
 .wv2-email-locked { pointer-events: none; }
 .wv2-code-input { text-align: center; letter-spacing: 0.5em; font-size: 22px; font-weight: 700; }
 .wv2-code-sub { font-size: 14px; line-height: 1.55; color: rgba(255,255,255,0.75); padding: 0 8px; max-width: 42ch; margin: 0 auto; }
-.wv2-capture:has(.wv2-code-legal) { display: flex; flex-direction: column; }
 .wv2-code-error { color: #ff6b63; font-size: 13px; text-align: center; }
 .wv2-code-resend { background: none; border: none; cursor: pointer; margin-top: 6px; font-size: 14px; color: rgba(255,255,255,0.65); font-family: inherit; }
 .wv2-code-resend-action { color: #7fb0ff; text-decoration: underline; text-underline-offset: 3px; font-weight: 700; }
 .wv2-code-resend:hover .wv2-code-resend-action { color: #a9c9ff; }
-/* Pin the legal footer to the sheet bottom so the screen doesn't trail off into
-   a void — same treatment as the capture screen. */
+/* Pin the legal footer to the bottom of the code screen's scrolling stack
+   (min-height:100% + margin-top:auto — same treatment as the capture
+   screen's legal block) so it never trails off into a void yet stays
+   scroll-reachable when the keyboard is up. */
 .wv2-code-legal { margin-top: auto; padding: 18px 22px 24px; text-align: center; }
 .wv2-email-input {
   flex: 1; min-width: 0; border: none; outline: none; background: transparent;

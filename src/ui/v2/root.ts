@@ -21,6 +21,7 @@ import {
 } from './screens';
 import { v2Styles } from './v2-styles';
 import { accentAlpha, contrastingMark, ensureV2Fonts, resolveAccent } from './v2-theme';
+import { attachKeyboardAvoidance, KeyboardAvoidanceHandle } from './keyboard';
 
 /**
  * Root of the V2 experience — the web equivalent of iOS WINRV2ExperienceRoot.
@@ -39,6 +40,7 @@ export class AvafliV2Experience {
   private sheet: HTMLElement | null = null;
   private modalHost: HTMLElement | null = null;
   private escapeHandler: ((e: KeyboardEvent) => void) | null = null;
+  private keyboard: KeyboardAvoidanceHandle | null = null;
 
   private winnerOpen = false;
 
@@ -103,6 +105,10 @@ export class AvafliV2Experience {
       document.removeEventListener('keydown', this.escapeHandler);
       this.escapeHandler = null;
     }
+    // Detach the visualViewport/focus listeners so nothing outlives the
+    // experience and no stale keyboard inset survives a re-present.
+    this.keyboard?.detach();
+    this.keyboard = null;
     const host = this.host;
     this.host = null;
     document.body.style.overflow = this.previousBodyOverflow;
@@ -163,6 +169,11 @@ export class AvafliV2Experience {
     this.overlay = overlay;
     this.sheet = sheet;
     this.modalHost = modalHost;
+
+    // Software-keyboard avoidance (mobile Safari especially): publishes the
+    // keyboard overlap as --wv2-kb on the overlay and keeps the focused
+    // field scrolled visible above the keyboard. See keyboard.ts.
+    this.keyboard = attachKeyboardAvoidance(overlay);
 
     // Animate in on the next frame so the initial transform applies first.
     requestAnimationFrame(() => {

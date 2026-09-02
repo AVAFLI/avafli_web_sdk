@@ -2620,6 +2620,10 @@ function renderCodeScreen(
   logoUrl?: string | null
 ): HTMLElement {
   const root = el('div', 'wv2-screen wv2-capture');
+  // The code screen scrolls like every other input screen — without this,
+  // short viewports (and any open software keyboard) trapped the VERIFY
+  // button, "Send a new code" and the legal footer with no way to reach them.
+  const scroll = el('div', 'wv2-scroll');
   const stack = el('div', 'wv2-capture-stack');
   stack.appendChild(
     renderHeader({
@@ -2689,10 +2693,14 @@ function renderCodeScreen(
 
   // Same legal footer as the capture screen — the code screen is one step of
   // the same consent flow, and without it the sheet trails off into a void.
+  // It lives INSIDE the scrolling stack (bottom-anchored via margin-top:auto,
+  // same as the capture screen's legal block) so it stays reachable when the
+  // keyboard shrinks the visible area.
   const legal = el('div', 'wv2-code-legal');
   legal.appendChild(renderLegalLinks(c, true));
-  root.appendChild(stack);
-  root.appendChild(legal);
+  stack.appendChild(legal);
+  scroll.appendChild(stack);
+  root.appendChild(scroll);
   setTimeout(() => input.focus(), 50);
   return root;
 }
@@ -2713,7 +2721,7 @@ export function renderCodeEntry(c: V2ExperienceController, logoUrl?: string | nu
   const subtitle =
     c.state.reentry || !email
       ? AvafliV2Strings.adoptionReentrySubtitle
-      : `This email is already part of a Avafli streak. Enter the 6-digit code we sent to ${email} to pick it up on this device.`;
+      : `This email is already part of an Avafli streak. Enter the 6-digit code we sent to ${email} to pick it up on this device.`;
   return renderCodeScreen(
     c,
     {

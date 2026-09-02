@@ -1,6 +1,13 @@
 # Changelog
 
 
+## Unreleased
+
+### Fixed
+- Keyboard interaction across every input screen (mobile Safari especially): the drawer now listens to `window.visualViewport` and publishes the software keyboard's overlap as a CSS inset, so with the keyboard open every screen's scroll area gains matching bottom padding — VERIFY buttons, "Send a new code", legal footers and everything else below the focused field stay scroll-reachable instead of trapped behind the keyboard. On focus (and again once the keyboard settles, and as focus moves between fields) the focused field is scrolled visible above the keyboard inside the drawer's own scroll container; an open address-autocomplete suggestions list is included in the visibility target so it never hides under the keyboard. The inset zeroes on keyboard dismissal and all listeners detach with the experience — no stale insets or blank gaps.
+- The 6-digit code screen (adoption OTP / email verification) had no scroll container at all: on short viewports — and always with the keyboard open — VERIFY, "Send a new code" and the legal footer could be unreachable. It now scrolls like every other screen, with the legal footer bottom-anchored inside the scrolling stack.
+- Copy: "part of a Avafli streak" → "part of an Avafli streak" on the adoption code screen.
+
 ## 3.1.0 — 2026-09-01
 
 ### Added
