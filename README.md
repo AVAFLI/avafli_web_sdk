@@ -99,7 +99,7 @@ user: { id: 'user_123', firstName: 'Jane', lastName: 'Doe', email: 'jane@example
 
 ```typescript
 await Avafli.configure({
-  apiKey: 'avafli_live_…',
+  apiKey: 'YOUR_API_KEY',
   bundleId: 'yourdomain.com',
   // no user — guest session
 });
@@ -140,7 +140,7 @@ npm run build
 
 The bundles are fully self-contained (fonts and imagery embedded, zero runtime dependencies).
 
-> **Note:** Contact [AVAFLI](https://avafli-website.web.app/sdk/pricing) to obtain an API key.
+> **Note:** Contact [AVAFLI](https://sdk.avafli.com/pricing) to obtain an API key.
 
 ## Configuration
 
@@ -158,7 +158,7 @@ await Avafli.configure({
   },
   options: {
     environment: 'production',
-    options: { debug: false },
+    debug: false,
     analyticsAdapter: myAdapter,
   },
 });
@@ -190,8 +190,7 @@ await Avafli.configure({
 
 ## Test in Development: Your Sandbox Key
 
-Your publisher dashboard shows two API keys (key prefixes are unchanged by the
-rebrand):
+Your publisher dashboard shows two API keys:
 
 | Key | Use it in |
 | --- | --------- |
@@ -239,7 +238,7 @@ Streak reminder pushes are a mobile-SDK feature. On the web, `Avafli.registerFor
 
 ## Customization
 
-All branding, themes, and copy are managed server-side through the [Avafli Dashboard](https://avafli-website.web.app/sdk/dashboard):
+All branding, themes, and copy are managed server-side through the [Avafli Dashboard](https://sdk.avafli.com/dashboard):
 
 - **Colors & Branding** — Primary colors, logos, backgrounds
 - **Copy & Messaging** — Headlines, CTAs, legal text
@@ -249,18 +248,47 @@ Changes apply instantly across all web applications without requiring a deployme
 
 ## Analytics
 
-Forward Avafli events to your existing analytics stack:
+Forward Avafli events to your existing analytics stack. The adapter is a plain
+object with `track` and `identify`, passed in `options.analyticsAdapter` — it
+works identically in both integration forms.
+
+### Script tag
+
+```html
+<script src="https://sdk.avafli.com/avafli-sdk.umd.js"></script>
+<script>
+  Avafli.configure({
+    apiKey: 'YOUR_API_KEY',
+    bundleId: 'yourdomain.com',
+    user: { id: 'user_123', firstName: 'Jane', lastName: 'Doe' },
+    options: {
+      // Plain object literal — no build tools needed
+      analyticsAdapter: {
+        track: function (event, properties) {
+          // Forward to Segment, Amplitude, etc.
+          segment.track(event, properties);
+        },
+        identify: function (userId, traits) {
+          segment.identify(userId, traits);
+        },
+      },
+    },
+  });
+</script>
+```
+
+### npm / ESM
 
 ```typescript
 import { Avafli, AnalyticsAdapter } from 'avafli-sdk';
 
 const analytics: AnalyticsAdapter = {
-  track(event, properties) { 
+  track(event, properties) {
     // Forward to Segment, Amplitude, etc.
-    segment.track(event, properties); 
+    segment.track(event, properties);
   },
-  identify(userId, traits) { 
-    segment.identify(userId, traits); 
+  identify(userId, traits) {
+    segment.identify(userId, traits);
   },
 };
 
@@ -282,28 +310,23 @@ await Avafli.configure({
 - `avafli_winner_claim_shown` / `avafli_prize_claim_submitted` — Winner claim flow shown / submitted
 - `avafli_opted_out` — Right-to-delete opt-out completed
 
-## GDPR / CCPA
+## Account deletion in your app
 
-Handle erasure requests with `optOut()`:
+If your app has its own delete-account flow, call `optOut()` from it so the
+user's Avafli data is erased along with their account. Users can also delete
+their data themselves at any time from the Privacy Policy screen inside the
+experience — no integration required.
 
 ```javascript
+// From your delete-account flow
 await Avafli.optOut();
 ```
 
-This is the complete Right-to-be-Forgotten path. It removes the person's personal
-information everywhere it is held — including prize-claim records, which carry name,
-address and phone — links their devices together so one call covers all of them, and
-permanently silences the experience on the device so it survives a reinstall.
-
-De-identified entry records are deliberately retained. They are the evidence that a
-drawing was fair and that a prize went to a real eligible person, which a sweepstakes
-operator must be able to show; GDPR Art. 17(3) exempts data needed for legal claims.
-The person is erased, the proof is kept.
-
-Users can also self-serve without any code from you: every legal link opens the
-Privacy Policy in an in-experience overlay (no new tab), and its **Delete my data &
-stop participating** section runs the same erasure as `optOut()`, behind a
-destructive confirmation.
+The erasure is identity-wide (one call covers all of the person's devices),
+includes prize-claim records, and permanently silences the experience on the
+device — it survives a reinstall. De-identified entry records are retained as
+the legally required evidence that drawings were fair (GDPR Art. 17(3)): the
+person is erased, the proof is kept.
 
 ## API Reference
 
@@ -318,7 +341,7 @@ destructive confirmation.
 | `Avafli.registerForPushNotifications()` | `Promise<void>` | Logged no-op on web unless web push (VAPID + service worker) is configured; gated on `enablePushReminders` |
 | `Avafli.optOut()` | `Promise<void>` | Right-to-delete: submits the user's opt-out and suppresses them permanently |
 
-For detailed API documentation, see the [Avafli Docs](https://avafli-website.web.app/sdk/web).
+For detailed API documentation, see the [Avafli Docs](https://sdk.avafli.com/web).
 
 ## Example / Demo
 
@@ -335,8 +358,8 @@ Use the on-page controls to replay the auto-open (clears the once-per-day mark a
 
 ## Links
 
-- **Dashboard:** [https://avafli-website.web.app/sdk/dashboard](https://avafli-website.web.app/sdk/dashboard)
-- **Documentation:** [https://avafli-website.web.app/sdk/web](https://avafli-website.web.app/sdk/web)
+- **Dashboard:** [https://sdk.avafli.com/dashboard](https://sdk.avafli.com/dashboard)
+- **Documentation:** [https://sdk.avafli.com/web](https://sdk.avafli.com/web)
 - **Support:** [info@avafli.com](mailto:info@avafli.com)
 
 ---
