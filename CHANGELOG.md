@@ -1,7 +1,7 @@
 # Changelog
 
 
-## Unreleased
+## 3.1.1 — 2026-09-02
 
 ### Fixed
 - Keyboard interaction across every input screen (mobile Safari especially): the drawer now listens to `window.visualViewport` and publishes the software keyboard's overlap as a CSS inset, so with the keyboard open every screen's scroll area gains matching bottom padding — VERIFY buttons, "Send a new code", legal footers and everything else below the focused field stay scroll-reachable instead of trapped behind the keyboard. On focus (and again once the keyboard settles, and as focus moves between fields) the focused field is scrolled visible above the keyboard inside the drawer's own scroll container; an open address-autocomplete suggestions list is included in the visibility target so it never hides under the keyboard. The inset zeroes on keyboard dismissal and all listeners detach with the experience — no stale insets or blank gaps.
