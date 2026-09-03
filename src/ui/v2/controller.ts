@@ -347,6 +347,21 @@ export class V2ExperienceController {
   }
 
   /** Disarms a pending auto-reveal (dismissal before it fires must no-op). */
+  /**
+   * True when a retry could plausibly fix the failure: a genuine transport
+   * drop (no HTTP status) or a 5xx/429. A structured 4xx rejection (giveaway
+   * ended/paused mid-session, upgrade-required, opt-out) can never succeed on
+   * retry — the "check your connection" notice would be a lie and its TRY
+   * AGAIN button a dead end. Matches the iOS resolution policy.
+   */
+  private static retryCanFix(error: unknown): boolean {
+    if (error instanceof AvafliError) {
+      if (error.httpStatus === undefined) return true; // transport
+      return error.httpStatus >= 500 || error.httpStatus === 429;
+    }
+    return true; // unknown shapes keep the retry affordance
+  }
+
   public cancelAutoReveal(): void {
     if (this.autoRevealTimer !== null) {
       clearTimeout(this.autoRevealTimer);
@@ -1012,7 +1027,7 @@ export class V2ExperienceController {
       this.deps.onClaimTransportFailure?.(error);
       logger.info('Auto-claim declined:', error);
       this.claimedToday = false;
-      this.claimFailedNotice = true;
+      this.claimFailedNotice = V2ExperienceController.retryCanFix(error);
       this.cancelAutoReveal();
       this.pendingRevealGrant = null;
       this.preClaimTotalEntries = null;
@@ -1150,7 +1165,7 @@ export class V2ExperienceController {
       this.deps.onClaimTransportFailure?.(error);
       logger.info('Auto-claim declined:', error);
       this.claimedToday = false;
-      this.claimFailedNotice = true;
+      this.claimFailedNotice = V2ExperienceController.retryCanFix(error);
       this.transition({ kind: 'dashboard' });
     } finally {
       this.isClaiming = false;

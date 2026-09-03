@@ -281,8 +281,19 @@ export class Avafli {
    */
   public static async configure(config: AvafliConfiguration): Promise<void> {
     if (Avafli.isConfigured) {
-      logger.warn('Avafli already configured, skipping reconfiguration');
-      return;
+      // Documented upgrade path: "when your user signs in, call configure
+      // again with the real user". A repeat call with a DIFFERENT signed-in
+      // user identity re-runs configuration so registration/adoption attaches
+      // this device to the real account (the guest→user upgrade). A repeat
+      // call with no user / the same identity stays a no-op.
+      const newUserId = config.user?.id?.trim();
+      const currentUserId = Avafli.instance?.currentUserIdForReconfigure();
+      if (!newUserId || newUserId === currentUserId) {
+        logger.warn('Avafli already configured, skipping reconfiguration');
+        return;
+      }
+      logger.info('Reconfiguring with a signed-in user (guest→user upgrade)');
+      Avafli.isConfigured = false;
     }
 
     // Clear any service-unavailable state from a prior failed attempt so this
@@ -309,7 +320,13 @@ export class Avafli {
         const guestKey = `${AVAFLI_CONSTANTS.STORAGE_KEYS.GUEST_ID}_${config.bundleId}`;
         let guestId = guestStore.getItem(guestKey);
         if (!guestId) {
-          guestId = `avafli_guest_${crypto.randomUUID()}`;
+          // crypto.randomUUID is missing in insecure contexts (plain-http
+          // publisher sites) and Safari < 15.4 — inside our advertised browser
+          // floor. Never let the guest path throw over an id.
+          const uuid = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+            ? crypto.randomUUID()
+            : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}-${Math.random().toString(36).slice(2, 10)}`;
+          guestId = `avafli_guest_${uuid}`;
           guestStore.setItem(guestKey, guestId);
         }
         config = { ...config, user: { id: guestId, firstName: '', lastName: '' } };
@@ -818,6 +835,11 @@ export class Avafli {
     const u = this.config.user;
     if (!u) throw new AvafliError(AvafliErrorCode.InvalidConfiguration, 'configure() has not run');
     return u;
+  }
+
+  /** The active identity, for configure()'s re-entry check (guest→user upgrade). */
+  public currentUserIdForReconfigure(): string | undefined {
+    return this.config.user?.id;
   }
 
   private get lastAutoPresentKey(): string {

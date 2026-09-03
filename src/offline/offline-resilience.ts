@@ -48,8 +48,11 @@ export function isRetriableNetworkError(error: unknown): boolean {
       error.httpStatus === undefined
     );
   }
-  // A raw fetch failure that escaped the client's wrapping.
-  return error instanceof TypeError;
+  // A raw fetch failure that escaped the client's wrapping. Programming
+  // errors are ALSO TypeErrors — only the fetch/network wordings count, or a
+  // stray bug would be retried 5 times per session as an "offline" event.
+  return error instanceof TypeError
+    && /fetch|network|load failed|connection/i.test(error.message || '');
 }
 
 /** The backend's `already-exists` daily-dedup messages. */

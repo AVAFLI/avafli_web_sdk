@@ -1,6 +1,13 @@
 # Changelog
 
 
+## 3.1.2
+
+- Fixed: guest sessions no longer crash on browsers without `crypto.randomUUID` (Safari < 15.4) or on non-HTTPS pages — a fallback id generator engages.
+- Fixed: calling `configure()` again with a signed-in user now performs the documented guest→user upgrade instead of silently doing nothing.
+- Fixed: terminal backend rejections (giveaway ended mid-session, upgrade required) no longer show "Check your connection" with a dead-end retry — the drawer settles to the truthful state. Transport and 5xx failures keep the retry notice.
+- Fixed: stray TypeErrors are no longer misclassified as offline events for the retry queue.
+
 ## 3.1.1 — 2026-09-02
 
 ### Fixed
