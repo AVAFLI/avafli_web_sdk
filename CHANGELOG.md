@@ -1,6 +1,10 @@
 # Changelog
 
 
+## 3.1.4
+
+- Fixed: the publisher logo in the drawer header no longer flickers on open — one pre-decoded logo node is created when the branding config arrives and reused across every re-render instead of being rebuilt (and re-decoded) on each state change.
+
 ## 3.1.3
 
 - Fixed: browsers with site data blocked no longer re-open the drawer on every navigation — an in-memory fallback holds the once-per-day mark and guest id within a page session.
