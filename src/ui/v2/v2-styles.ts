@@ -1078,7 +1078,8 @@ button.wv2-dash-notice { cursor: pointer; }
   /* EXCEPTION: the stepped claim form slides absolutely-positioned pages
      inside a flex:1 viewport, which needs a definite height — that screen
      keeps a fixed card height (the 696px Figma modal frame). */
-  .wv2-sheet:has(.wv2-claim-flow) {
+  .wv2-sheet:has(.wv2-claim-flow),
+  .wv2-sheet.wv2-claim-open {
     height: min(696px, calc(100vh - 64px));
     height: min(696px, calc(100dvh - 64px));
   }

@@ -1,6 +1,11 @@
 # Changelog
 
 
+## 3.1.3
+
+- Fixed: browsers with site data blocked no longer re-open the drawer on every navigation — an in-memory fallback holds the once-per-day mark and guest id within a page session.
+- Fixed: the winner claim card keeps its correct height on browsers without `:has()` support (Chrome < 105, Safari < 15.4, Firefox < 121).
+
 ## 3.1.2
 
 - Fixed: guest sessions no longer crash on browsers without `crypto.randomUUID` (Safari < 15.4) or on non-HTTPS pages — a fallback id generator engages.

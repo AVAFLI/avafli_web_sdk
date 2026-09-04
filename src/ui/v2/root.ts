@@ -288,6 +288,12 @@ export class AvafliV2Experience {
     if (c.legalOverlay) {
       this.sheet.appendChild(renderLegalOverlay(c));
     }
+
+    // :has() fallback (Chrome < 105 / Safari < 15.4 / Firefox < 121, inside
+    // our advertised floor): the claim flow needs the sheet's definite-height
+    // rule, selected via .wv2-sheet:has(.wv2-claim-flow) on modern engines and
+    // via this class everywhere else.
+    this.sheet.classList.toggle('wv2-claim-open', !!this.sheet.querySelector('.wv2-claim-flow'));
   }
 
   private openWinnerModal(): void {

@@ -5,13 +5,18 @@ import { StorageProvider } from '../types';
  */
 export class LocalStorageProvider implements StorageProvider {
   private isAvailable: boolean = false;
+  // Storage-blocked browsers (private windows, site-data blocked, partitioned
+  // webviews) fall back to an in-memory map: persistence is lost across
+  // navigations, but WITHIN a page session the once-per-day auto-open mark and
+  // guest id hold — without this the drawer re-opened on every SPA route.
+  private static memory: Map<string, string> = new Map();
 
   constructor() {
     this.isAvailable = this.checkAvailability();
   }
 
   public getItem(key: string): string | null {
-    if (!this.isAvailable) return null;
+    if (!this.isAvailable) return LocalStorageProvider.memory.get(key) ?? null;
     
     try {
       return localStorage.getItem(key);
@@ -22,7 +27,7 @@ export class LocalStorageProvider implements StorageProvider {
   }
 
   public setItem(key: string, value: string): void {
-    if (!this.isAvailable) return;
+    if (!this.isAvailable) { LocalStorageProvider.memory.set(key, value); return; }
     
     try {
       localStorage.setItem(key, value);
@@ -42,7 +47,7 @@ export class LocalStorageProvider implements StorageProvider {
   }
 
   public removeItem(key: string): void {
-    if (!this.isAvailable) return;
+    if (!this.isAvailable) { LocalStorageProvider.memory.delete(key); return; }
     
     try {
       localStorage.removeItem(key);
