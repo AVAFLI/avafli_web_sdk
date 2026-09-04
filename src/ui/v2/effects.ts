@@ -370,3 +370,49 @@ export function createAnimatedCheck(lineWidth: number): HTMLElement {
     `</svg>`;
   return wrap;
 }
+
+// ─── Two-line shrink-to-fit (iOS minimumScaleFactor parity) ───
+
+/**
+ * Pure size picker: given a measurer that reports how many lines `text`
+ * needs at a font size, returns the largest size ≥ base×minScale that fits
+ * `maxLines`, stepping down ~4% at a time (SwiftUI's lineLimit +
+ * minimumScaleFactor). Falls back to the floor when nothing fits.
+ */
+export function pickFittingFontSize(
+  base: number,
+  minScale: number,
+  maxLines: number,
+  linesAt: (px: number) => number,
+): number {
+  const floor = base * minScale;
+  let size = base;
+  while (size > floor) {
+    if (linesAt(size) <= maxLines) return size;
+    size = Math.max(floor, size * 0.96);
+    if (size === floor) break;
+  }
+  return floor;
+}
+
+/**
+ * Shrinks an element's font-size until its text fits `maxLines` (measured
+ * from its own line-height), never below `minScale`. Runs after layout and
+ * again on resize; a no-op for text that already fits.
+ */
+export function fitTextToLines(el: HTMLElement, maxLines = 2, minScale = 0.55): void {
+  const apply = (): void => {
+    if (!el.isConnected) return;
+    el.style.fontSize = '';
+    const cs = getComputedStyle(el);
+    const base = parseFloat(cs.fontSize) || 28;
+    const ratio = (parseFloat(cs.lineHeight) || base * 1.05) / base;
+    const linesAt = (px: number): number => {
+      el.style.fontSize = `${px}px`;
+      return Math.round(el.scrollHeight / (px * ratio));
+    };
+    el.style.fontSize = `${pickFittingFontSize(base, minScale, maxLines, linesAt)}px`;
+  };
+  requestAnimationFrame(apply);
+  window.addEventListener('resize', apply, { passive: true });
+}

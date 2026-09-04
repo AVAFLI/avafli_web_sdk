@@ -1,6 +1,10 @@
 # Changelog
 
 
+## 3.1.6
+
+- Fixed: a long physical-prize name on the Day 2+ prize card shrinks to fit two lines (never below 55%) instead of growing the lockup — iOS/Android/Flutter parity.
+
 ## 3.1.5
 
 - Fixed: the streak tile's confetti explosion at the reveal beat (and the burst over the total count-up) is now drawn on a canvas instead of an animated GIF. WebKit skips animated-image playback under iOS Reduce Motion and can defer decoding a freshly mounted GIF, which left iPhones with no explosion at all while the native SDKs always showed one. Same 2-second one-shot choreography; under reduced motion a static mid-burst scatter is held instead.

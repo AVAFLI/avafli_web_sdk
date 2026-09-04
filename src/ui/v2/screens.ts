@@ -7,6 +7,7 @@ import {
   createConfetti,
   mountGifBurst,
   mountCanvasBurst,
+  fitTextToLines,
   prefersReducedMotion,
 } from './effects';
 import {
@@ -987,7 +988,7 @@ function renderPrizeCard(c: V2ExperienceController, preReveal = false): HTMLElem
     // Centered "Win a {Prize}" + accent "$X.00 VALUE!".
     const lockup = el('div', 'wv2-ph-prize');
     lockup.appendChild(
-      el('div', 'wv2-ph-prize-title', `Win ${prizeArticle(description, false)} ${description}`)
+      (() => { const t = el('div', 'wv2-ph-prize-title', `Win ${prizeArticle(description, false)} ${description}`); fitTextToLines(t, 2, 0.55); return t; })()
     );
     if (showsValueLine(description, value)) {
       lockup.appendChild(el('div', 'wv2-ph-prize-value', `$${formatInt(value)}.00 VALUE!`));
