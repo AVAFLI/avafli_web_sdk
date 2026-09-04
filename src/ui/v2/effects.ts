@@ -245,6 +245,109 @@ export function mountGifBurst(options: {
   return img;
 }
 
+// ─── One-shot confetti BURST (canvas) ───
+
+/**
+ * The reveal-beat explosion, drawn on a canvas instead of the embedded GIF.
+ *
+ * WebKit does not auto-play animated images when the OS asks for reduced
+ * motion (and may defer decoding a freshly mounted GIF), which left the web
+ * streak tile with NO explosion while every native SDK — which decodes the
+ * same GIF frame-by-frame itself — always showed one. The canvas replays the
+ * GIF's choreography: ~45 pieces racing out from the centre to about 55% of
+ * the canvas, tumbling, then fading over the last third (2000ms, one shot).
+ * Under reduced motion a single mid-burst scatter is held instead, so the
+ * moment is still marked without motion.
+ *
+ * Same lifecycle contract as mountGifBurst: a guarded timeout removes the
+ * canvas after `durationMs`, and onFinished runs only if it was still
+ * mounted (a torn-down parent takes the canvas with it — never touch
+ * removed DOM).
+ */
+export function mountCanvasBurst(options: {
+  parent: HTMLElement;
+  className: string;
+  durationMs?: number;
+  count?: number;
+  onFinished?: () => void;
+}): HTMLCanvasElement {
+  const { parent, className, durationMs = CONFETTI_BURST_DURATION_MS, count = 46 } = options;
+  const canvas = document.createElement('canvas');
+  canvas.className = className;
+  const reduced = prefersReducedMotion();
+  const start = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  let rafId = 0;
+
+  const drawAt = (p: number): void => {
+    const ctx = canvas.getContext('2d');
+    const cssW = Math.min(canvas.clientWidth, 4096);
+    const cssH = Math.min(canvas.clientHeight, 4096);
+    if (!ctx || cssW <= 0 || cssH <= 0) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const pxW = Math.round(cssW * dpr);
+    const pxH = Math.round(cssH * dpr);
+    if (canvas.width !== pxW || canvas.height !== pxH) {
+      canvas.width = pxW;
+      canvas.height = pxH;
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, cssW, cssH);
+
+    const cx = cssW / 2;
+    const cy = cssH / 2;
+    const reach = Math.min(cssW, cssH) * 0.55;
+    // Radial ease-out: fast launch, gentle settle (the GIF's ring expansion).
+    const travel = 1 - Math.pow(1 - p, 2.2);
+    // Fade: full until 60%, gone by 100%; a quick fade-in over the first ~12%.
+    const fade = Math.min(1, p * 8) * (p < 0.6 ? 1 : Math.max(0, 1 - (p - 0.6) / 0.4));
+
+    for (let i = 0; i < count; i++) {
+      const seed = i;
+      const angle = fract(seed * 0.61803398875) * Math.PI * 2;
+      const vigor = 0.55 + fract(seed * 0.7548776662) * 0.45; // per-piece reach
+      const r = reach * vigor * travel;
+      const drop = p * p * reach * 0.35 * (0.6 + fract(seed * 0.51) * 0.8); // gravity
+      const x = cx + Math.cos(angle) * r;
+      const y = cy + Math.sin(angle) * r + drop;
+      const spin = (fract(seed * 0.2928932188) - 0.5) * 12;
+      const rotation = seed + p * spin;
+      const w = 4.0 + fract(seed * 0.833) * 3.0;
+      const h = w * (0.55 + fract(seed * 0.377) * 0.5);
+      const squash = 0.35 + Math.abs(Math.sin(p * 9 + seed * 2.0)) * 0.65;
+
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(rotation);
+      ctx.scale(1, squash);
+      ctx.globalAlpha = 0.95 * fade;
+      ctx.fillStyle = CELEBRATION_PALETTE[i % CELEBRATION_PALETTE.length]!;
+      roundedRect(ctx, -w / 2, -h / 2, w, h, 1);
+      ctx.fill();
+      ctx.restore();
+    }
+  };
+
+  const frame = (): void => {
+    if (!canvas.isConnected) return; // parent torn down — stop drawing
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const p = Math.min(1, (now - start) / durationMs);
+    drawAt(reduced ? 0.45 : p);
+    if (reduced || p >= 1) return;
+    rafId = requestAnimationFrame(frame);
+  };
+
+  parent.appendChild(canvas);
+  rafId = requestAnimationFrame(frame);
+
+  window.setTimeout(() => {
+    if (rafId) cancelAnimationFrame(rafId);
+    if (!canvas.isConnected) return; // torn down first — never touch removed DOM
+    canvas.remove();
+    options.onFinished?.();
+  }, durationMs);
+  return canvas;
+}
+
 // ─── Animated checkmark (draw-on) ───
 
 /**

@@ -1,6 +1,10 @@
 # Changelog
 
 
+## 3.1.5
+
+- Fixed: the streak tile's confetti explosion at the reveal beat (and the burst over the total count-up) is now drawn on a canvas instead of an animated GIF. WebKit skips animated-image playback under iOS Reduce Motion and can defer decoding a freshly mounted GIF, which left iPhones with no explosion at all while the native SDKs always showed one. Same 2-second one-shot choreography; under reduced motion a static mid-burst scatter is held instead.
+
 ## 3.1.4
 
 - Fixed: the publisher logo in the drawer header no longer flickers on open — one pre-decoded logo node is created when the branding config arrives and reused across every re-render instead of being rebuilt (and re-decoded) on each state change.

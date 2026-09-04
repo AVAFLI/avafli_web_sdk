@@ -478,10 +478,10 @@ describe('V2 Day 2+ reveal flow', () => {
     expect(tile).not.toBeNull();
     expect(tile?.querySelector('.wv2-tile-icon .wv2-animated-check')).not.toBeNull();
     expect(dash.querySelector('.wv2-tile-confetti')).not.toBeNull();
-    const burst = dash.querySelector('.wv2-tile-burst') as HTMLImageElement;
+    const burst = dash.querySelector('.wv2-tile-burst') as HTMLElement;
     expect(burst).not.toBeNull();
-    // Fresh <img> with the embedded GIF — mounting starts playback at frame 0.
-    expect(burst.src).toBe(V2_IMAGES.confettiBurst);
+    // Canvas-drawn (never a GIF: WebKit skips GIF playback under reduced motion).
+    expect(burst.tagName).toBe('CANVAS');
 
     // After the GIF's full one-shot run only the burst overlay is removed —
     // the drawn check and confetti field ARE the active tile's resting state.
@@ -503,7 +503,7 @@ describe('V2 Day 2+ reveal flow', () => {
     const dash = renderDashboard(controller, null, () => {});
     document.body.appendChild(dash);
     vi.advanceTimersByTime(DELAY);
-    const burst = dash.querySelector('.wv2-tile-burst') as HTMLImageElement;
+    const burst = dash.querySelector('.wv2-tile-burst') as HTMLElement;
     expect(burst).not.toBeNull();
 
     // Dashboard unmounts before the GIF finishes → the removal timer no-ops

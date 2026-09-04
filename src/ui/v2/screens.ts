@@ -6,6 +6,7 @@ import {
   createAnimatedCheck,
   createConfetti,
   mountGifBurst,
+  mountCanvasBurst,
   prefersReducedMotion,
 } from './effects';
 import {
@@ -826,10 +827,10 @@ export function renderDashboard(
     if (totalNum) {
       animateCount(totalNum as HTMLElement, preClaimTotal, c.totalEntries, 700, () => {
         if (!totalNum.isConnected) return;
-        mountGifBurst({
+        mountCanvasBurst({
           parent: totalNum as HTMLElement,
-          src: V2_IMAGES.confettiBurst,
           className: 'wv2-count-burst',
+          count: 18,
           durationMs: CONFETTI_BURST_DURATION_MS,
         });
       });
@@ -1131,9 +1132,11 @@ type TileState = 'completed' | 'active' | 'ready' | 'locked';
  * removal after its full run is teardown-guarded inside mountGifBurst.
  */
 function mountTileBurst(box: HTMLElement): void {
-  mountGifBurst({
+  // Canvas, not the GIF: WebKit skips animated-image playback under reduced
+  // motion, which silently erased this explosion on iPhones (see
+  // mountCanvasBurst). Same 2s one-shot, same overflow over the tile.
+  mountCanvasBurst({
     parent: box,
-    src: V2_IMAGES.confettiBurst,
     className: 'wv2-tile-burst',
     durationMs: CONFETTI_BURST_DURATION_MS,
   });
