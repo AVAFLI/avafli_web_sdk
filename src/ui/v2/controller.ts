@@ -1,3 +1,4 @@
+import { preloadLogo } from './logo-cache';
 import {
   ClaimDailyEntriesResponse,
   DailyEntryGrant,
@@ -728,6 +729,8 @@ export class V2ExperienceController {
       } else if (response.sdkConfig) {
         this.sdkConfig = response.sdkConfig;
       }
+      // Warm the header logo before the first render that shows it.
+      preloadLogo(this.sdkConfig?.branding?.logoUrl);
 
       // Backend is the source of truth for email consent. If it confirms an
       // email on file, seed the local "submitted" flag so a user whose local

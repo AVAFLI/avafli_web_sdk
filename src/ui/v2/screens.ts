@@ -1,3 +1,4 @@
+import { logoNode } from './logo-cache';
 import { Giveaway, GiveawayWinner, PrizeClaimBlock, AVAFLI_CONSTANTS } from '../../types';
 import { V2_IMAGES } from './assets.generated';
 import {
@@ -134,10 +135,9 @@ export function renderHeader(options: HeaderOptions): HTMLElement {
 
   const logo = el('div', 'wv2-header-logo');
   if (options.logoUrl) {
-    const img = el('img');
-    img.src = options.logoUrl;
-    img.alt = '';
-    logo.appendChild(img);
+    // Shared, pre-decoded node (see logo-cache.ts) — moving it between
+    // renders keeps the logo stable instead of blinking on each re-render.
+    logo.appendChild(logoNode(options.logoUrl, 'sheet'));
   } else {
     logo.appendChild(el('span', 'wv2-header-logo-fallback', 'Avafli'));
   }
@@ -1460,10 +1460,9 @@ function renderClaimHeader(logoUrl: string | null | undefined, onClose: () => vo
 
   const logo = el('div', 'wv2-header-logo');
   if (logoUrl) {
-    const img = el('img');
-    img.src = logoUrl;
-    img.alt = '';
-    logo.appendChild(img);
+    // Claim-flow screens replace each other inside the modal, so one shared
+    // 'claim' node serves the splash, steps, share and confirmation headers.
+    logo.appendChild(logoNode(logoUrl, 'claim'));
   } else {
     logo.appendChild(el('span', 'wv2-header-logo-fallback', 'Avafli'));
   }
@@ -1624,10 +1623,9 @@ export function renderClaimSteps(
   header.appendChild(back);
   const logo = el('div', 'wv2-header-logo');
   if (logoUrl) {
-    const img = el('img');
-    img.src = logoUrl;
-    img.alt = '';
-    logo.appendChild(img);
+    // Claim-flow screens replace each other inside the modal, so one shared
+    // 'claim' node serves the splash, steps, share and confirmation headers.
+    logo.appendChild(logoNode(logoUrl, 'claim'));
   } else {
     logo.appendChild(el('span', 'wv2-header-logo-fallback', 'Avafli'));
   }
