@@ -15,6 +15,16 @@ export class LocalStorageProvider implements StorageProvider {
     this.isAvailable = this.checkAvailability();
   }
 
+  /**
+   * True when values survive a page load (real localStorage). False on the
+   * in-memory fallback (site data blocked): callers that mint identifiers
+   * must then derive them deterministically instead of at random, or every
+   * load would be a new person.
+   */
+  public get isPersistent(): boolean {
+    return this.isAvailable;
+  }
+
   public getItem(key: string): string | null {
     if (!this.isAvailable) return LocalStorageProvider.memory.get(key) ?? null;
     

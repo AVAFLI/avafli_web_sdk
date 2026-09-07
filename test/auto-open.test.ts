@@ -93,6 +93,14 @@ async function configureSDK(): Promise<void> {
 }
 
 const host = (): Element | null => document.querySelector('[data-winr="v2"]');
+/** The visitor closes the drawer (X). 3.1.8: this is when the day mark is written. */
+const closeButton = (): HTMLButtonElement | null =>
+  host()?.shadowRoot?.querySelector('button[aria-label="Close"]') as HTMLButtonElement | null;
+const closeDrawer = async (): Promise<void> => {
+  // The loading frame carries no close control; wait for a real screen.
+  await vi.waitFor(() => expect(closeButton()).not.toBeNull());
+  closeButton()!.click();
+};
 
 describe('auto-open engine', () => {
   beforeEach(() => {
@@ -111,14 +119,18 @@ describe('auto-open engine', () => {
     await configureSDK();
 
     await vi.waitFor(() => expect(host()).not.toBeNull());
-    expect(localStorage.getItem(MARK_KEY)).toBe(todayString());
-    expect(localStorage.getItem(IMPRESSIONS_KEY)).toBe('1');
 
     // The email-capture CTA carries the renamed copy (2.2.0).
     await vi.waitFor(() => {
       const pill = host()?.shadowRoot?.querySelector('.wv2-pill');
       expect(pill?.textContent).toBe('CLAIM MY 10 ENTRIES');
     });
+
+    // 3.1.8: on screen = nothing burned yet; closing it burns the day.
+    expect(localStorage.getItem(MARK_KEY)).toBeNull();
+    await closeDrawer();
+    await vi.waitFor(() => expect(localStorage.getItem(MARK_KEY)).toBe(todayString()));
+    await vi.waitFor(() => expect(localStorage.getItem(IMPRESSIONS_KEY)).toBe('1'));
   });
 
   it('same-day reload: does NOT re-open', async () => {
@@ -136,7 +148,8 @@ describe('auto-open engine', () => {
     await configureSDK();
 
     await vi.waitFor(() => expect(host()).not.toBeNull());
-    expect(localStorage.getItem(MARK_KEY)).toBe(todayString());
+    await closeDrawer();
+    await vi.waitFor(() => expect(localStorage.getItem(MARK_KEY)).toBe(todayString()));
   });
 
   it('REGRESSION: configure() before <body> exists defers (burning nothing) and opens on DOMContentLoaded', async () => {
@@ -162,8 +175,9 @@ describe('auto-open engine', () => {
       document.dispatchEvent(new Event('DOMContentLoaded'));
 
       await vi.waitFor(() => expect(host()).not.toBeNull());
-      expect(localStorage.getItem(MARK_KEY)).toBe(todayString());
-      expect(localStorage.getItem(IMPRESSIONS_KEY)).toBe('1');
+      await closeDrawer();
+      await vi.waitFor(() => expect(localStorage.getItem(MARK_KEY)).toBe(todayString()));
+      await vi.waitFor(() => expect(localStorage.getItem(IMPRESSIONS_KEY)).toBe('1'));
     } finally {
       // Restore the prototype getter.
       delete (document as unknown as Record<string, unknown>).body;
@@ -191,15 +205,16 @@ describe('auto-open engine', () => {
     // Presentation failed — and the eligibility marks were rolled back.
     expect(host()).toBeNull();
     expect(localStorage.getItem(MARK_KEY)).toBeNull();
-    expect(localStorage.getItem(IMPRESSIONS_KEY)).toBe('0');
+    expect(localStorage.getItem(IMPRESSIONS_KEY)).toBeNull(); // 3.1.8: nothing is written before a settled mount
 
     // The SDK's own focus re-check now succeeds (also proves the internal
     // "already on screen" guard was released after the failed mount).
     window.dispatchEvent(new Event('focus'));
 
     await vi.waitFor(() => expect(host()).not.toBeNull());
-    expect(localStorage.getItem(MARK_KEY)).toBe(todayString());
-    expect(localStorage.getItem(IMPRESSIONS_KEY)).toBe('1');
+    await closeDrawer();
+    await vi.waitFor(() => expect(localStorage.getItem(MARK_KEY)).toBe(todayString()));
+    await vi.waitFor(() => expect(localStorage.getItem(IMPRESSIONS_KEY)).toBe('1'));
 
     appendSpy.mockRestore();
   });
@@ -227,6 +242,44 @@ describe('auto-open engine', () => {
     await configureSDK();
     await new Promise((r) => setTimeout(r, 50));
     expect(host()).toBeNull();
+    expect(localStorage.getItem(MARK_KEY)).toBeNull();
+  });
+
+  // ── 3.1.8: a navigation during the open must not cost the visitor the day ──
+  //
+  // Field report (Sept 7): the drawer was still loading when the visitor
+  // clicked to another page; the day mark had already been written, so the
+  // refreshed page never opened it again ("capped at one attempt").
+
+  it('the day mark is written only when the visitor closes the drawer', async () => {
+    await configureSDK();
+    await vi.waitFor(() => expect(host()).not.toBeNull());
+    // On screen: nothing burned yet.
+    expect(localStorage.getItem(MARK_KEY)).toBeNull();
+    expect(localStorage.getItem(IMPRESSIONS_KEY)).toBeNull();
+    await closeDrawer();
+    await vi.waitFor(() => expect(localStorage.getItem(MARK_KEY)).toBe(todayString()));
+    expect(localStorage.getItem(IMPRESSIONS_KEY)).toBe('1');
+    // …and a same-day re-check stays quiet.
+    window.dispatchEvent(new Event('focus'));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(host()).toBeNull();
+  });
+
+  it('a page torn down mid-open re-opens on the next load', async () => {
+    await configureSDK();
+    await vi.waitFor(() => expect(host()).not.toBeNull());
+    expect(localStorage.getItem(MARK_KEY)).toBeNull();
+
+    // Simulate the navigation: the page (and the SDK instance) goes away
+    // before the visitor ever closes the drawer.
+    document.querySelectorAll('[data-winr="v2"]').forEach((n) => n.remove());
+    vi.resetModules();
+    (globalThis as unknown as Record<string, unknown>).fetch = okFetch();
+
+    // The next page load auto-opens again instead of staying silent.
+    await configureSDK();
+    await vi.waitFor(() => expect(host()).not.toBeNull());
     expect(localStorage.getItem(MARK_KEY)).toBeNull();
   });
 });

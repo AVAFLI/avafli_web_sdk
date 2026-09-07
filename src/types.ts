@@ -623,6 +623,8 @@ export class AvafliError extends Error {
 // ─── Service Interfaces ───
 
 export interface StorageProvider {
+  /** Optional: false when values do not survive a page load (see LocalStorageProvider). */
+  readonly isPersistent?: boolean;
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
   removeItem(key: string): void;

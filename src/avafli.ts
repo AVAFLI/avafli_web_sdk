@@ -83,6 +83,8 @@ export class Avafli {
    * need to query {@link Avafli.isAvailable}/{@link Avafli.unavailableReason}.
    */
   private static serviceUnavailable: AvafliError | null = null;
+  /** An auto-open is on screen but not yet settled — no second one may start. */
+  private static autoPresentPending = false;
 
   // ─── Offline resilience (launch item 15) ───
   // Persisted same-day retry queue + offline analytics buffering. Static:
@@ -920,7 +922,7 @@ export class Avafli {
     if (instance.storage.getItem(instance.lastAutoPresentKey) === today) return;
 
     // Don't stack on top of an already-presented experience.
-    if (instance.currentExperience) return;
+    if (instance.currentExperience || Avafli.autoPresentPending) return;
 
     // Unregistered users (no confirmed email) see the auto-open at most N
     // times, then the SDK goes quiet until they register or the publisher
@@ -939,23 +941,29 @@ export class Avafli {
         logger.debug(`Auto-present skipped: unregistered impression cap (${cap}) reached`);
         return;
       }
-      instance.storage.setItem(instance.unregisteredImpressionsKey, String(seen + 1));
     }
 
-    // The once-per-day mark (and the unregistered impression above) is burned
-    // up front so a midnight-crossing session can't double-open — but ROLLED
-    // BACK if the presentation never made it on screen, so the DOM-ready /
-    // visibility re-checks can retry instead of going silent for the day.
-    instance.storage.setItem(instance.lastAutoPresentKey, today);
+    // 3.1.8: nothing is burned up front. presentExperience() settles when the
+    // visitor closes the drawer or completes a claim, and ONLY THEN is the day
+    // mark (and the unregistered impression) written. A visitor who taps a
+    // link while the register → giveaway round-trips are still in flight
+    // tears the page down before that, so the NEXT page load opens it again
+    // instead of "capped at one attempt" (Sept 7 field report). While it is
+    // on screen the in-flight flag (and currentExperience) hold off a second
+    // open; a failed mount writes nothing, so the re-checks simply retry.
     logger.info('Auto-presenting Avafli experience (first visit of the day)');
-    await Avafli.presentExperience().catch(() => {
-      if (instance.storage.getItem(instance.lastAutoPresentKey) === today) {
-        instance.storage.removeItem(instance.lastAutoPresentKey);
-      }
+    Avafli.autoPresentPending = true;
+    try {
+      await Avafli.presentExperience();
+      instance.storage.setItem(instance.lastAutoPresentKey, today);
       if (!emailConsent) {
-        instance.storage.setItem(instance.unregisteredImpressionsKey, String(seen));
+        instance.storage.setItem(instance.unregisteredImpressionsKey, String(seen + 1));
       }
-    });
+    } catch {
+      // Mount failed: nothing was written, so the next re-check simply retries.
+    } finally {
+      Avafli.autoPresentPending = false;
+    }
   }
 
   /**
@@ -1077,6 +1085,20 @@ export class Avafli {
     return true;
   }
 
+  /** `web_` + 24 hex chars from the CSPRNG (Math.random only if crypto is absent). */
+  private static randomDeviceId(): string {
+    const bytes = new Uint8Array(12);
+    const c = typeof crypto !== 'undefined' ? crypto : undefined;
+    if (c?.getRandomValues) {
+      c.getRandomValues(bytes);
+    } else {
+      for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+    }
+    let hex = '';
+    for (const b of bytes) hex += b.toString(16).padStart(2, '0');
+    return `web_${hex}`;
+  }
+
   private async initializeDeviceFingerprint(): Promise<void> {
     // Check if we have a cached fingerprint
     const cached = this.storage.getItem(AVAFLI_CONSTANTS.STORAGE_KEYS.DEVICE_FINGERPRINT);
@@ -1111,7 +1133,28 @@ export class Avafli {
     }
   }
 
+  /**
+   * The browser's identity, minted ONCE per site and then reused from storage
+   * (see initializeDeviceFingerprint).
+   *
+   * 3.1.8: a random id, not a hash of browser signals. The hash
+   * (user agent + language + screen + colour depth + timezone) was brittle —
+   * an iOS update, "Request Desktop Website", or a link opened inside another
+   * app's browser changed it and the same phone became a new person — and it
+   * was not unique: two people on the same phone model, OS version, language
+   * and timezone hashed to the same value and were treated as ONE account by
+   * registerDevice's fingerprint + publisher lookup. Browsers that already
+   * hold a hashed id keep it (storage is read first), so nobody's identity
+   * changes on upgrade; only brand-new browsers get random ids. Cross-device
+   * continuity is the email code flow's job, not the fingerprint's.
+   *
+   * Storage-blocked browsers (in-memory fallback) keep the deterministic hash:
+   * a random id there would mint a new person on every page load.
+   */
   private async generateBasicFingerprint(): Promise<string> {
+    if ((this.storage as { isPersistent?: boolean }).isPersistent !== false) {
+      return Avafli.randomDeviceId();
+    }
     const components = [
       navigator.userAgent,
       navigator.language,

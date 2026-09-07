@@ -1,6 +1,11 @@
 # Changelog
 
 
+## 3.1.8
+
+- Changed: a browser's identity is now a random id minted once per site and reused, instead of a hash of browser signals. The hash changed with iOS updates, "Request Desktop Website", or links opened inside another app's browser (the same phone became a new person), and it was not unique (two people on identical phones in the same timezone shared one account). Browsers that already hold an id keep it; storage-blocked browsers keep the deterministic hash. Linking a person across browsers is the email code flow's job.
+- Fixed: the once-per-day auto-open mark is written when the visitor closes the drawer (or completes a claim), not the moment it starts loading. Navigating away while it was still loading used to burn the day, so the next page never opened it again.
+
 ## 3.1.7
 
 - Fixed: a browser with an unfinished cross-device link (typed an email that already belongs to another device, never entered the 6-digit code) now opens straight onto the code screen. Previously the cached "day 1" dashboard was painted first and only replaced by the code screen after the code e-mail had been sent — close the drawer in that window and you had an e-mail with no memory of any code prompt.
