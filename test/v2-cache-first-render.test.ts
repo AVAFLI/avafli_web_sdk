@@ -200,8 +200,9 @@ describe('cache-first render', () => {
     });
 
     // Everything else is cached and warm; the consent gate alone blocks it.
-    expect(controller.hydrateFromCache()).toBe(false);
-    expect(controller.state.kind).toBe('loading');
+    // 3.1.9: capture is the FIRST frame (the giveaway came with register).
+    expect(controller.hydrateFromCache()).toBe(true);
+    expect(controller.state.kind).toBe('emailCapture');
 
     await controller.load();
     expect(controller.state.kind).toBe('emailCapture');
@@ -212,7 +213,8 @@ describe('cache-first render', () => {
       storage: warmStorage({ emailSubmitted: false }),
       deps: { hasRegisteredUuid: () => true },
     });
-    expect(controller.hydrateFromCache()).toBe(false);
+    expect(controller.hydrateFromCache()).toBe(true);
+    expect(controller.state.kind).toBe('emailCapture'); // never the dashboard
   });
 
   it('never stomps fresher truth: hydration no-ops once the network resolved the phase', async () => {

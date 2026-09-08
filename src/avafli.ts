@@ -396,18 +396,18 @@ export class Avafli {
       Avafli.instance.currentUser = user;
 
       // Submit user profile to server
-      try {
-        await Avafli.instance.client.post<{ success: boolean }>('/submitUserProfile', {
+      // 3.1.9: fire-and-forget. Nothing downstream needs the profile write to
+      // have landed, and awaiting it held the first-visit auto-open back by a
+      // full round-trip.
+      void Avafli.instance.client
+        .post<{ success: boolean }>('/submitUserProfile', {
           firstName: user.firstName,
           lastName: user.lastName,
           phone: user.phone,
           smsConsent: false,
           publisherUserId: user.id,
-        } as SubmitUserProfileRequest);
-      } catch (profileError) {
-        logger.warn('Failed to submit user profile:', profileError);
-        // Non-fatal — continue
-      }
+        } as SubmitUserProfileRequest)
+        .catch((profileError) => logger.warn('Failed to submit user profile:', profileError));
 
       // Identify user in analytics
       analyticsAdapter.identify(user.id, {

@@ -15,6 +15,8 @@ export const AvafliV2Strings = {
   // ─── Verification-code screen (cross-device adoption OTP) ───
   codeExpired: "That code expired. Tap 'Send a new code' to get a fresh one.",
   codeTooManyAttempts: 'Too many attempts. Request a new code.',
+  /** The old code is dead (expired / attempts used up) and a fresh one was just mailed. */
+  codeFreshSent: "That code can't be used anymore — we just sent you a fresh one. Check your email.",
   codeIncorrect: "That code didn't match. Check the email and try again.",
   /** RESEND failed — shown in the code-error slot; the code screen stays up. */
   codeResendFailed: "Couldn't send a new code. Check your connection and try again.",

@@ -1,6 +1,11 @@
 # Changelog
 
 
+## 3.1.9
+
+- Improved: a first-time visitor sees the email screen as soon as registration returns — the drawer no longer waits for the giveaway round-trip, and the profile write no longer blocks the auto-open. About 1.2 s less to first paint on a typical connection.
+- Fixed: after "too many attempts" or an expired code, the SDK now mails a fresh code immediately and says so, instead of leaving the person on a screen that could never succeed until the resend cooldown passed.
+
 ## 3.1.8
 
 - Changed: a browser's identity is now a random id minted once per site and reused, instead of a hash of browser signals. The hash changed with iOS updates, "Request Desktop Website", or links opened inside another app's browser (the same phone became a new person), and it was not unique (two people on identical phones in the same timezone shared one account). Browsers that already hold an id keep it; storage-blocked browsers keep the deterministic hash. Linking a person across browsers is the email code flow's job.

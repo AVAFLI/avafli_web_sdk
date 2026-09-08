@@ -3,6 +3,7 @@ import { V2ExperienceController, V2ControllerDeps } from '../src/ui/v2/controlle
 import { GetActiveGiveawayResponse, Giveaway } from '../src/types';
 import { AvafliAPI } from '../src/network/api';
 import { LocalStorageProvider } from '../src/storage/local-storage';
+import { AvafliV2Strings } from '../src/ui/v2/strings';
 
 /**
  * Adoption RE-ENTRY (2.9): when the register response reports
@@ -227,5 +228,20 @@ describe('Adoption re-entry (adoptionPending)', () => {
     await controller.resendVerificationCode();
     expect(restageAdoption).toHaveBeenCalledOnce();
     expect(controller.state.kind).toBe('codeEntry');
+  });
+
+  it('a dead code (too many attempts) mails a fresh one immediately, ignoring the cooldown', async () => {
+    const { controller, restageAdoption } = makeController({
+      adoptionPending: true,
+      verifyError: new Error('resource-exhausted: Too many attempts. Enter your email again to get a new code.'),
+      storageSeed: { winr_adoption_code_sent_at_com_test: String(Date.now()) },
+    });
+    await controller.load();
+    expect(restageAdoption).not.toHaveBeenCalled(); // inside the cooldown, no auto-resend on open
+
+    await controller.submitVerificationCode('000000');
+    expect(restageAdoption).toHaveBeenCalledOnce(); // …but a dead code gets a fresh one right away
+    expect(controller.state.kind).toBe('codeEntry');
+    expect(controller.codeError).toBe(AvafliV2Strings.codeFreshSent);
   });
 });

@@ -647,7 +647,18 @@ export class V2ExperienceController {
 
     // Day 1 / unconsented users must land on email capture, NEVER a cached
     // dashboard. This gate is the whole reason the cache path is safe.
-    if (!this.hasEmailConsent) return false;
+    //
+    // 3.1.9: land there IMMEDIATELY. The giveaway (prize, copy, branding)
+    // arrived with the register response, and the network path ends on the
+    // capture screen for a new visitor anyway — so paint it as the first
+    // frame instead of a skeleton for the getActiveGiveaway round-trip.
+    // load() still reconciles: opted-out, geo-blocked, no-giveaway and
+    // winner-claim responses transition away from it as before.
+    if (!this.hasEmailConsent) {
+      this.giveaway = giveaway;
+      this.state = { kind: 'emailCapture' };
+      return true;
+    }
 
     const streak = this.readCachedStreakState();
     if (!streak || typeof streak.currentDay !== 'number') return false;
@@ -1347,21 +1358,56 @@ export class V2ExperienceController {
       this.deps.storage.removeItem(this.adoptionCodeSentAtKey);
       await this.load();
     } catch (error) {
-      // NEVER render raw backend text — map the failure to fixed copy
-      // (Master Field List; see AvafliV2Strings).
       const message = error instanceof Error ? error.message : String(error);
-      if (/expired/i.test(message)) {
+      logger.warn('Adoption code check failed:', error);
+      // NEVER render raw backend text — map the failure to fixed copy.
+      // 3.1.9: an expired code, a burned attempt budget, or a pending record
+      // the backend has already dropped are all dead ends for the OLD code —
+      // and the resend cooldown would otherwise hold the person on a screen
+      // that can never succeed. Mail a fresh code right away and say so.
+      if (/expired|too many attempts|no verification is pending/i.test(message) && (await this.sendFreshAdoptionCode())) {
+        this.codeError = AvafliV2Strings.codeFreshSent;
+      } else if (/expired/i.test(message)) {
         this.codeError = AvafliV2Strings.codeExpired;
       } else if (/attempts/i.test(message)) {
         this.codeError = AvafliV2Strings.codeTooManyAttempts;
       } else {
         this.codeError = AvafliV2Strings.codeIncorrect;
       }
-      logger.warn('Adoption code check failed:', error);
       this.onChange?.(this.state);
     } finally {
       this.isVerifyingCode = false;
       if (this.state.kind === 'codeEntry') this.onChange?.(this.state);
+    }
+  }
+
+  /**
+   * Mail a fresh adoption code for the screen the person is on, ignoring the
+   * resend cooldown: re-submit the typed email when we still hold it, else
+   * restage the parked adoption. True when a code went out.
+   */
+  private async sendFreshAdoptionCode(): Promise<boolean> {
+    if (this.state.kind !== 'codeEntry') return false;
+    const { email, consent } = this.state;
+    this.deps.storage.removeItem(this.adoptionCodeSentAtKey);
+    try {
+      if (email && consent) {
+        const res = (await this.deps.submitEmailAndAdopt({
+          email,
+          ageConfirmed: consent.ageConfirmed,
+          marketingConsent: consent.marketingConsent,
+        })) as { verificationRequired?: boolean } | undefined;
+        if (!res?.verificationRequired) return false;
+      } else if (this.deps.restageAdoption) {
+        await this.deps.restageAdoption();
+      } else {
+        return false;
+      }
+      this.markAdoptionCodeSent();
+      return true;
+    } catch (error) {
+      logger.warn('Fresh adoption code could not be sent:', error);
+      return false;
     }
   }
 

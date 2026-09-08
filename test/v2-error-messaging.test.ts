@@ -332,8 +332,9 @@ describe('verification-code screen error copy', () => {
 
   it('never renders raw backend text — expired / attempts / mismatch map to fixed strings', async () => {
     const cases: Array<[string, string]> = [
-      ['deadline-exceeded: verification code expired at 2026-08-10T12:00:00Z', AvafliV2Strings.codeExpired],
-      ['resource-exhausted: too many attempts (5/5) for uid 4f3a', AvafliV2Strings.codeTooManyAttempts],
+      // 3.1.9: a dead code (expired / attempts) triggers an immediate fresh send — the copy says so.
+      ['deadline-exceeded: verification code expired at 2026-08-10T12:00:00Z', AvafliV2Strings.codeFreshSent],
+      ['resource-exhausted: too many attempts (5/5) for uid 4f3a', AvafliV2Strings.codeFreshSent],
       ['invalid-argument: code mismatch for pending adoption f81d', AvafliV2Strings.codeIncorrect],
     ];
     for (const [raw, expected] of cases) {
