@@ -216,8 +216,16 @@ export interface RegisterDeviceResponse {
   uuid: string;
   /** Active giveaway */
   giveaway: Giveaway | null;
-  /** Whether user is returning */
+  /**
+   * Whether this person is known under ANOTHER publisher. NOT "existed
+   * before" — a perfectly real single-publisher user reports false here.
+   */
   isReturningUser?: boolean;
+  /**
+   * 3.1.10: true ONLY when this call minted a brand-new user for the device
+   * id. The one signal that may reset local state (email flag, streak cache).
+   */
+  isNewUser?: boolean;
   /**
    * Soft email-verification signal. `false` means this person typed a
    * brand-new email that hasn't been confirmed yet — drives the persistent
@@ -722,7 +730,7 @@ export interface PresentationOptions {
 // ─── Constants ───
 
 export const AVAFLI_CONSTANTS = {
-  SDK_VERSION: '3.1.6',
+  SDK_VERSION: '3.1.10',
   PLATFORM_OS: 'Web',
   /**
    * Canonical Avafli privacy policy. 2.9.3: every "Privacy Policy" link used to

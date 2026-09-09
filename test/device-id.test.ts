@@ -51,6 +51,7 @@ describe('browser identity (device id)', () => {
     vi.resetModules();
     localStorage.clear();
     sessionStorage.clear();
+    document.cookie = 'avafli_did=; Max-Age=0; Path=/';
     bodies = [];
     (globalThis as unknown as Record<string, unknown>).fetch = okFetch(bodies);
   });
@@ -72,11 +73,42 @@ describe('browser identity (device id)', () => {
   it('two fresh profiles on the same machine never collide', async () => {
     await configureSDK();
     const first = localStorage.getItem(FP_KEY);
+    // A fresh profile has neither storage NOR cookies (3.1.10 mirrors the id
+    // in a first-party cookie — see the restore test below).
     localStorage.clear();
+    document.cookie = 'avafli_did=; Max-Age=0; Path=/';
     vi.resetModules();
     (globalThis as unknown as Record<string, unknown>).fetch = okFetch(bodies);
     await configureSDK();
     expect(localStorage.getItem(FP_KEY)).not.toBe(first);
+  });
+
+  it('3.1.10: the id is mirrored in a first-party cookie', async () => {
+    await configureSDK();
+    const id = localStorage.getItem(FP_KEY);
+    expect(document.cookie).toContain(`avafli_did=${id}`);
+  });
+
+  it('3.1.10: localStorage wiped but the cookie survived → same id, same account (no re-mint)', async () => {
+    await configureSDK();
+    const id = localStorage.getItem(FP_KEY);
+    // The browser dropped site storage (Safari field report, Sept 9 2026)
+    // but kept cookies.
+    localStorage.clear();
+    sessionStorage.clear();
+    vi.resetModules();
+    (globalThis as unknown as Record<string, unknown>).fetch = okFetch(bodies);
+    await configureSDK();
+    expect(localStorage.getItem(FP_KEY)).toBe(id);
+    expect(sentFingerprint(bodies[1])).toBe(id);
+  });
+
+  it('3.1.10: a cookie that does not look like an SDK id is ignored', async () => {
+    document.cookie = 'avafli_did=<script>alert(1)</script>; Path=/';
+    await configureSDK();
+    const id = localStorage.getItem(FP_KEY);
+    expect(id).toMatch(/^web_[0-9a-f]{24}$/);
+    expect(document.cookie).toContain(`avafli_did=${id}`);
   });
 
   it('a browser that already holds a hashed id keeps it (no identity change on upgrade)', async () => {

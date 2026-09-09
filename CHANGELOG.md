@@ -1,6 +1,15 @@
 # Changelog
 
 
+## 3.1.10
+
+- **Identity/email gate (Sept 9 field report — "it asked for my email again"):** the register handler treated the backend's `isReturningUser` ("known under another publisher") as "this user existed before" and wiped the local email-captured flag on every page load. With 3.1.9's capture-first frame that flashed the email screen for every returning single-publisher visitor, and when the giveaway reconcile lost a race the screen stuck. Local state now resets only on the backend's new `isNewUser: true`; register's `emailConsentStatus` settles the gate directly (true seeds the flag, false drops a stale one); older backends leave local state alone.
+- The giveaway response seeds the email flag before any refresh hook runs, so a hook failure can never leave the gate reading stale local state.
+- Device id is mirrored in a first-party cookie (`avafli_did`, 400 days) and restored when localStorage comes back empty — a browser that drops site storage but keeps cookies keeps its account instead of being minted a new one.
+- `verifyAdoptionCode` now switches the session to the canonical account's credentials (parity with iOS/Android/Flutter); the web session no longer keeps running as the merged-away shell.
+- A minted guest (no name) no longer posts an empty profile that the backend rejects with a 400 on every load.
+- `SDK_VERSION` had been stuck at 3.1.6 since 3.1.6 (the admin showed the wrong version for every 3.1.7–3.1.9 browser). Corrected and now gated by a test against package.json.
+
 ## 3.1.9
 
 - Improved: a first-time visitor sees the email screen as soon as registration returns — the drawer no longer waits for the giveaway round-trip, and the profile write no longer blocks the auto-open. About 1.2 s less to first paint on a typical connection.

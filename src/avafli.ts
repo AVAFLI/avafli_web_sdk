@@ -193,21 +193,31 @@ export class Avafli {
   public static async submitEmailAndAdopt(request: SubmitEmailRequest): Promise<SubmitEmailResponse> {
     Avafli.ensureConfigured();
     const response = await Avafli.instance!.api.submitEmail(request);
-    if (response.adopted && response.token && response.uuid) {
-      const store = Avafli.instance!.secureStorage;
-      store.setItem(AVAFLI_CONSTANTS.STORAGE_KEYS.TOKEN, response.token);
-      if (response.refreshToken) {
-        store.setItem(AVAFLI_CONSTANTS.STORAGE_KEYS.REFRESH_TOKEN, response.refreshToken);
-      }
-      store.setItem(AVAFLI_CONSTANTS.STORAGE_KEYS.UUID, response.uuid);
-      logger.info('Adopted existing account — streak unified across devices');
-    }
+    Avafli.adoptSessionIfMerged(response);
     // The cached consent flag is otherwise only refreshed by getActiveGiveaway.
     // Set it here too so the auto-open engine's impression-cap check reads the
     // truth it just created rather than depending on the once-per-day mark
     // being evaluated first.
     Avafli.instance!.currentEmailConsentStatus = true;
     return response;
+  }
+
+  /**
+   * When the backend merged this device onto the person's canonical account
+   * (`adopted` + fresh credentials), switch the session to those credentials
+   * so every later call runs as the canonical user. Shared by the direct
+   * submitEmail path and — 3.1.10 — the 6-digit verifyAdoptionCode path,
+   * which used to keep the shell user's token (native SDKs already switch).
+   */
+  private static adoptSessionIfMerged(response: SubmitEmailResponse | null | undefined): void {
+    if (!response || !response.adopted || !response.token || !response.uuid) return;
+    const store = Avafli.instance!.secureStorage;
+    store.setItem(AVAFLI_CONSTANTS.STORAGE_KEYS.TOKEN, response.token);
+    if (response.refreshToken) {
+      store.setItem(AVAFLI_CONSTANTS.STORAGE_KEYS.REFRESH_TOKEN, response.refreshToken);
+    }
+    store.setItem(AVAFLI_CONSTANTS.STORAGE_KEYS.UUID, response.uuid);
+    logger.info('Adopted existing account — streak unified across devices');
   }
 
   /** Expose the resolved consent / age-gate config to UI components. */
@@ -399,15 +409,20 @@ export class Avafli {
       // 3.1.9: fire-and-forget. Nothing downstream needs the profile write to
       // have landed, and awaiting it held the first-visit auto-open back by a
       // full round-trip.
-      void Avafli.instance.client
-        .post<{ success: boolean }>('/submitUserProfile', {
-          firstName: user.firstName,
-          lastName: user.lastName,
-          phone: user.phone,
-          smsConsent: false,
-          publisherUserId: user.id,
-        } as SubmitUserProfileRequest)
-        .catch((profileError) => logger.warn('Failed to submit user profile:', profileError));
+      // 3.1.10: only when there is a profile to send. A minted guest has no
+      // name, and the backend rejects an empty first name — every page load
+      // was logging a 400 for nothing.
+      if (user.firstName || user.lastName || user.phone) {
+        void Avafli.instance.client
+          .post<{ success: boolean }>('/submitUserProfile', {
+            firstName: user.firstName,
+            lastName: user.lastName,
+            phone: user.phone,
+            smsConsent: false,
+            publisherUserId: user.id,
+          } as SubmitUserProfileRequest)
+          .catch((profileError) => logger.warn('Failed to submit user profile:', profileError));
+      }
 
       // Identify user in analytics
       analyticsAdapter.identify(user.id, {
@@ -726,8 +741,13 @@ export class Avafli {
       bundleId: this.config.bundleId,
       submitEmailAndAdopt: (request) =>
         Avafli.submitEmailAndAdopt({ ...request, publisherUserId: this.resolvedUser.id }),
-      verifyAdoptionCode: (request) =>
-        this.client.post('/verifyAdoptionCode', request),
+      verifyAdoptionCode: async (request) => {
+        const response = await this.client.post<SubmitEmailResponse>('/verifyAdoptionCode', request);
+        Avafli.adoptSessionIfMerged(response);
+        // The code proved the inbox: this device is through the email gate.
+        this.currentEmailConsentStatus = true;
+        return response;
+      },
       confirmEmailVerification: (request) =>
         this.client.post('/confirmEmailVerification', request),
       resendEmailVerification: () =>
@@ -1099,11 +1119,56 @@ export class Avafli {
     return `web_${hex}`;
   }
 
+  /** Cookie that mirrors the localStorage device id (see initializeDeviceFingerprint). */
+  private static readonly DEVICE_ID_COOKIE = 'avafli_did';
+
+  private static readDeviceIdCookie(): string | null {
+    try {
+      if (typeof document === 'undefined' || typeof document.cookie !== 'string') return null;
+      const match = document.cookie
+        .split(';')
+        .map((part) => part.trim())
+        .find((part) => part.startsWith(`${Avafli.DEVICE_ID_COOKIE}=`));
+      if (!match) return null;
+      const value = decodeURIComponent(match.slice(Avafli.DEVICE_ID_COOKIE.length + 1));
+      // Only ids this SDK minted — never trust arbitrary cookie content.
+      return /^web_[A-Za-z0-9_]{4,64}$/.test(value) ? value : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private static mirrorDeviceIdCookie(deviceId: string): void {
+    try {
+      if (typeof document === 'undefined' || typeof document.cookie !== 'string') return;
+      if (Avafli.readDeviceIdCookie() === deviceId) return;
+      const secure = typeof location !== 'undefined' && location.protocol === 'https:' ? '; Secure' : '';
+      // 400 days = the longest lifetime browsers honour.
+      document.cookie = `${Avafli.DEVICE_ID_COOKIE}=${encodeURIComponent(deviceId)}; Max-Age=${400 * 24 * 60 * 60}; Path=/; SameSite=Lax${secure}`;
+    } catch {
+      // Cookies blocked — localStorage remains the only copy.
+    }
+  }
+
   private async initializeDeviceFingerprint(): Promise<void> {
     // Check if we have a cached fingerprint
     const cached = this.storage.getItem(AVAFLI_CONSTANTS.STORAGE_KEYS.DEVICE_FINGERPRINT);
     if (cached) {
       this.deviceFingerprint = cached;
+      Avafli.mirrorDeviceIdCookie(cached);
+      return;
+    }
+
+    // 3.1.10: a second copy of the id rides in a first-party cookie. When
+    // localStorage comes back empty but the cookie survived (storage cleared
+    // by the browser, a partitioned/ephemeral storage bucket, a quota wipe),
+    // the person keeps their account instead of being minted a new one and
+    // re-asked for their email (Sept 9 2026, iPhone Safari field report).
+    const mirrored = Avafli.readDeviceIdCookie();
+    if (mirrored) {
+      this.deviceFingerprint = mirrored;
+      this.storage.setItem(AVAFLI_CONSTANTS.STORAGE_KEYS.DEVICE_FINGERPRINT, mirrored);
+      logger.info('Device id restored from cookie mirror');
       return;
     }
 
@@ -1120,6 +1185,7 @@ export class Avafli {
       
       this.deviceFingerprint = fingerprint;
       this.storage.setItem(AVAFLI_CONSTANTS.STORAGE_KEYS.DEVICE_FINGERPRINT, fingerprint);
+      Avafli.mirrorDeviceIdCookie(fingerprint);
       
       logger.debug('Device fingerprint generated');
       
@@ -1128,6 +1194,7 @@ export class Avafli {
       const fallback = `web_${Date.now()}_${Math.random().toString(36).substring(2)}`;
       this.deviceFingerprint = fallback;
       this.storage.setItem(AVAFLI_CONSTANTS.STORAGE_KEYS.DEVICE_FINGERPRINT, fallback);
+      Avafli.mirrorDeviceIdCookie(fallback);
       
       logger.warn('Using fallback device fingerprint:', error);
     }
@@ -1249,8 +1316,23 @@ export class Avafli {
       }
       if (response.optedOut === true) this.markOptedOut();
 
-      // Initialize streak state if needed
-      if (!response.isReturningUser) {
+      // 3.1.10: reset local state ONLY when the backend says it just MINTED
+      // this user. Until now this keyed off `!isReturningUser`, which means
+      // "not known under another publisher" — false for every ordinary
+      // single-publisher person — so the email-captured flag was wiped on
+      // EVERY page load, the capture screen flashed as the first frame, and
+      // when the giveaway reconcile lost a race it stuck there (Sept 9 2026,
+      // iPhone Safari on a publisher page). Backends that predate `isNewUser`
+      // leave local state alone; `emailConsentStatus: false` from a current
+      // backend self-heals a stale flag explicitly.
+      if (response.emailConsentStatus === false) {
+        this.storage.removeItem(emailSubmittedStorageKey(this.config.bundleId));
+        this.currentEmailConsentStatus = false;
+      } else if (response.emailConsentStatus === undefined) {
+        this.currentEmailConsentStatus =
+          this.storage.getItem(emailSubmittedStorageKey(this.config.bundleId)) === 'true';
+      }
+      if (response.isNewUser === true) {
         // The server just created a FRESH user for this device, so any cached
         // "email submitted" flag is provably stale (the previous account was
         // deleted/reset server-side). Clear it so the capture screen shows

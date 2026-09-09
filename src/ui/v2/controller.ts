@@ -742,6 +742,16 @@ export class V2ExperienceController {
       // Fresh truth has landed — everything below overwrites the cache-first
       // frame, so the dashboard renders normally again from here on.
       this.hydratedFromCache = false;
+      // Backend is the source of truth for email consent. If it confirms an
+      // email on file, seed the local "submitted" flag so a user whose local
+      // flag was lost isn't re-prompted for email. Settled FIRST (3.1.10) —
+      // before any hook that could throw — so the gate below always reads the
+      // server's answer. (A stale local flag is dropped at register time and
+      // by the claim path's "email confirmation is required" self-heal, never
+      // here: mid-flow, the just-submitted email must win.)
+      if (response.emailConsentStatus === true) {
+        this.deps.storage.setItem(this.emailSubmittedKey, 'true');
+      }
       this.deps.onGiveawayRefreshed?.(response);
 
       // RTD: an opted-out person never sees the experience content.
@@ -784,13 +794,6 @@ export class V2ExperienceController {
       }
       // Warm the header logo before the first render that shows it.
       preloadLogo(this.sdkConfig?.branding?.logoUrl);
-
-      // Backend is the source of truth for email consent. If it confirms an
-      // email on file, seed the local "submitted" flag so a user whose local
-      // flag was lost isn't re-prompted for email.
-      if (response.emailConsentStatus === true) {
-        this.deps.storage.setItem(this.emailSubmittedKey, 'true');
-      }
 
       if (response.giveaway) {
         this.deps.storage.setItem(this.giveawayCacheKey, JSON.stringify(response.giveaway));
