@@ -47,10 +47,11 @@ await Avafli.configure({
 });
 
 // 2. That's it — the experience presents itself on the first visit of
-//    each day. There is no manual launch API.
+//    each day. Want to decide when it appears instead? See
+//    "Controlling when the drawer opens" below (autoOpen + Avafli.present()).
 ```
 
-> **Auto-open:** After `configure()`, the SDK presents the experience automatically once per calendar day (and re-checks when the tab regains focus). It can be disabled remotely via the dashboard's `experience.autoOpenEnabled` kill switch; unregistered users see at most 3 auto-opens until they submit an email.
+> **Auto-open:** After `configure()`, the SDK presents the experience automatically once per calendar day (and re-checks when the tab regains focus). It can be disabled remotely via the dashboard's `experience.autoOpenEnabled` kill switch; unregistered users see at most 3 auto-opens until they submit an email. Publishers can narrow this with `autoOpen` (`'returningUsersOnly'` / `'never'`) and open it themselves with `Avafli.present()` — see [Controlling when the drawer opens](#controlling-when-the-drawer-opens).
 
 ### Script Tag (UMD)
 
@@ -171,6 +172,7 @@ await Avafli.configure({
 | `apiKey` | `string` | ✅ | Your Avafli API key from the dashboard |
 | `bundleId` | `string` | ✅ | Your site's domain (e.g., yourdomain.com) — must be registered under Bundle IDs in the publisher dashboard |
 | `user` | `AvafliUser?` | — | The signed-in user; omit for a guest session |
+| `autoOpen` | `'always' \| 'returningUsersOnly' \| 'never'` | — | When the SDK may open the drawer by itself (default `'always'`, unchanged). See [Controlling when the drawer opens](#controlling-when-the-drawer-opens) |
 | `options` | `AvafliOptions?` | — | Optional behavior toggles |
 
 ### AvafliUser
@@ -211,9 +213,54 @@ changes.
 
 ## The Experience Presents Itself
 
-There is no manual launch API — the Avafli experience is exclusively SDK-driven. After `Avafli.configure()`, the experience opens automatically at most once per calendar day (first visit of the day, re-checked when the tab regains focus; if `configure()` runs before the DOM is ready, the open is deferred until DOMContentLoaded). Auto-open respects the server-side kill switch (`sdkConfig.experience.autoOpenEnabled`), an unregistered-impression cap (default 3 impressions until the user submits an email), and the RTD opt-out — an opted-out user never sees the experience again.
+By default the Avafli experience is SDK-driven. After `Avafli.configure()`, the experience opens automatically at most once per calendar day (first visit of the day, re-checked when the tab regains focus; if `configure()` runs before the DOM is ready, the open is deferred until DOMContentLoaded). Auto-open respects the server-side kill switch (`sdkConfig.experience.autoOpenEnabled`), an unregistered-impression cap (default 3 impressions until the user submits an email), and the RTD opt-out — an opted-out user never sees the experience again. To decide yourself when it appears, see [Controlling when the drawer opens](#controlling-when-the-drawer-opens).
 
 Entries are claimed silently the moment the experience opens. On day 1 the "You're in!" celebration modal is the reveal (its GOT IT closes the experience). On day 2+ there is no modal and nothing to press: the celebration is the dashboard's first visible frame — today's tile checks off with a confetti burst, the streak label advances, the total counts up and pops, and the bar leads with a "YOU'RE ON A ROLL!" toast before settling into the come-back message. The pill reads GOT IT throughout and closes the experience.
+
+## Controlling when the drawer opens
+
+**The default is unchanged:** with nothing set, the drawer auto-opens once per calendar day exactly as above. Since 3.1.11 you can decide when it appears — for example to keep it off a first-run onboarding.
+
+**Registration and analytics happen on `configure()` regardless of mode.** Device registration (DAU/MAU, `lastSeenAt`, SDK version), profile submission, opt-out and everything else run at configure time in every mode; the mode only decides who opens the drawer.
+
+### `autoOpen` on `Avafli.configure()`
+
+| Value | Behavior |
+| ----- | -------- |
+| `'always'` (default) | Today's behavior: auto-open once per day when eligible |
+| `'returningUsersOnly'` | Skip the auto-open for the page load in which registration created a brand-new user for this browser (the very first visit). Every later load auto-opens as normal. A backend that does not report `isNewUser` counts as returning |
+| `'never'` | The SDK never auto-opens; you call `Avafli.present()` |
+
+The dashboard can narrow this remotely (`experience.autoOpenMode`); the **most restrictive** of the server and client settings wins (`never` > `returningUsersOnly` > `always`), and `experience.autoOpenEnabled = false` remains the hard kill switch.
+
+### `Avafli.present()`
+
+`static present(): Promise<boolean>` — open the drawer now, from a button, a screen, or the end of your onboarding. It applies the same guards as the auto-open (configured, not opted out, not suspended, an active giveaway exists, not already on screen) but **bypasses** the once-per-day mark and the unregistered impression cap, and never counts an impression. On close it writes the same once-per-day mark the auto-open writes, so the drawer does not pop a second time that day. If `configure()` is still registering, `present()` waits for it. It never throws over eligibility: it resolves `true` once the drawer was shown (after the visitor closes it) or was already on screen, and `false` when it could not be shown (not configured, registration failed, no active giveaway, opted out, suspended).
+
+### `Avafli.holdAutoOpen()` / `Avafli.releaseAutoOpen()`
+
+`holdAutoOpen()` may be called before `configure()`; while held, the once-a-day auto-open is deferred and nothing is burned (no day mark, no impression). `present()` still works while held. `releaseAutoOpen()` clears the hold and immediately re-runs the auto-open eligibility check (which applies the effective mode, the day mark and the impression cap as usual). Both are safe before `configure()` and idempotent.
+
+### Example: show it after onboarding
+
+```typescript
+// First-time visitors get your onboarding first; returning visitors get the
+// normal once-a-day auto-open.
+await Avafli.configure({
+  apiKey: 'avafli_live_xxxxxxxxxx',
+  bundleId: 'yourdomain.com',
+  user: { id: 'user_abc123' },
+  autoOpen: 'returningUsersOnly', // or 'never' to always open it yourself
+});
+
+// …when the onboarding's last step completes:
+async function onOnboardingFinished() {
+  const shown = await Avafli.present(); // false if there is nothing to show
+  if (!shown) continueToHome();
+}
+```
+
+Prefer to keep the auto-open but pause it while something else is on screen? Call `Avafli.holdAutoOpen()` before `configure()` and `Avafli.releaseAutoOpen()` when your flow ends.
 
 ## Email Capture & Verification
 
@@ -302,7 +349,7 @@ await Avafli.configure({
 
 **Events emitted by the SDK:**
 - `avafli_device_registered` — Device registered with Avafli
-- `avafli_modal_presented` — The Avafli experience auto-opened
+- `avafli_modal_presented` — The Avafli experience opened (auto-open or `Avafli.present()`)
 - `avafli_email_captured` — User completed the email/consent capture
 - `avafli_daily_entry_claimed` — Daily entries awarded (auto-claimed on open)
 - `avafli_modal_dismissed` — User closed the Avafli experience
@@ -334,9 +381,12 @@ person is erased, the proof is kept.
 
 | Method | Returns | Description |
 | ------ | ------- | ----------- |
-| `Avafli.configure(config)` | `Promise<void>` | Initialize the SDK with user and settings (the experience then auto-opens once per day) |
-| `Avafli.dismiss()` | `void` | Programmatically close the auto-opened experience |
-| `Avafli.isAvailable` | `boolean` | Whether the experience is currently available (eligible to auto-open) |
+| `Avafli.configure(config)` | `Promise<void>` | Initialize the SDK with user and settings (the experience then auto-opens once per day unless `autoOpen` says otherwise) |
+| `Avafli.present()` | `Promise<boolean>` | Open the experience now (3.1.11) — bypasses the once-per-day mark and impression cap; resolves `false` when there is nothing to show |
+| `Avafli.holdAutoOpen()` | `void` | Defer the once-a-day auto-open (3.1.11); may be called before `configure()`; nothing is burned while held |
+| `Avafli.releaseAutoOpen()` | `void` | Clear the hold and re-run the auto-open check immediately (3.1.11) |
+| `Avafli.dismiss()` | `void` | Programmatically close the open experience |
+| `Avafli.isAvailable` | `boolean` | Whether the experience is currently available (eligible to auto-open / `present()`) |
 | `Avafli.refreshConfig()` | `Promise<void>` | Re-fetch the giveaway/SDK config from the backend |
 | `Avafli.registerForPushNotifications()` | `Promise<void>` | Logged no-op on web unless web push (VAPID + service worker) is configured; gated on `enablePushReminders` |
 | `Avafli.optOut()` | `Promise<void>` | Right-to-delete: submits the user's opt-out and suppresses them permanently |

@@ -6,14 +6,18 @@ import { AvafliError, AvafliErrorCode, Logger } from '../types';
 export class NetworkClient {
   private baseURL: string;
   private apiKey: string;
-  private tokenProvider?: () => string | null;
+  /**
+   * 3.1.11: may be async — the SDK's provider refreshes an expired token
+   * BEFORE the request goes out instead of eating a guaranteed 401.
+   */
+  private tokenProvider?: () => string | null | Promise<string | null>;
   private refreshHandler?: () => Promise<string | null>;
   private logger?: Logger;
 
   constructor(options: {
     baseURL: string;
     apiKey: string;
-    tokenProvider?: () => string | null;
+    tokenProvider?: () => string | null | Promise<string | null>;
     refreshHandler?: () => Promise<string | null>;
     logger?: Logger;
   }) {
@@ -57,7 +61,7 @@ export class NetworkClient {
         // and a non-allowlisted custom header trips CORS. The publisher apiKey travels
         // inside the request payload (e.g. registerDevice), not a header.
         if (requiresAuth && this.tokenProvider) {
-          const token = this.tokenProvider();
+          const token = await this.tokenProvider();
           if (token) {
             headers.set('authorization', `Bearer ${token}`);
           }
@@ -315,7 +319,7 @@ export class NetworkClient {
 export function createNetworkClient(options: {
   baseURL: string;
   apiKey: string;
-  tokenProvider?: () => string | null;
+  tokenProvider?: () => string | null | Promise<string | null>;
   refreshHandler?: () => Promise<string | null>;
   logger?: Logger;
 }): NetworkClient {

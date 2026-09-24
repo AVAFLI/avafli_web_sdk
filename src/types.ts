@@ -21,11 +21,35 @@ export interface AvafliOptions {
   deviceFingerprintProvider?: () => Promise<string>;
 }
 
+/**
+ * When the SDK may open the experience on its own (3.1.11).
+ *
+ * - `always` — the default, and today's behavior: auto-open once per calendar
+ *   day when eligible.
+ * - `returningUsersOnly` — skip the auto-open for the page load in which
+ *   registration minted a brand-new user for this browser (the very first
+ *   visit); every later load auto-opens as normal. Lets a publisher keep the
+ *   drawer off a first-run onboarding and call {@link Avafli.present} when
+ *   it ends. A backend that does not report `isNewUser` counts as returning.
+ * - `never` — the SDK never auto-opens; the publisher calls
+ *   {@link Avafli.present} from its own button, screen or onboarding.
+ *
+ * The dashboard can narrow this remotely (`experience.autoOpenMode`); the
+ * most restrictive of the two wins. Registration and analytics run on
+ * `configure()` in every mode — the mode only decides who opens the drawer.
+ */
+export type AvafliAutoOpen = 'always' | 'returningUsersOnly' | 'never';
+
 export interface AvafliConfiguration {
   /** Publisher API key */
   apiKey: string;
   /** Application bundle/package identifier */
   bundleId: string;
+  /**
+   * When the SDK may open the experience by itself. Default `'always'`
+   * (unchanged behavior). See {@link AvafliAutoOpen}.
+   */
+  autoOpen?: AvafliAutoOpen;
   /**
    * Current user. OMIT for a guest session (logged out / no account system) —
    * the SDK mints a stable per-install guest id (`avafli_guest_…`; guests
@@ -357,6 +381,14 @@ export interface SDKCopy {
 export interface ExperienceConfig {
   /** Auto-present the experience on the first visit of the day (default true). */
   autoOpenEnabled?: boolean;
+  /**
+   * 3.1.11: server-side auto-open mode (default `always`). Combined with the
+   * publisher's client-side {@link AvafliConfiguration.autoOpen} — the most
+   * restrictive wins (never > returningUsersOnly > always). Unknown values
+   * are treated as `always`; `autoOpenEnabled === false` stays the hard kill
+   * switch regardless of mode.
+   */
+  autoOpenMode?: AvafliAutoOpen;
   /**
    * How many times an unregistered (no-email) user sees the auto-presented
    * experience before it goes quiet (default 3 — MVP decision).
@@ -713,8 +745,9 @@ export interface Theme {
 }
 
 /**
- * Options for the SDK-internal presentation flow (auto-open). Not part of the
- * public API — the experience cannot be launched manually.
+ * Options for the SDK-internal presentation flow (auto-open and
+ * {@link Avafli.present}). Not part of the public API — the host opens the
+ * experience through `Avafli.present()`, which takes no options.
  */
 export interface PresentationOptions {
   /** Container element ID for inline presentation */
@@ -730,7 +763,7 @@ export interface PresentationOptions {
 // ─── Constants ───
 
 export const AVAFLI_CONSTANTS = {
-  SDK_VERSION: '3.1.10',
+  SDK_VERSION: '3.1.11',
   PLATFORM_OS: 'Web',
   /**
    * Canonical Avafli privacy policy. 2.9.3: every "Privacy Policy" link used to

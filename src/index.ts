@@ -10,6 +10,7 @@ export { Avafli } from './avafli';
 // Core types and interfaces
 export type {
   AvafliConfiguration,
+  AvafliAutoOpen,
   AvafliOptions,
   AvafliBranding,
   AvafliUser,

@@ -1,4 +1,5 @@
 import {
+  AvafliAutoOpen,
   AvafliConfiguration,
   AvafliUser,
   AvafliError,
@@ -60,8 +61,9 @@ function isJwtValid(token: string | null): boolean {
         : Buffer.from(base64, 'base64').toString('utf-8');
     const payload = JSON.parse(payloadJson) as { exp?: number };
     if (typeof payload.exp === 'number') {
-      // exp is seconds since epoch; treat as expired with a small skew buffer.
-      if (Date.now() >= payload.exp * 1000 - 5000) return false;
+      // exp is seconds since epoch. 3.1.11: a token within 60 s of expiry
+      // counts as expired so a slow request can't cross the line in flight.
+      if (Date.now() >= payload.exp * 1000 - 60_000) return false;
     }
     return true;
   } catch {
@@ -85,6 +87,17 @@ export class Avafli {
   private static serviceUnavailable: AvafliError | null = null;
   /** An auto-open is on screen but not yet settled — no second one may start. */
   private static autoPresentPending = false;
+  /**
+   * 3.1.11: {@link Avafli.holdAutoOpen} is in effect. Static so a publisher
+   * can hold BEFORE configure(); while held the auto-open check backs out
+   * before anything is burned (no day mark, no impression).
+   */
+  private static autoOpenHeld = false;
+  /**
+   * 3.1.11: the configure() currently running, so {@link Avafli.present}
+   * can wait for registration instead of racing it.
+   */
+  private static configureInFlight: Promise<void> | null = null;
 
   // ─── Offline resilience (launch item 15) ───
   // Persisted same-day retry queue + offline analytics buffering. Static:
@@ -118,6 +131,19 @@ export class Avafli {
    * screen after restaging the adoption. Cleared when the code is verified.
    */
   private currentAdoptionPending = false;
+  /**
+   * 3.1.11: registration minted a brand-new user for this browser on THIS
+   * page load (`isNewUser: true`). The `returningUsersOnly` auto-open mode
+   * skips the auto-open for the rest of this session; the next load
+   * registers as a known user and auto-opens as normal.
+   */
+  private registeredAsNewUser = false;
+  /**
+   * 3.1.11: the one refresh in flight. Concurrent callers (the proactive
+   * pre-check, parallel 401s) share it — never two `/refreshToken` calls
+   * with the same refresh token.
+   */
+  private refreshInFlight: Promise<string | null> | null = null;
   private streakEngine: StreakEngine;
   /**
    * Non-sensitive preferences (device fingerprint, cached giveaway, streak
@@ -269,21 +295,28 @@ export class Avafli {
 
   /**
    * Return the stored session token, proactively refreshing it if it is
-   * structurally invalid or expired. The network client previously only
-   * reacted to a 401; this validates `exp` up front.
+   * structurally invalid or expired (or within 60 s of it). The network
+   * client only reacted to a 401; this validates `exp` up front.
+   *
+   * 3.1.11: the refresh is AWAITED. It used to be fire-and-forget while the
+   * request went out with the dead token anyway — a guaranteed 401, a second
+   * refresh from the 401 path, and on a cold open several authed calls doing
+   * that in parallel (the Sept 24 Skape cold-open failure). Now the request
+   * waits for the single-flight refresh and carries the new token.
    */
-  private getValidToken(): string | null {
+  private async getValidToken(): Promise<string | null> {
     const token = this.secureStorage.getItem(AVAFLI_CONSTANTS.STORAGE_KEYS.TOKEN);
     if (token && isJwtValid(token)) {
       return token;
     }
-    // Token missing/expired/malformed — kick off a refresh (best-effort, async)
-    // and return the current value so the in-flight request can still attempt;
-    // a resulting 401 will trigger the reactive refresh path as a fallback.
     if (this.secureStorage.getItem(AVAFLI_CONSTANTS.STORAGE_KEYS.REFRESH_TOKEN)) {
-      this.refreshToken().catch((err) =>
-        logger.debug('Proactive token refresh failed:', err)
-      );
+      try {
+        return await this.refreshToken();
+      } catch (err) {
+        // Fall through with whatever we had; the 401 path reports the
+        // authoritative failure (refreshToken() already dropped the tokens).
+        logger.debug('Proactive token refresh failed:', err);
+      }
     }
     return token;
   }
@@ -291,7 +324,17 @@ export class Avafli {
   /**
    * Configure the Avafli SDK
    */
-  public static async configure(config: AvafliConfiguration): Promise<void> {
+  public static configure(config: AvafliConfiguration): Promise<void> {
+    // 3.1.11: publish the in-flight run so present() can wait for
+    // registration. The promise the publisher gets settles exactly as before.
+    const run = Avafli.runConfigure(config);
+    Avafli.configureInFlight = run;
+    return run.finally(() => {
+      if (Avafli.configureInFlight === run) Avafli.configureInFlight = null;
+    });
+  }
+
+  private static async runConfigure(config: AvafliConfiguration): Promise<void> {
     if (Avafli.isConfigured) {
       // Documented upgrade path: "when your user signs in, call configure
       // again with the real user". A repeat call with a DIFFERENT signed-in
@@ -433,9 +476,13 @@ export class Avafli {
       logger.debug('User set from configuration:', { userId: user.id });
 
       // V2 auto-open: the experience opens automatically on the first visit of
-      // each calendar day (ALWAYS on; the only kill switch is the server-driven
-      // sdkConfig.experience.autoOpenEnabled). Also re-checks when the tab
-      // becomes visible again, covering the "tab stayed open overnight" case.
+      // each calendar day (default on; the server-driven
+      // sdkConfig.experience.autoOpenEnabled is the kill switch and, 3.1.11,
+      // the publisher's `autoOpen` mode / server `autoOpenMode` can narrow it
+      // — see autoPresentIfEligible). Also re-checks when the tab becomes
+      // visible again, covering the "tab stayed open overnight" case. Note
+      // that registration above ran regardless of mode: tracking is never
+      // deferred to presentation time.
       if (typeof document !== 'undefined') {
         Avafli.instance.attachAutoOpenListeners();
         void Avafli.autoPresentIfEligible();
@@ -644,11 +691,106 @@ export class Avafli {
   }
 
   /**
+   * Open the experience now, from the host page — a button, a screen, the end
+   * of your onboarding. Pair it with `autoOpen: 'never'` or
+   * `'returningUsersOnly'` on {@link AvafliConfiguration} to decide when the
+   * drawer appears (3.1.11).
+   *
+   * Applies the same guards as the auto-open (configured, not opted out, not
+   * suspended, an active giveaway exists, not already on screen) but
+   * BYPASSES the once-per-day mark and the unregistered impression cap — an
+   * explicit call always opens — and does not count an impression. On close
+   * it writes the same once-per-day mark the auto-open writes, so the
+   * auto-open does not pop a second time that day. Works while
+   * {@link Avafli.holdAutoOpen} is in effect.
+   *
+   * If `configure()` is still registering, waits for it rather than racing
+   * registration. Never throws to the host over eligibility: resolves `true`
+   * once the experience was shown (after the visitor closes it) or was
+   * already on screen, `false` when it could not be shown (not configured,
+   * registration failed, no active giveaway, opted out, suspended).
+   */
+  public static async present(): Promise<boolean> {
+    const inFlight = Avafli.configureInFlight;
+    if (inFlight) {
+      try {
+        await inFlight;
+      } catch {
+        logger.info('present() skipped: registration failed');
+        return false;
+      }
+    }
+    if (!Avafli.isConfigured || !Avafli.instance) {
+      logger.info('present() skipped: Avafli is not configured');
+      return false;
+    }
+    const instance = Avafli.instance;
+    if (Avafli.unavailableReason) {
+      logger.info('present() skipped: Avafli is unavailable for this publisher');
+      return false;
+    }
+    if (instance.isOptedOut()) {
+      logger.info('present() skipped: user opted out (RTD)');
+      return false;
+    }
+    if (instance.currentExperience || Avafli.autoPresentPending) {
+      logger.debug('present(): experience already on screen');
+      return true;
+    }
+    if (!instance.currentGiveaway) {
+      logger.info('present() skipped: no active giveaway');
+      return false;
+    }
+    if (typeof document === 'undefined' || !document.body) {
+      logger.info('present() skipped: no document body to mount into');
+      return false;
+    }
+
+    // Same day-mark contract as the auto-open: written when the visitor
+    // closes the drawer (presentExperience settles on close), never up front.
+    const today = Avafli.dayString(new Date());
+    try {
+      await Avafli.presentExperience();
+    } catch {
+      // presentExperience already logged it; nothing was written.
+      return false;
+    }
+    instance.storage.setItem(instance.lastAutoPresentKey, today);
+    return true;
+  }
+
+  /**
+   * Defer the once-a-day auto-open until {@link Avafli.releaseAutoOpen} is
+   * called (3.1.11). May be called before `configure()`. Nothing is burned
+   * while held — no day mark, no impression — and {@link Avafli.present}
+   * still works. Typical use: hold during a first-run onboarding, release
+   * when it ends.
+   */
+  public static holdAutoOpen(): void {
+    if (Avafli.autoOpenHeld) return;
+    Avafli.autoOpenHeld = true;
+    logger.debug('Auto-open held');
+  }
+
+  /**
+   * Clear a {@link Avafli.holdAutoOpen} and immediately re-run the auto-open
+   * eligibility check (which applies the effective auto-open mode, the
+   * once-per-day mark and the impression cap as usual). Safe before
+   * `configure()` and idempotent.
+   */
+  public static releaseAutoOpen(): void {
+    if (!Avafli.autoOpenHeld) return;
+    Avafli.autoOpenHeld = false;
+    logger.debug('Auto-open released');
+    void Avafli.autoPresentIfEligible();
+  }
+
+  /**
    * Present the Avafli experience as a modal.
    *
-   * Internal-only: the experience is exclusively SDK-driven. It is opened by
-   * the once-a-day auto-open engine ({@link Avafli.autoPresentIfEligible}) and
-   * cannot be launched manually by the host page.
+   * Internal: opened by the once-a-day auto-open engine
+   * ({@link Avafli.autoPresentIfEligible}) and by the public
+   * {@link Avafli.present}, which adds the host-facing guards and settlement.
    */
   private static async presentExperience(options?: PresentationOptions): Promise<void> {
     // If the publisher has been suspended, do NOT render the modal. Checked
@@ -903,11 +1045,39 @@ export class Avafli {
     window.addEventListener('focus', () => void Avafli.autoPresentIfEligible());
   }
 
+  /** Restrictiveness order for the auto-open mode merge (higher wins). */
+  private static readonly AUTO_OPEN_RANK: Record<AvafliAutoOpen, number> = {
+    always: 0,
+    returningUsersOnly: 1,
+    never: 2,
+  };
+
+  /** Unknown/absent values (older backends, typos) fall back to `always`. */
+  private static parseAutoOpen(value: unknown): AvafliAutoOpen {
+    return value === 'never' || value === 'returningUsersOnly' ? value : 'always';
+  }
+
+  /**
+   * 3.1.11: the most restrictive of the publisher's `autoOpen` and the
+   * server's `experience.autoOpenMode` (never > returningUsersOnly > always).
+   * The server's `autoOpenEnabled === false` kill switch is checked
+   * separately and always wins.
+   */
+  private effectiveAutoOpenMode(): AvafliAutoOpen {
+    const client = Avafli.parseAutoOpen(this.config.autoOpen);
+    const server = Avafli.parseAutoOpen(this.serverSDKConfig?.experience?.autoOpenMode);
+    return Avafli.AUTO_OPEN_RANK[client] >= Avafli.AUTO_OPEN_RANK[server] ? client : server;
+  }
+
   /**
    * Presents the experience automatically, at most once per calendar day, when
    * all conditions allow. Runs after configure() completes and on each tab
    * foreground. All short-circuits are silent by design. Mirrors iOS:
    *  - server kill switch: sdkConfig.experience.autoOpenEnabled
+   *  - 3.1.11: the effective auto-open mode (publisher `autoOpen` merged with
+   *    server `autoOpenMode`): `never` backs out; `returningUsersOnly` backs
+   *    out for the load that minted a brand-new user
+   *  - 3.1.11: a publisher hold (holdAutoOpen) defers the whole check
    *  - unregistered (no confirmed email) users are capped at
    *    experience.unregisteredImpressionCap auto-opens (default 3)
    *  - RTD opted-out users never see it
@@ -922,6 +1092,13 @@ export class Avafli {
 
     const experience = instance.serverSDKConfig?.experience;
     if (experience?.autoOpenEnabled === false) return; // server kill switch
+    const mode = instance.effectiveAutoOpenMode();
+    if (mode === 'never') return; // the publisher opens it via present()
+    if (mode === 'returningUsersOnly' && instance.registeredAsNewUser) {
+      logger.debug('Auto-present skipped: first visit (autoOpen: returningUsersOnly)');
+      return;
+    }
+    if (Avafli.autoOpenHeld) return; // releaseAutoOpen() re-runs this check
     if (!instance.currentGiveaway) return;
 
     // configure() is typically called from a <head> script — before the parser
@@ -1332,6 +1509,9 @@ export class Avafli {
         this.currentEmailConsentStatus =
           this.storage.getItem(emailSubmittedStorageKey(this.config.bundleId)) === 'true';
       }
+      // 3.1.11: remembered for the `returningUsersOnly` auto-open mode.
+      // Absent on older backends → false → treated as returning.
+      this.registeredAsNewUser = response.isNewUser === true;
       if (response.isNewUser === true) {
         // The server just created a FRESH user for this device, so any cached
         // "email submitted" flag is provably stale (the previous account was
@@ -1380,7 +1560,22 @@ export class Avafli {
     }
   }
 
-  private async refreshToken(): Promise<string | null> {
+  /**
+   * Single-flight token refresh (3.1.11): the proactive pre-check and the
+   * network client's 401 path both land here, and on a cold open several
+   * authed calls can hit a dead token at once — they all await the ONE
+   * `/refreshToken` round-trip instead of each spending the refresh token.
+   */
+  private refreshToken(): Promise<string | null> {
+    if (this.refreshInFlight) return this.refreshInFlight;
+    const run = this.performTokenRefresh().finally(() => {
+      this.refreshInFlight = null;
+    });
+    this.refreshInFlight = run;
+    return run;
+  }
+
+  private async performTokenRefresh(): Promise<string | null> {
     const refreshToken = this.secureStorage.getItem(AVAFLI_CONSTANTS.STORAGE_KEYS.REFRESH_TOKEN);
     if (!refreshToken) {
       throw new AvafliError(

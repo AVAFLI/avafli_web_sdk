@@ -1,6 +1,14 @@
 # Changelog
 
 
+## 3.1.11
+
+- **Publisher presentation control.** New `autoOpen` on `Avafli.configure()` — `'always'` (default, unchanged), `'returningUsersOnly'` (no auto-open on the page load that registered a brand-new user; later loads auto-open as normal), `'never'` (the publisher opens it). The dashboard's new `experience.autoOpenMode` merges with it — the most restrictive wins; `autoOpenEnabled = false` stays the hard kill switch. Registration and analytics still run on `configure()` in every mode.
+- New `Avafli.present(): Promise<boolean>` — open the drawer from your own button, screen or onboarding. Same guards as the auto-open, bypasses the once-per-day mark and the unregistered impression cap, never counts an impression, writes the day mark on close, waits for an in-flight registration, and never throws over eligibility.
+- New `Avafli.holdAutoOpen()` / `Avafli.releaseAutoOpen()` — defer the once-a-day auto-open (safe before `configure()`, nothing burned while held) and re-run the eligibility check on release.
+- **Token-refresh hardening** (the Sept 24 cold-open failure): an expired ID token (or one within 60 s of expiry) is now refreshed BEFORE the authed request goes out — the refresh used to be fire-and-forget while the request went out with the dead token and ate a guaranteed 401. Concurrent callers (the proactive check, parallel 401s) share a single in-flight `/refreshToken` call instead of each spending the refresh token. `NetworkClient`'s `tokenProvider` may now be async.
+- Test: the check that pinned the ABSENCE of a public `present()` now pins that `present()` resolves `false` (no modal, no throw) for a suspended publisher.
+
 ## 3.1.10
 
 - **Identity/email gate (Sept 9 field report — "it asked for my email again"):** the register handler treated the backend's `isReturningUser` ("known under another publisher") as "this user existed before" and wiped the local email-captured flag on every page load. With 3.1.9's capture-first frame that flashed the email screen for every returning single-publisher visitor, and when the giveaway reconcile lost a race the screen stuck. Local state now resets only on the backend's new `isNewUser: true`; register's `emailConsentStatus` settles the gate directly (true seeds the flag, false drops a stale one); older backends leave local state alone.

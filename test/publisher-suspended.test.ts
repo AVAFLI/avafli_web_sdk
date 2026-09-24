@@ -148,9 +148,19 @@ describe('publisher suspended handling', () => {
     }
   });
 
-  it('the manual-present public API surface is gone (present/presentInline removed)', async () => {
+  // 3.1.11: the public present() is BACK (publisher presentation control).
+  // This used to pin its absence; it now pins the suspended-publisher guard —
+  // present() resolves false and renders nothing, never throws to the host.
+  it('the public present() resolves false (no modal, no throw) when suspended; presentInline stays gone', async () => {
+    (globalThis as unknown as Record<string, unknown>).fetch = suspendedFetch('API key suspended or revoked');
     const { Avafli } = await import('../src/index');
-    expect((Avafli as unknown as Record<string, unknown>).present).toBeUndefined();
+    await Avafli.configure({
+      apiKey: 'k',
+      bundleId: 'com.test',
+      user: { ...VALID_USER },
+    }).catch(() => undefined);
+
+    await expect(Avafli.present()).resolves.toBe(false);
     expect(
       (Avafli as unknown as Record<string, unknown>).presentInline
     ).toBeUndefined();
