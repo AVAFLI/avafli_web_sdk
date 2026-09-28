@@ -146,7 +146,7 @@ The bundles are fully self-contained (fonts and imagery embedded, zero runtime d
 
 ## Configuration
 
-Initialize the SDK with your user and environment settings:
+Initialize the SDK with your API key and user:
 
 ```typescript
 await Avafli.configure({
@@ -160,7 +160,6 @@ await Avafli.configure({
     phone: '+15551234567',  // optional
   },
   options: {
-    environment: 'production',
     debug: false,
     analyticsAdapter: myAdapter,
   },
