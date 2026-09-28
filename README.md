@@ -36,6 +36,7 @@ import { Avafli } from 'avafli-sdk';
 await Avafli.configure({
   apiKey: 'YOUR_API_KEY', // debug builds: use your avafli_test_ sandbox key
   bundleId: 'yourdomain.com',
+  autoOpen: 'always', // or 'returningUsersOnly' / 'never'
   user: {
     id: 'user_123',            // only id is required — pass whatever identity you have
     firstName: 'Jane',
@@ -151,6 +152,7 @@ Initialize the SDK with your user and environment settings:
 await Avafli.configure({
   apiKey: 'avafli_live_xxxxxxxxxx',
   bundleId: 'yourdomain.com',
+  autoOpen: 'always', // or 'returningUsersOnly' / 'never'
   user: {
     id: 'user_abc123',
     firstName: 'Jane',
