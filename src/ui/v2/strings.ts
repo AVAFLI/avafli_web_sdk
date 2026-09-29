@@ -64,7 +64,7 @@ export const AvafliV2Strings = {
   claimCodeSent: 'Code sent',
   /** The send failed — inline, next to a Retry action; the field stays usable. */
   claimCodeSendFailed: "We couldn't send your code just now. Please try again in a minute.",
-  claimCodeRetry: 'Retry',
+  claimCodeRetry: 'Try again',
   claimCodeResend: 'Send a new code',
   /** The resend action while it cools down; `{time}` is m:ss. */
   claimCodeResendIn: 'Send a new code in {time}',

@@ -136,6 +136,20 @@ export class Avafli {
    */
   private currentAdoptionPending = false;
   /**
+   * 3.2.0: the latest registerDevice / getActiveGiveaway response carried a
+   * prize claim that is still `pending`. While true the auto-open ignores
+   * the once-per-day mark, the impression cap and `returningUsersOnly` — a
+   * winner who closed the drawer must always be able to get back to their
+   * claim (see {@link Avafli.autoPresentIfEligible}).
+   */
+  private currentClaimPending = false;
+  /**
+   * 3.2.0: this page load has already shown the experience for the pending
+   * claim. The FIRST check of a page load opens it; later ones (tab
+   * foreground/focus) wait out {@link CLAIM_REOPEN_INTERVAL_MS}.
+   */
+  private claimShownThisLoad = false;
+  /**
    * 3.1.11: registration minted a brand-new user for this browser on THIS
    * page load (`isNewUser: true`). The `returningUsersOnly` auto-open mode
    * skips the auto-open for the rest of this session; the next load
@@ -756,7 +770,9 @@ export class Avafli {
       logger.debug('present(): experience already on screen');
       return true;
     }
-    if (!instance.currentGiveaway) {
+    // A pending prize claim can outlive its giveaway — the winner flow still
+    // opens (3.2.0).
+    if (!instance.currentGiveaway && !instance.currentClaimPending) {
       logger.info('present() skipped: no active giveaway');
       return false;
     }
@@ -775,6 +791,7 @@ export class Avafli {
       return false;
     }
     instance.storage.setItem(instance.lastAutoPresentKey, today);
+    instance.noteClaimShownIfPending();
     return true;
   }
 
@@ -924,6 +941,9 @@ export class Avafli {
       // submitted claim ({ story } → { saved }); best-effort by contract.
       attachClaimStory: (request) =>
         this.client.post<{ saved?: boolean }>('/attachClaimStory', request),
+      onPrizeClaimSubmitted: () => {
+        this.currentClaimPending = false;
+      },
       optOut: () => Avafli.optOutFromExperience(),
       hasRegisteredUuid: () =>
         this.secureStorage.getItem(AVAFLI_CONSTANTS.STORAGE_KEYS.UUID) !== null,
@@ -976,6 +996,7 @@ export class Avafli {
     this.currentClaimedToday = response.claimedToday === true;
     this.currentEmailConsentStatus = response.emailConsentStatus === true;
     if (response.optedOut === true) this.markOptedOut(response.optedOutUntil);
+    this.currentClaimPending = response.prizeClaim?.status === 'pending';
     if (response.sdkConfig) this.serverSDKConfig = response.sdkConfig;
 
     // Backend is the source of truth for the streak — seed the local state so
@@ -1027,6 +1048,27 @@ export class Avafli {
 
   private get lastAutoPresentKey(): string {
     return `${AVAFLI_CONSTANTS.STORAGE_KEYS.LAST_AUTO_PRESENT}_${this.config.bundleId}`;
+  }
+
+  private get lastClaimAutoPresentKey(): string {
+    return `${AVAFLI_CONSTANTS.STORAGE_KEYS.LAST_CLAIM_AUTO_PRESENT}_${this.config.bundleId}`;
+  }
+
+  /**
+   * 3.2.0: how long a tab foreground/focus waits after the experience was
+   * last shown for a pending prize claim before opening it again — a winner
+   * can always get back to the claim, without it becoming a nag.
+   */
+  private static readonly CLAIM_REOPEN_INTERVAL_MS = 30 * 60 * 1000;
+
+  /**
+   * The experience just closed. If a prize claim is still pending, stamp the
+   * reopen throttle (its own key — never the once-per-day mark).
+   */
+  private noteClaimShownIfPending(): void {
+    if (!this.currentClaimPending) return;
+    this.claimShownThisLoad = true;
+    this.storage.setItem(this.lastClaimAutoPresentKey, String(Date.now()));
   }
 
   private get unregisteredImpressionsKey(): string {
@@ -1121,6 +1163,7 @@ export class Avafli {
     this.storage.removeItem(AVAFLI_CONSTANTS.STORAGE_KEYS.STREAK_STATE);
     this.storage.removeItem(AVAFLI_CONSTANTS.STORAGE_KEYS.LAST_CLAIM_DATE);
     this.storage.removeItem(this.lastAutoPresentKey);
+    this.storage.removeItem(this.lastClaimAutoPresentKey);
     this.storage.removeItem(this.unregisteredImpressionsKey);
     this.storage.removeItem(adoptionCodeSentAtStorageKey(bundleId));
     // A claim retry queued by the old session belongs to the erased account.
@@ -1130,6 +1173,8 @@ export class Avafli {
     this.currentClaimedToday = false;
     this.currentEmailConsentStatus = false;
     this.currentAdoptionPending = false;
+    this.currentClaimPending = false;
+    this.claimShownThisLoad = false;
     this.registeredAsNewUser = false;
     return true;
   }
@@ -1220,6 +1265,16 @@ export class Avafli {
    *    experience.unregisteredImpressionCap auto-opens (default 3)
    *  - RTD opted-out users never see it (3.2.0: until the 24-hour block
    *    lapses — then the old session is cleared and the device re-registers)
+   *
+   * 3.2.0 — a PENDING prize claim: a winner who closed the drawer must be
+   * able to get back to the claim without waiting for tomorrow. While the
+   * latest response reports one, the check BYPASSES the once-per-day mark,
+   * the unregistered impression cap (no impression is counted) and the
+   * `returningUsersOnly` mode. It still RESPECTS the hold, the opt-out,
+   * service-unavailable, the server kill switch and mode `never` (that
+   * publisher owns the timing and opens the winner flow with present()).
+   * So it is not a nag: it opens on every page load, and on a tab
+   * foreground/focus only when 30 minutes have passed since it was last shown.
    */
   private static async autoPresentIfEligible(): Promise<void> {
     if (!Avafli.isConfigured || !Avafli.instance) return;
@@ -1233,14 +1288,16 @@ export class Avafli {
 
     const experience = instance.serverSDKConfig?.experience;
     if (experience?.autoOpenEnabled === false) return; // server kill switch
+    const claimPending = instance.currentClaimPending;
     const mode = instance.effectiveAutoOpenMode();
     if (mode === 'never') return; // the publisher opens it via present()
-    if (mode === 'returningUsersOnly' && instance.registeredAsNewUser) {
+    if (mode === 'returningUsersOnly' && instance.registeredAsNewUser && !claimPending) {
       logger.debug('Auto-present skipped: first visit (autoOpen: returningUsersOnly)');
       return;
     }
     if (Avafli.autoOpenHeld) return; // releaseAutoOpen() re-runs this check
-    if (!instance.currentGiveaway) return;
+    // A pending prize claim can outlive its giveaway.
+    if (!instance.currentGiveaway && !claimPending) return;
 
     // configure() is typically called from a <head> script — before the parser
     // has created <body>. Mounting the shadow-DOM host would throw, so defer
@@ -1255,8 +1312,38 @@ export class Avafli {
       return;
     }
 
-    // Once per calendar day.
     const today = Avafli.dayString(new Date());
+
+    if (claimPending) {
+      // Don't stack on top of an already-presented experience.
+      if (instance.currentExperience || Avafli.autoPresentPending) return;
+      // The first check of a page load always opens (a check deferred by a
+      // hold or a missing <body> is still that first check); after that, a
+      // foreground/focus waits out the interval.
+      if (instance.claimShownThisLoad) {
+        const last = Number(instance.storage.getItem(instance.lastClaimAutoPresentKey));
+        const elapsed = Date.now() - last;
+        if (Number.isFinite(last) && last > 0 && elapsed >= 0 &&
+            elapsed < Avafli.CLAIM_REOPEN_INTERVAL_MS) {
+          return;
+        }
+      }
+      logger.info('Auto-presenting Avafli experience (pending prize claim)');
+      Avafli.autoPresentPending = true;
+      try {
+        await Avafli.presentExperience();
+        // Same contract as present(): written on close, and no impression.
+        instance.storage.setItem(instance.lastAutoPresentKey, today);
+        instance.noteClaimShownIfPending();
+      } catch {
+        // Mount failed: nothing was written, so the next re-check simply retries.
+      } finally {
+        Avafli.autoPresentPending = false;
+      }
+      return;
+    }
+
+    // Once per calendar day.
     if (instance.storage.getItem(instance.lastAutoPresentKey) === today) return;
 
     // Don't stack on top of an already-presented experience.
@@ -1297,6 +1384,8 @@ export class Avafli {
       if (!emailConsent) {
         instance.storage.setItem(instance.unregisteredImpressionsKey, String(seen + 1));
       }
+      // The drawer's own refresh may have found a pending claim (3.2.0).
+      instance.noteClaimShownIfPending();
     } catch {
       // Mount failed: nothing was written, so the next re-check simply retries.
     } finally {
@@ -1651,6 +1740,8 @@ export class Avafli {
       // 2.9: an unfinished cross-device adoption routes the next drawer-open
       // to the code screen (optional field — absent on older backends).
       this.currentAdoptionPending = response.adoptionPending === true;
+      // 3.2.0: a pending prize claim keeps the auto-open available.
+      this.currentClaimPending = response.prizeClaim?.status === 'pending';
       if (response.emailConsentStatus === true) {
         this.currentEmailConsentStatus = true;
         this.storage.setItem(emailSubmittedStorageKey(this.config.bundleId), 'true');

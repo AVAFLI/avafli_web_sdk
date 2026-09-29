@@ -28,6 +28,7 @@ const optedOutKey = (bundle: string): string => `winr_opted_out_${bundle}`;
 const untilKey = (bundle: string): string => `winr_opted_out_until_${bundle}`;
 const emailKey = (bundle: string): string => `winr_email_submitted_${bundle}`;
 const markKey = (bundle: string): string => `winr_last_auto_present_${bundle}`;
+const claimMarkKey = (bundle: string): string => `winr_last_claim_auto_present_${bundle}`;
 const impressionsKey = (bundle: string): string => `winr_unregistered_impressions_${bundle}`;
 const adoptionKey = (bundle: string): string => `winr_adoption_code_sent_at_${bundle}`;
 
@@ -156,6 +157,7 @@ function seedOptedOutSession(bundle: string, until: number | null): void {
   );
   localStorage.setItem('winr_last_claim_date', iso(NOW - 2 * DAY));
   localStorage.setItem(markKey(bundle), '2026-09-27');
+  localStorage.setItem(claimMarkKey(bundle), String(NOW - 2 * DAY));
   localStorage.setItem(impressionsKey(bundle), '2');
   localStorage.setItem(adoptionKey(bundle), String(NOW - 2 * DAY));
   sessionStorage.setItem('winr_token', fakeJwt('old-user'));
@@ -172,6 +174,7 @@ const clearedLocalKeys = (bundle: string): string[] => [
   'winr_streak_state',
   'winr_last_claim_date',
   markKey(bundle),
+  claimMarkKey(bundle),
   impressionsKey(bundle),
   adoptionKey(bundle),
 ];

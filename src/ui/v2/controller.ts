@@ -159,6 +159,12 @@ export interface V2ControllerDeps {
    */
   attachClaimStory?: (request: { story: string }) => Promise<unknown>;
   /**
+   * 3.2.0: the prize claim was submitted — lets the SDK stop treating the
+   * claim as pending (the auto-open goes back to its once-per-day rules)
+   * without waiting for the next giveaway refresh to say so.
+   */
+  onPrizeClaimSubmitted?: () => void;
+  /**
    * Performs the RTD opt-out (the in-experience "Delete my data" flow — the
    * privacy page inside the legal overlay bridges into the destructive
    * confirmation). MUST reject on failure — unlike the public
@@ -1974,6 +1980,7 @@ export class V2ExperienceController {
       this.isSubmittingClaim = false;
       this.submittedClaimForm = form;
       this.claimFormDraft = null;
+      this.deps.onPrizeClaimSubmitted?.();
       // 2.9: the claim is recorded — the SHARE step comes next (never
       // blocking; closing it changes nothing about the claim), then the
       // confirmation screen. Fresh story slate for this share step.

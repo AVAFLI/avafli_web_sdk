@@ -17,7 +17,7 @@ Avafli lets you add daily-entry sweepstakes and prize experiences to your app in
 - **Celebration on open** — Returning users open straight into the celebration: today's tile checks off with a confetti burst, the total counts up and pops, and a "YOU'RE ON A ROLL!" toast leads the bar — no button to press, no modal. Day 1 keeps the one-time "You're in!" welcome modal
 - **Email capture** — The SDK captures an email through its own opt-in screen, with an UNCHECKED-by-default marketing-consent tick and a publisher-configurable age gate
 - **Cross-device verified adoption** — When a typed email matches an existing account, the SDK confirms a 6-digit code before merging the streak across devices
-- **Soft email verification** — A brand-new typed email shows a persistent, dismissible "Verify your email" chip; it never blocks play, only prize-draw eligibility
+- **Soft email verification** — A brand-new typed email shows a persistent, dismissible "Verify your email" chip; it never blocks play or the prize draw; confirming early means no code step if they win
 - **Winner claim flow** — "WE HAVE A WINNER!" splash and a guided prize-claim flow (name, shipping address incl. DC, optional photo), followed by a post-submit share step (optional story + real share actions) and a claim-number confirmation
 - **Responsive V2 design** — Bottom drawer on mobile (<768px), centered modal card on desktop (≥768px, widened with a modest type/spacing scale-up at ≥900px)
 - **Publisher branding** — Logo, primary color, and prize image configured from the Avafli dashboard
@@ -270,7 +270,7 @@ Email is captured inside the SDK's own opt-in screen (see the identity section a
 Two verification paths run from that screen:
 
 - **Cross-device verified adoption.** When the typed email matches an existing Avafli account (from another device or install), the SDK asks for a **6-digit code** emailed to that address before the two identities are merged — so a streak follows the person across devices without letting anyone attach to someone else's record.
-- **Soft email verification (2.7.0+).** A brand-new, never-before-seen typed email surfaces a persistent, dismissible **"Verify your email"** chip on the dashboard. It **never blocks play** — the user keeps earning entries — it only affects prize-draw eligibility until the address is confirmed.
+- **Soft email verification (2.7.0+).** A brand-new, never-before-seen typed email surfaces a persistent, dismissible **"Verify your email"** chip on the dashboard. It **never blocks play or the prize draw** — every active account is eligible. Confirming early just means the person skips the code step if they win.
 
 ## Winner Experience
 
@@ -279,6 +279,8 @@ When one of your users is drawn as a giveaway winner, the experience automatical
 After the claim is submitted — and never blocking it — a **share step** invites the winner to tell their story and share the news: X opens a prefilled tweet intent, Facebook opens the share dialog, and Instagram/Snapchat/TikTok use the Web Share API where available (falling back to copy-to-clipboard with a "Copied!" toast). The share line includes your publisher `shareUrl` when one is configured in the dashboard. Closing the share step changes nothing about the claim.
 
 This requires no integration work — the flow appears only for the drawn winner and disappears once their claim is submitted. The winning email is never re-entered; a backend-masked address is displayed for recognition and the claim is keyed to the account server-side.
+
+A winner can always get back to a claim they have not finished (3.2.0): while the claim is pending the drawer opens on every page load — regardless of the once-per-day mark, the impression cap and `returningUsersOnly` — and again when the tab returns to the foreground, at most once every 30 minutes. `holdAutoOpen()` and the dashboard's kill switch are still respected. With `autoOpen: 'never'` nothing opens by itself: call `Avafli.present()`, which lands on the winner splash.
 
 ### Prize claims: email code before the form (3.2.0)
 

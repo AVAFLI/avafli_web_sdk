@@ -116,6 +116,7 @@ interface Harness {
     confirmClaimVerificationCode: ReturnType<typeof vi.fn>;
   };
   writes: string[];
+  onPrizeClaimSubmitted: ReturnType<typeof vi.fn>;
 }
 
 function makeController(
@@ -150,6 +151,7 @@ function makeController(
   };
   const store = new Map<string, string>([['winr_email_submitted_com.test', 'true']]);
   const writes: string[] = [];
+  const onPrizeClaimSubmitted = vi.fn();
   const storage = {
     getItem: (k: string) => store.get(k) ?? null,
     setItem: (k: string, v: string) => {
@@ -166,8 +168,9 @@ function makeController(
     submitEmailAndAdopt: async () => ({ success: true }),
     hasRegisteredUuid: () => true,
     userPrefill: { firstName: 'Ada', lastName: 'Lovelace' },
+    onPrizeClaimSubmitted,
   };
-  return { controller: new V2ExperienceController(deps), api, writes };
+  return { controller: new V2ExperienceController(deps), api, writes, onPrizeClaimSubmitted };
 }
 
 /** Lets the promise chain behind a fire-and-forget call settle (no timers). */
@@ -730,6 +733,7 @@ describe('3.2.0 claim email-ownership step', () => {
     await settle();
 
     // Routed to the code screen; the form is held in memory, untouched.
+    expect(h.onPrizeClaimSubmitted).not.toHaveBeenCalled();
     expect(h.controller.winnerClaimStep).toEqual({ kind: 'code' });
     expect(h.controller.claimSubmitError).toBeNull();
     expect(h.controller.claimFormDraft).toBe(typed);
@@ -758,6 +762,8 @@ describe('3.2.0 claim email-ownership step', () => {
     );
     expect(h.controller.winnerClaimStep.kind).toBe('share');
     expect(h.controller.claimFormDraft).toBeNull();
+    // The SDK is told at once: the claim is no longer pending.
+    expect(h.onPrizeClaimSubmitted).toHaveBeenCalledOnce();
   });
 });
 

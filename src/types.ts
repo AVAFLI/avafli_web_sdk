@@ -879,6 +879,10 @@ export const AVAFLI_CONSTANTS = {
     // Auto-present persistence (suffixed with the bundleId at the call site so
     // multiple publisher integrations on one origin don't cross-contaminate).
     LAST_AUTO_PRESENT: 'winr_last_auto_present',
+    // 3.2.0: when the experience was last shown for a PENDING prize claim
+    // (ms since epoch) — the 30-minute foreground throttle. Its own key: the
+    // once-per-day mark above is never used for that.
+    LAST_CLAIM_AUTO_PRESENT: 'winr_last_claim_auto_present',
     GUEST_ID: 'winr_guest_id',
     UNREGISTERED_IMPRESSIONS: 'winr_unregistered_impressions',
     // Adoption re-entry: when the last 6-digit code was mailed for a parked
