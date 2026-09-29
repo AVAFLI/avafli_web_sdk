@@ -165,6 +165,21 @@ export interface V2ControllerDeps {
    */
   onPrizeClaimSubmitted?: () => void;
   /**
+   * 3.2.0: the backend refused the claim for this giveaway ("Not the
+   * winner" / "Already submitted" / window expired / no longer available) —
+   * the SDK stops treating it as pending, whatever a block still says.
+   */
+  onPrizeClaimUnavailable?: (giveawayId: string) => void;
+  /**
+   * 3.2.0: the pending prize-claim block the SDK already holds in memory
+   * (from registration or the last giveaway refresh). The winner splash is
+   * then the FIRST frame — never a cached dashboard or a bare skeleton
+   * behind it — and the flow still opens when the refresh cannot reach the
+   * server. A giveaway has usually ENDED by the time its winner is drawn, so
+   * this block routinely arrives with no active giveaway at all.
+   */
+  cachedPrizeClaim?: PrizeClaimBlock | null;
+  /**
    * Performs the RTD opt-out (the in-experience "Delete my data" flow — the
    * privacy page inside the legal overlay bridges into the destructive
    * confirmation). MUST reject on failure — unlike the public
@@ -647,6 +662,17 @@ export class V2ExperienceController {
 
     const giveaway = this.deps.cachedGiveaway ?? this.readCachedGiveaway();
 
+    // 3.2.0: a pending prize claim OWNS this open (it outranks everything in
+    // load() too). Paint the winner splash from the block already in hand;
+    // load() reconciles with the fresh one.
+    const cachedClaim = this.cachedPendingClaim;
+    if (cachedClaim) {
+      if (giveaway) this.giveaway = giveaway;
+      this.winnerClaimStep = { kind: 'splash' };
+      this.state = { kind: 'winnerClaim', claim: cachedClaim };
+      return true;
+    }
+
     // A parked cross-device link OWNS this open. The code screen must be the
     // FIRST frame — never a cached dashboard that sits there for the
     // register → giveaway → restage round-trips and reads as "day 1" to a
@@ -689,6 +715,12 @@ export class V2ExperienceController {
     this.hydratedFromCache = true;
     this.state = { kind: 'dashboard' };
     return true;
+  }
+
+  /** The SDK's in-memory pending claim block, unless this open already lost it. */
+  private get cachedPendingClaim(): PrizeClaimBlock | null {
+    const claim = this.deps.cachedPrizeClaim;
+    return claim?.status === 'pending' && !this.suppressWinnerClaim ? claim : null;
   }
 
   private readCachedGiveaway(): Giveaway | null {
@@ -789,6 +821,13 @@ export class V2ExperienceController {
       if (!response.giveaway && !pendingPrizeClaim) {
         this.giveaway = null;
         this.deps.storage.removeItem(this.giveawayCacheKey);
+        // 3.2.0: the winner flow was on screen (painted from the block in
+        // hand) and the claim turned out to be gone, with no giveaway to
+        // fall back to — close, never an empty state behind it.
+        if (this.state.kind === 'winnerClaim') {
+          this.requestDismiss();
+          return;
+        }
         this.transition({ kind: 'empty' });
         return;
       }
@@ -843,7 +882,11 @@ export class V2ExperienceController {
         }
       }
       logger.debug('Using cached giveaway (offline):', error);
-      if (!this.giveaway) {
+      // 3.2.0: a pending claim the SDK already knows about still opens its
+      // flow — each step then reports the connection problem inline, with
+      // its own retry. Never a blank or empty screen for a winner.
+      pendingPrizeClaim = this.cachedPendingClaim;
+      if (!this.giveaway && !pendingPrizeClaim) {
         this.transition({ kind: 'empty' });
         return;
       }
@@ -858,12 +901,29 @@ export class V2ExperienceController {
     // the giveaway is null). The daily auto-claim still fires silently in the
     // background so the winner's entries keep accruing.
     if (pendingPrizeClaim) {
-      this.winnerClaimStep = { kind: 'splash' };
-      this.transition({ kind: 'winnerClaim', claim: pendingPrizeClaim });
+      if (this.state.kind !== 'winnerClaim') {
+        this.winnerClaimStep = { kind: 'splash' };
+        this.transition({ kind: 'winnerClaim', claim: pendingPrizeClaim });
+      } else if (this.winnerClaimStep.kind === 'splash') {
+        // Already painted from the block in hand (3.2.0): take the fresh one.
+        // Repaint only when what the splash shows actually changed — a
+        // repaint restarts its celebration.
+        const shown = this.state.claim;
+        this.state = { kind: 'winnerClaim', claim: pendingPrizeClaim };
+        if (
+          shown.prizeDescription !== pendingPrizeClaim.prizeDescription ||
+          shown.prizeValue !== pendingPrizeClaim.prizeValue
+        ) {
+          this.onChange?.(this.state);
+        }
+      }
+      // (Past the splash already: the step in progress holds fresher state
+      // than this response — leave it alone.)
       analyticsAdapter.track('avafli_winner_claim_shown', {
         giveaway_id: pendingPrizeClaim.giveawayId,
       });
-      if (!this.claimedToday && this.hasEmailConsent) {
+      // No giveaway (it ended before the draw) → there is nothing to enter.
+      if (this.giveaway && !this.claimedToday && this.hasEmailConsent) {
         void this.silentDailyClaim();
       }
       return;
@@ -1922,10 +1982,26 @@ export class V2ExperienceController {
     this.cancelClaimCodeVerifiedHold();
     this.onClaimCodeChange = undefined;
     this.claimFormDraft = null;
-    this.suppressWinnerClaim = true;
+    if (this.abandonWinnerClaim()) return;
     this.dashboardNotice = message || AvafliV2Strings.claimUnavailable;
     this.transition({ kind: 'loading' });
     await this.load();
+  }
+
+  /**
+   * The backend refused the claim: this open stops showing the winner flow
+   * and the SDK stops treating the claim as pending. With NO active giveaway
+   * (the usual case — it ended before the draw) there is nothing to fall
+   * back to, so the whole experience closes; returns true when it did.
+   */
+  private abandonWinnerClaim(): boolean {
+    this.suppressWinnerClaim = true;
+    if (this.state.kind === 'winnerClaim') {
+      this.deps.onPrizeClaimUnavailable?.(this.state.claim.giveawayId);
+    }
+    if (this.giveaway) return false;
+    this.requestDismiss();
+    return true;
   }
 
   /**
@@ -2019,7 +2095,7 @@ export class V2ExperienceController {
         // Stale/duplicate winner state — never trap the user in the claim
         // flow. Fall back to the normal dashboard silently.
         logger.info(`Prize claim rejected (${message}) — falling back to dashboard`);
-        this.suppressWinnerClaim = true;
+        if (this.abandonWinnerClaim()) return;
         this.transition({ kind: 'loading' });
         await this.load();
         return;

@@ -280,7 +280,7 @@ After the claim is submitted — and never blocking it — a **share step** invi
 
 This requires no integration work — the flow appears only for the drawn winner and disappears once their claim is submitted. The winning email is never re-entered; a backend-masked address is displayed for recognition and the claim is keyed to the account server-side.
 
-A winner can always get back to a claim they have not finished (3.2.0): while the claim is pending the drawer opens on every page load — regardless of the once-per-day mark, the impression cap and `returningUsersOnly` — and again when the tab returns to the foreground, at most once every 30 minutes. `holdAutoOpen()` and the dashboard's kill switch are still respected. With `autoOpen: 'never'` nothing opens by itself: call `Avafli.present()`, which lands on the winner splash.
+A winner can always get back to a claim they have not finished (3.2.0): while the claim is pending the drawer opens on every page load — regardless of the once-per-day mark, the impression cap and `returningUsersOnly` — and again when the tab returns to the foreground, at most once every 30 minutes. `holdAutoOpen()` and the dashboard's kill switch are still respected. With `autoOpen: 'never'` nothing opens by itself: call `Avafli.present()`, which lands on the winner splash. All of this holds when the giveaway has already ended and no new one is running — the usual situation when a winner is drawn — in which case closing the winner flow simply closes the drawer.
 
 ### Prize claims: email code before the form (3.2.0)
 

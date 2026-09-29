@@ -1,4 +1,5 @@
 import {
+  PrizeClaimBlock,
   AvafliAutoOpen,
   AvafliConfiguration,
   AvafliUser,
@@ -143,6 +144,17 @@ export class Avafli {
    * claim (see {@link Avafli.autoPresentIfEligible}).
    */
   private currentClaimPending = false;
+  /**
+   * 3.2.0: that pending block, in MEMORY only — the drawer paints the winner
+   * splash from it as its first frame. Null whenever nothing is pending.
+   */
+  private currentPrizeClaim: PrizeClaimBlock | null = null;
+  /**
+   * 3.2.0: the giveaway whose claim the backend refused during this page
+   * load ("Not the winner" / "Already submitted" / expired). A block that
+   * still reports it as pending is not believed.
+   */
+  private refusedClaimGiveawayId: string | null = null;
   /**
    * 3.2.0: this page load has already shown the experience for the pending
    * claim. The FIRST check of a page load opens it; later ones (tab
@@ -941,8 +953,12 @@ export class Avafli {
       // submitted claim ({ story } → { saved }); best-effort by contract.
       attachClaimStory: (request) =>
         this.client.post<{ saved?: boolean }>('/attachClaimStory', request),
-      onPrizeClaimSubmitted: () => {
-        this.currentClaimPending = false;
+      // 3.2.0: the pending-claim flag follows what happens inside the drawer.
+      cachedPrizeClaim: this.currentPrizeClaim,
+      onPrizeClaimSubmitted: () => this.notePrizeClaim(undefined),
+      onPrizeClaimUnavailable: (giveawayId) => {
+        this.refusedClaimGiveawayId = giveawayId;
+        this.notePrizeClaim(undefined);
       },
       optOut: () => Avafli.optOutFromExperience(),
       hasRegisteredUuid: () =>
@@ -996,7 +1012,7 @@ export class Avafli {
     this.currentClaimedToday = response.claimedToday === true;
     this.currentEmailConsentStatus = response.emailConsentStatus === true;
     if (response.optedOut === true) this.markOptedOut(response.optedOutUntil);
-    this.currentClaimPending = response.prizeClaim?.status === 'pending';
+    this.notePrizeClaim(response.prizeClaim);
     if (response.sdkConfig) this.serverSDKConfig = response.sdkConfig;
 
     // Backend is the source of truth for the streak — seed the local state so
@@ -1060,6 +1076,18 @@ export class Avafli {
    * can always get back to the claim, without it becoming a nag.
    */
   private static readonly CLAIM_REOPEN_INTERVAL_MS = 30 * 60 * 1000;
+
+  /**
+   * Records what the latest response (or the drawer) says about the prize
+   * claim: pending only while the block says so AND the backend has not
+   * refused that claim during this page load.
+   */
+  private notePrizeClaim(claim: PrizeClaimBlock | undefined): void {
+    const pending =
+      claim?.status === 'pending' && claim.giveawayId !== this.refusedClaimGiveawayId;
+    this.currentClaimPending = pending;
+    this.currentPrizeClaim = pending && claim ? claim : null;
+  }
 
   /**
    * The experience just closed. If a prize claim is still pending, stamp the
@@ -1174,6 +1202,8 @@ export class Avafli {
     this.currentEmailConsentStatus = false;
     this.currentAdoptionPending = false;
     this.currentClaimPending = false;
+    this.currentPrizeClaim = null;
+    this.refusedClaimGiveawayId = null;
     this.claimShownThisLoad = false;
     this.registeredAsNewUser = false;
     return true;
@@ -1323,6 +1353,8 @@ export class Avafli {
       if (instance.claimShownThisLoad) {
         const last = Number(instance.storage.getItem(instance.lastClaimAutoPresentKey));
         const elapsed = Date.now() - last;
+        // A stamp from the FUTURE (the device clock moved back) counts as
+        // expired — it must never lock a winner out.
         if (Number.isFinite(last) && last > 0 && elapsed >= 0 &&
             elapsed < Avafli.CLAIM_REOPEN_INTERVAL_MS) {
           return;
@@ -1741,7 +1773,7 @@ export class Avafli {
       // to the code screen (optional field — absent on older backends).
       this.currentAdoptionPending = response.adoptionPending === true;
       // 3.2.0: a pending prize claim keeps the auto-open available.
-      this.currentClaimPending = response.prizeClaim?.status === 'pending';
+      this.notePrizeClaim(response.prizeClaim);
       if (response.emailConsentStatus === true) {
         this.currentEmailConsentStatus = true;
         this.storage.setItem(emailSubmittedStorageKey(this.config.bundleId), 'true');
