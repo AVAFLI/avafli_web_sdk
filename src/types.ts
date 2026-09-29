@@ -269,6 +269,11 @@ export interface RegisterDeviceResponse {
   emailConsentStatus?: boolean;
   /** True when this person has opted out (RTD) — never show the experience. */
   optedOut?: boolean;
+  /**
+   * 3.2.0: ISO moment the opt-out block lifts (24 hours after "Delete my
+   * data"). Present only while `optedOut === true`; absent on older backends.
+   */
+  optedOutUntil?: string;
   /** SDK configuration */
   sdkConfig?: SDKConfig | null;
   /**
@@ -481,6 +486,11 @@ export interface GetActiveGiveawayResponse {
   lifetimeCount?: number;
   /** True when this person has opted out (RTD) — never show the experience. */
   optedOut?: boolean;
+  /**
+   * 3.2.0: ISO moment the opt-out block lifts (24 hours after "Delete my
+   * data"). Present only while `optedOut === true`; absent on older backends.
+   */
+  optedOutUntil?: string;
   /** SDK configuration */
   sdkConfig?: SDKConfig | null;
   /**
@@ -493,6 +503,46 @@ export interface GetActiveGiveawayResponse {
 }
 
 // ─── Prize Claim (winner flow) ───
+
+/**
+ * 3.2.0: the email-ownership step of a pending claim — a six-digit code sent
+ * to the address on file, entered before the claim form opens. The SERVER
+ * holds all of this state; the SDK persists none of it.
+ */
+export interface ClaimVerificationBlock {
+  /** `false` → go straight to the claim form. */
+  required: boolean;
+  /** ISO. Present = a live code exists. */
+  codeSentAt?: string;
+  /** ISO. `codeSentAt` + 10 minutes. */
+  codeExpiresAt?: string;
+  /** ISO. `codeSentAt` + 60 seconds. */
+  resendAvailableAt?: string;
+}
+
+/** Payload for `sendClaimVerificationCode`. */
+export interface SendClaimVerificationCodeRequest {
+  giveawayId: string;
+  /** Absent/false: send only when there is no live code. True: always send. */
+  resend?: boolean;
+}
+
+export interface SendClaimVerificationCodeResponse {
+  /** False when a live code was re-used (nothing new was mailed). */
+  sent: boolean;
+  verification?: ClaimVerificationBlock;
+}
+
+/** Payload for `confirmClaimVerificationCode`. */
+export interface ConfirmClaimVerificationCodeRequest {
+  giveawayId: string;
+  code: string;
+}
+
+export interface ConfirmClaimVerificationCodeResponse {
+  verified: boolean;
+  verification?: ClaimVerificationBlock;
+}
 
 /** FIXED API contract, mirroring `PrizeClaimBlock` in the backend's types.ts. */
 export interface PrizeClaimBlock {
@@ -509,6 +559,12 @@ export interface PrizeClaimBlock {
   claimNumber?: string;
   /** ISO date, when submitted. */
   submittedAt?: string;
+  /**
+   * 3.2.0: email-ownership step, while `status === "pending"`. ABSENT on
+   * older backends (or with the platform flag off) — the claim button then
+   * opens the form directly, exactly as before.
+   */
+  verification?: ClaimVerificationBlock;
 }
 
 /** Payload for `submitPrizeClaim` (exact backend field names). */
@@ -536,6 +592,13 @@ export interface SubmitPrizeClaimRequest {
    * built elsewhere stay valid while the backend adds storage in parallel.
    */
   promoConsentGranted?: boolean;
+  /**
+   * 3.2.0: tells the backend this client knows the email-ownership step, so
+   * an unverified submit is answered with `claim_verification_required`
+   * instead of being accepted as a legacy-client claim. Added by the API
+   * layer on every submit.
+   */
+  supportsClaimVerification?: boolean;
 }
 
 export interface SubmitPrizeClaimResponse {
@@ -640,6 +703,22 @@ export enum AvafliErrorCode {
   ServiceUnavailable = 'service_unavailable',
 }
 
+/**
+ * The `details` object of a callable error (3.2.0). `reason` is the
+ * machine-readable cause; the other fields depend on it. Unknown keys pass
+ * through untouched.
+ */
+export interface AvafliErrorDetails {
+  reason?: string;
+  /** `resend_cooldown` / `send_limit`. */
+  retryAfterSeconds?: number;
+  /** `code_mismatch`. */
+  attemptsRemaining?: number;
+  /** `fresh_code_sent`: the new code's block. */
+  verification?: ClaimVerificationBlock;
+  [key: string]: unknown;
+}
+
 export class AvafliError extends Error {
   /**
    * HTTP status of the backend response this error represents, when there WAS
@@ -649,6 +728,14 @@ export class AvafliError extends Error {
    * 5xx/unknown statuses to it too). Stamped by the network client.
    */
   public httpStatus?: number;
+
+  /**
+   * 3.2.0: the callable error's `details` object, when the backend sent one
+   * (`{"error":{"status","message","details":{…}}}`) — the machine-readable
+   * `reason` plus its fields (`retryAfterSeconds`, `attemptsRemaining`, …).
+   * Undefined for errors without details. Stamped by the network client.
+   */
+  public details?: AvafliErrorDetails;
 
   constructor(
     public code: AvafliErrorCode,
@@ -763,7 +850,7 @@ export interface PresentationOptions {
 // ─── Constants ───
 
 export const AVAFLI_CONSTANTS = {
-  SDK_VERSION: '3.1.11',
+  SDK_VERSION: '3.2.0',
   PLATFORM_OS: 'Web',
   /**
    * Canonical Avafli privacy policy. 2.9.3: every "Privacy Policy" link used to
@@ -799,6 +886,9 @@ export const AVAFLI_CONSTANTS = {
     // inside the cooldown show the code screen without re-sending.
     ADOPTION_CODE_SENT_AT: 'winr_adoption_code_sent_at',
     OPTED_OUT: 'winr_opted_out',
+    // 3.2.0: ISO moment the opt-out lifts (24 hours after the deletion);
+    // suffixed with the bundleId at the call site, like OPTED_OUT.
+    OPTED_OUT_UNTIL: 'winr_opted_out_until',
     // Offline resilience: pending same-day register/claim retry intents and
     // the bounded offline analytics ring buffer (suffixed with the bundleId
     // at the call site, like the auto-present keys).

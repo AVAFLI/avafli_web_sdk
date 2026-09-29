@@ -48,6 +48,45 @@ export const AvafliV2Strings = {
   /** Transport failure on the prize-claim submit — inline on the review page. */
   claimSubmitFailed: 'Something went wrong. Please check your connection and try again.',
 
+  // ─── Prize-claim email-ownership step (3.2.0) ───
+  // The six-digit code a winner enters before the claim form opens. Plain
+  // English only: "code" / "verification code". Two messages on this step
+  // are the SERVER'S own sentence, by contract written for the winner: the
+  // "we sent you a new one" notice, and why a claim is no longer available.
+  claimCodeTitle: 'CHECK YOUR EMAIL',
+  /** `{maskedEmail}` is the server-masked address (the SDK never holds the raw one). */
+  claimCodeSubtitle: 'Enter the 6-digit code we sent to {maskedEmail}',
+  /** Same line when the block carries no masked address. */
+  claimCodeSubtitleNoEmail: 'Enter the 6-digit code we sent to your email',
+  /** Small inline status while the opening send is in flight. */
+  claimCodeSending: 'Sending your code…',
+  /** Inline status once a NEW code went out (never shown for a re-used live code). */
+  claimCodeSent: 'Code sent',
+  /** The send failed — inline, next to a Retry action; the field stays usable. */
+  claimCodeSendFailed: "We couldn't send your code just now. Please try again in a minute.",
+  claimCodeRetry: 'Retry',
+  claimCodeResend: 'Send a new code',
+  /** The resend action while it cools down; `{time}` is m:ss. */
+  claimCodeResendIn: 'Send a new code in {time}',
+  /** Help line under the code screen; the address is a mailto link. */
+  claimCodeHelp: "Can't get to this email? Contact {email}",
+  claimHelpEmail: 'info@avafli.com',
+  /** Wrong code; `{attemptsRemaining}` comes from the server. */
+  claimCodeMismatch: "That code didn't match. {attemptsRemaining} tries left.",
+  claimCodeMismatchOne: "That code didn't match. 1 try left.",
+  /** "Send a new code" tapped inside the server's 60-second cooldown. */
+  claimCodeCooldown: 'Please wait a moment before requesting another code.',
+  /** Five codes in an hour — the resend countdown follows the server's retry time. */
+  claimCodeSendLimit:
+    "You've requested several codes. Please try again in a little while, or contact info@avafli.com.",
+  /** The request never reached the server — what they typed is kept. */
+  claimCodeNetwork: "We couldn't reach the server. Check your connection and try again.",
+  /** No address on file for the winning account — a code cannot be sent. */
+  claimCodeNoEmail:
+    "We don't have an email on file for this account. Contact info@avafli.com to claim your prize.",
+  /** Fallback when the server's claim-state rejection carries no message. */
+  claimUnavailable: 'This prize claim is no longer available.',
+
   // ─── Dashboard notices ───
   /**
    * Backend rejected the claim as already-claimed when LOCAL state thought
@@ -75,7 +114,7 @@ export const AvafliV2Strings = {
   // ─── RTD opt-out (delete-my-data confirmation) ───
   optOutTitle: 'Delete my data & stop participating',
   optOutBody:
-    'This permanently deletes your Avafli data, ends your giveaway participation, and cannot be undone. You can also email info@avafli.com.',
+    'This permanently erases your information and ends your participation. Entries and streaks are forfeited and cannot be restored. You can join again as a new participant after 24 hours.',
   optOutConfirm: 'DELETE MY DATA',
   optOutCancel: 'Cancel',
   /** Brief success state shown before the experience dismisses itself. */
@@ -93,6 +132,33 @@ export const AvafliV2Strings = {
   sessionExpired: 'Your session has expired. Please try again.',
   retry: 'RETRY',
 } as const;
+
+/** The claim code screen's subtitle for this (server-masked) address. */
+export function claimCodeSubtitle(maskedEmail?: string | null): string {
+  const masked = maskedEmail?.trim();
+  return masked
+    ? AvafliV2Strings.claimCodeSubtitle.replace('{maskedEmail}', masked)
+    : AvafliV2Strings.claimCodeSubtitleNoEmail;
+}
+
+/** "That code didn't match. N tries left." — generic copy when N is unknown. */
+export function claimCodeMismatchMessage(attemptsRemaining: unknown): string {
+  if (typeof attemptsRemaining !== 'number' || !Number.isFinite(attemptsRemaining)) {
+    return AvafliV2Strings.codeIncorrect;
+  }
+  const left = Math.max(0, Math.floor(attemptsRemaining));
+  return left === 1
+    ? AvafliV2Strings.claimCodeMismatchOne
+    : AvafliV2Strings.claimCodeMismatch.replace('{attemptsRemaining}', String(left));
+}
+
+/** The resend action's label: plain when ready, with m:ss while cooling down. */
+export function claimCodeResendLabel(secondsLeft: number): string {
+  if (secondsLeft <= 0) return AvafliV2Strings.claimCodeResend;
+  const minutes = Math.floor(secondsLeft / 60);
+  const seconds = String(secondsLeft % 60).padStart(2, '0');
+  return AvafliV2Strings.claimCodeResendIn.replace('{time}', `${minutes}:${seconds}`);
+}
 
 /**
  * Whether a backend rejection is the geo-fence speaking. Matches BOTH shapes

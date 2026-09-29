@@ -280,6 +280,10 @@ After the claim is submitted — and never blocking it — a **share step** invi
 
 This requires no integration work — the flow appears only for the drawn winner and disappears once their claim is submitted. The winning email is never re-entered; a backend-masked address is displayed for recognition and the claim is keyed to the account server-side.
 
+### Prize claims: email code before the form (3.2.0)
+
+Before the claim form opens, a winner enters a **6-digit code** sent to the email address on file, proving the inbox is theirs (Official Rules §7). People who proved the inbox earlier — the cross-device code, or a verified email — skip the step. The server holds all of the step's state, so a winner who closes the drawer, reloads or switches device resumes exactly where they were; the SDK stores nothing about it and only ever shows the masked address. Nothing for the host app to do.
+
 ## Push Notifications
 
 Streak reminder pushes are a mobile-SDK feature. On the web, `Avafli.registerForPushNotifications()` is a **logged no-op unless web push is configured** — functional web push needs a VAPID application-server key and a service worker, which this build does not ship. It is also gated on `enablePushReminders`. Web engagement runs through the daily auto-open experience itself, not browser notifications.
@@ -356,6 +360,7 @@ await Avafli.configure({
 - `avafli_modal_dismissed` — User closed the Avafli experience
 - `avafli_email_verified` / `avafli_adoption_verified` — Email verification / cross-device adoption completed
 - `avafli_winner_claim_shown` / `avafli_prize_claim_submitted` — Winner claim flow shown / submitted
+- `avafli_claim_email_verified` — Winner entered the correct email code before the claim form (3.2.0)
 - `avafli_opted_out` — Right-to-delete opt-out completed
 
 ## Account deletion in your app
@@ -371,10 +376,21 @@ await Avafli.optOut();
 ```
 
 The erasure is identity-wide (one call covers all of the person's devices),
-includes prize-claim records, and permanently silences the experience on the
-device — it survives a reinstall. De-identified entry records are retained as
-the legally required evidence that drawings were fair (GDPR Art. 17(3)): the
-person is erased, the proof is kept.
+includes prize-claim records, and silences the experience on the device — it
+survives a reinstall. De-identified entry records are retained as the legally
+required evidence that drawings were fair (GDPR Art. 17(3)): the person is
+erased, the proof is kept.
+
+### Delete my data: rejoining after 24 hours
+
+Deleting permanently erases the person's information and ends their
+participation; entries and streaks are forfeited and cannot be restored. For
+24 hours that email and that browser cannot register. After 24 hours the
+person may join again as a brand-new participant with no connection to the old
+profile: on the next page load (or when the tab comes back to the foreground)
+the SDK clears the old session, registers the browser afresh and shows the
+normal email-capture flow. Until then nothing is presented and
+`Avafli.present()` resolves `false`. Nothing for the host app to do.
 
 ## API Reference
 
@@ -390,7 +406,7 @@ person is erased, the proof is kept.
 | `Avafli.isAvailable` | `boolean` | Whether the experience is currently available (eligible to auto-open / `present()`) |
 | `Avafli.refreshConfig()` | `Promise<void>` | Re-fetch the giveaway/SDK config from the backend |
 | `Avafli.registerForPushNotifications()` | `Promise<void>` | Logged no-op on web unless web push (VAPID + service worker) is configured; gated on `enablePushReminders` |
-| `Avafli.optOut()` | `Promise<void>` | Right-to-delete: submits the user's opt-out and suppresses them permanently |
+| `Avafli.optOut()` | `Promise<void>` | Right-to-delete: erases the user's data and suppresses the experience; they may join again as a new participant after 24 hours |
 
 For detailed API documentation, see the [Avafli Docs](https://sdk.avafli.com/web).
 

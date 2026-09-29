@@ -1,6 +1,7 @@
 import { preloadLogo } from './logo-cache';
 import {
   ClaimDailyEntriesResponse,
+  ClaimVerificationBlock,
   DailyEntryGrant,
   GetActiveGiveawayResponse,
   Giveaway,
@@ -14,7 +15,7 @@ import {
   AVAFLI_CONSTANTS,
 } from '../../types';
 import { CLAIM_COUNTRY, PrizeClaimForm, emptyClaimForm, isClaimFormValid } from './claim';
-import { AvafliV2Strings, isGeoBlockedError } from './strings';
+import { AvafliV2Strings, claimCodeMismatchMessage, isGeoBlockedError } from './strings';
 import { AvafliAPI } from '../../network/api';
 import { LocalStorageProvider } from '../../storage/local-storage';
 import { logger } from '../../services/logger';
@@ -83,9 +84,12 @@ export type V2State =
  * 2.9 order: splash → form (3 steps + review/submit) → share → confirmation.
  * The SHARE step comes AFTER the submit and never blocks — the claim is
  * already recorded server-side, so closing/skipping it changes nothing.
+ * 3.2.0: the CODE step (six-digit email-ownership code) sits between the
+ * splash and the form whenever `prizeClaim.verification.required` is true.
  */
 export type WinnerClaimStep =
   | { kind: 'splash' }
+  | { kind: 'code' }
   | { kind: 'form' }
   | { kind: 'share'; claimNumber: string; submittedAt: string }
   | { kind: 'confirmation'; claimNumber: string; submittedAt: string };
@@ -231,6 +235,13 @@ export const ADOPTION_CODE_RESEND_COOLDOWN_MS = 10 * 60 * 1000;
 export function adoptionCodeSentAtStorageKey(bundleId: string): string {
   return `${AVAFLI_CONSTANTS.STORAGE_KEYS.ADOPTION_CODE_SENT_AT}_${bundleId}`;
 }
+
+/**
+ * The server's resend cooldown (functions/src/claimverify.ts). A countdown
+ * derived from a block's `resendAvailableAt` never runs longer than this —
+ * a device clock that is behind must not lock the resend for minutes.
+ */
+export const CLAIM_CODE_RESEND_COOLDOWN_MS = 60 * 1000;
 
 /**
  * Whether a persisted `lastClaimedDate` (JSON round-trips to a string) falls
@@ -1578,11 +1589,337 @@ export class V2ExperienceController {
     }
   }
 
-  /** Splash CONTINUE → the claim form. */
+  /**
+   * Splash CONTINUE → the claim form, or (3.2.0) the code screen first when
+   * the block says the inbox still has to be proven. An absent block or
+   * `required: false` opens the form directly, exactly as before.
+   */
   public winnerClaimContinue(): void {
     if (this.state.kind !== 'winnerClaim') return;
+    if (this.state.claim.verification?.required === true) {
+      this.enterClaimCode();
+      return;
+    }
     this.winnerClaimStep = { kind: 'form' };
     this.onChange?.(this.state);
+  }
+
+  // ─── Claim email-ownership step (3.2.0) ───
+  //
+  // A winner proves they control the inbox on file — a six-digit code —
+  // before the claim form opens. The SERVER holds all of the step's state
+  // (`prizeClaim.verification`): nothing below is persisted, and every open
+  // rebuilds it from the fresh block, so closing the drawer, reloading or
+  // switching device resumes at the right step.
+  //
+  // The code screen updates IN PLACE (onClaimCodeChange) rather than
+  // re-rendering — a send that lands while the person is typing must not
+  // wipe the field or steal focus.
+
+  /** How long the "Email verified ✓" confirmation holds before the form opens. */
+  public static readonly CLAIM_CODE_VERIFIED_HOLD_MS = 900;
+
+  /** The send in progress / just finished — the code screen's small inline status. */
+  public claimCodeSend: 'idle' | 'sending' | 'sent' | 'failed' = 'idle';
+  /** Inline send failure (`claimCodeSend === 'failed'`). */
+  public claimCodeSendError: string | null = null;
+  /** Whether the failed send offers Retry (not when there is no email on file). */
+  public claimCodeSendRetryable = true;
+  /** Inline message under the code field — an error, or plain information. */
+  public claimCodeNotice: { text: string; tone: 'error' | 'info' } | null = null;
+  /** True while a claim code is being checked. */
+  public isVerifyingClaimCode = false;
+  /** The code was accepted — brief confirmation before the form opens. */
+  public claimCodeVerified = false;
+  /** What is typed in the code field (memory only), so a re-render keeps it. */
+  public claimCodeDraft = '';
+  /** Bumped whenever the code field must be cleared (mismatch, fresh code). */
+  public claimCodeFieldResets = 0;
+  /** When "Send a new code" unlocks (ms since epoch); null = available now. */
+  public claimCodeResendAt: number | null = null;
+  /**
+   * The claim form exactly as the person left it, held while a
+   * `claim_verification_required` answer detours them through the code
+   * screen. Memory only; dropped once the claim is submitted.
+   */
+  public claimFormDraft: PrizeClaimForm | null = null;
+  /** In-place update hook, registered by the code screen render. */
+  public onClaimCodeChange?: () => void;
+
+  /** Guards against a late send response landing on a re-opened code screen. */
+  private claimCodeSendSeq = 0;
+  /** Whether the failed send was a "Send a new code" (Retry repeats it as such). */
+  private claimCodeFailedSendWasResend = false;
+  private claimCodeVerifiedTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** Seconds until "Send a new code" unlocks (0 = available). */
+  public claimCodeResendSecondsLeft(now: number = Date.now()): number {
+    if (this.claimCodeResendAt === null) return 0;
+    return Math.max(0, Math.ceil((this.claimCodeResendAt - now) / 1000));
+  }
+
+  private get isOnClaimCode(): boolean {
+    return this.state.kind === 'winnerClaim' && this.winnerClaimStep.kind === 'code';
+  }
+
+  private notifyClaimCode(): void {
+    if (this.onClaimCodeChange) this.onClaimCodeChange();
+    else this.onChange?.(this.state);
+  }
+
+  /** Writes the server's block into the in-memory claim + resend countdown. */
+  private adoptClaimVerification(block: ClaimVerificationBlock | undefined): void {
+    if (!block || typeof block.required !== 'boolean') return;
+    if (this.state.kind !== 'winnerClaim') return;
+    this.state = { ...this.state, claim: { ...this.state.claim, verification: block } };
+    const at = block.resendAvailableAt ? Date.parse(block.resendAvailableAt) : NaN;
+    this.claimCodeResendAt = Number.isFinite(at)
+      ? Math.min(at, Date.now() + CLAIM_CODE_RESEND_COOLDOWN_MS)
+      : null;
+  }
+
+  /**
+   * Opens the code screen. It paints at once from the block already in hand
+   * (masked address, resend countdown); the send — idempotent without
+   * `resend`, so safe on every open — runs behind it.
+   */
+  private enterClaimCode(): void {
+    if (this.state.kind !== 'winnerClaim') return;
+    this.cancelClaimCodeVerifiedHold();
+    this.codeError = null;
+    this.claimCodeNotice = null;
+    this.claimCodeSendError = null;
+    this.claimCodeSendRetryable = true;
+    this.claimCodeVerified = false;
+    this.isVerifyingClaimCode = false;
+    this.claimCodeDraft = '';
+    this.adoptClaimVerification(this.state.claim.verification);
+    this.claimCodeSend = 'sending';
+    this.onClaimCodeChange = undefined; // the fresh render registers its own
+    this.winnerClaimStep = { kind: 'code' };
+    this.onChange?.(this.state);
+    void this.sendClaimCode(false);
+  }
+
+  /** Back on the code screen → the splash. Sends and invalidates nothing. */
+  public winnerClaimCodeBack(): void {
+    if (!this.isOnClaimCode) return;
+    this.cancelClaimCodeVerifiedHold();
+    this.claimCodeSendSeq++; // a send still in flight no longer has a screen
+    this.onClaimCodeChange = undefined;
+    this.winnerClaimStep = { kind: 'splash' };
+    this.onChange?.(this.state);
+  }
+
+  private async sendClaimCode(resend: boolean): Promise<void> {
+    if (this.state.kind !== 'winnerClaim') return;
+    const giveawayId = this.state.claim.giveawayId;
+    const seq = ++this.claimCodeSendSeq;
+    this.claimCodeSend = 'sending';
+    this.claimCodeSendError = null;
+    this.notifyClaimCode();
+    try {
+      const response = await this.deps.api.sendClaimVerificationCode(
+        resend ? { giveawayId, resend: true } : { giveawayId }
+      );
+      if (!this.isOnClaimCode || seq !== this.claimCodeSendSeq) return;
+      if (response?.verification?.required === false) {
+        // The inbox was proven in the meantime (another device, an earlier
+        // code) — nothing to enter.
+        this.claimCodeSend = 'idle';
+        this.finishClaimVerification();
+        return;
+      }
+      this.adoptClaimVerification(response?.verification);
+      // A re-used live code says nothing extra; only a NEW code is announced.
+      this.claimCodeSend = response?.sent === true ? 'sent' : 'idle';
+      this.notifyClaimCode();
+    } catch (error) {
+      if (!this.isOnClaimCode || seq !== this.claimCodeSendSeq) return;
+      logger.warn('Claim code send failed:', error);
+      await this.handleClaimCodeFailure(error, resend ? 'resend' : 'send');
+    }
+  }
+
+  /** Retry on the inline send failure — repeats the send that failed. */
+  public retryClaimCodeSend(): void {
+    if (!this.isOnClaimCode || this.claimCodeSend === 'sending') return;
+    void this.sendClaimCode(this.claimCodeFailedSendWasResend);
+  }
+
+  /** "Send a new code". A no-op until the countdown has run out. */
+  public async resendClaimCode(): Promise<void> {
+    if (!this.isOnClaimCode || this.claimCodeSend === 'sending') return;
+    if (this.isVerifyingClaimCode || this.claimCodeVerified) return;
+    if (this.claimCodeResendSecondsLeft() > 0) return;
+    this.claimCodeNotice = null;
+    await this.sendClaimCode(true);
+  }
+
+  /** Submit the six digits (the VERIFY pill, or auto-submit on the sixth). */
+  public async confirmClaimCode(code: string): Promise<void> {
+    if (!this.isOnClaimCode || this.state.kind !== 'winnerClaim') return;
+    if (this.isVerifyingClaimCode || this.claimCodeVerified) return;
+    const giveawayId = this.state.claim.giveawayId;
+    this.isVerifyingClaimCode = true;
+    this.claimCodeNotice = null;
+    this.notifyClaimCode();
+    try {
+      await this.deps.api.confirmClaimVerificationCode({ giveawayId, code });
+      this.isVerifyingClaimCode = false;
+      if (!this.isOnClaimCode) return;
+      analyticsAdapter.track('avafli_claim_email_verified', { giveaway_id: giveawayId });
+      this.finishClaimVerification();
+    } catch (error) {
+      this.isVerifyingClaimCode = false;
+      if (!this.isOnClaimCode) return;
+      logger.warn('Claim code check failed:', error);
+      await this.handleClaimCodeFailure(error, 'confirm');
+    }
+  }
+
+  /**
+   * The inbox is proven: remember it on the in-memory block (the rest of the
+   * session never re-asks), confirm briefly, then open the claim form.
+   */
+  private finishClaimVerification(): void {
+    if (this.state.kind !== 'winnerClaim') return;
+    this.state = {
+      ...this.state,
+      claim: { ...this.state.claim, verification: { required: false } },
+    };
+    this.claimCodeResendAt = null;
+    this.claimCodeNotice = null;
+    this.claimCodeDraft = '';
+    this.claimCodeVerified = true;
+    this.notifyClaimCode();
+    this.cancelClaimCodeVerifiedHold();
+    this.claimCodeVerifiedTimer = setTimeout(() => {
+      this.claimCodeVerifiedTimer = null;
+      if (!this.isOnClaimCode) return;
+      this.claimCodeVerified = false;
+      this.onClaimCodeChange = undefined;
+      this.winnerClaimStep = { kind: 'form' };
+      this.onChange?.(this.state);
+    }, V2ExperienceController.CLAIM_CODE_VERIFIED_HOLD_MS);
+  }
+
+  private cancelClaimCodeVerifiedHold(): void {
+    if (this.claimCodeVerifiedTimer !== null) {
+      clearTimeout(this.claimCodeVerifiedTimer);
+      this.claimCodeVerifiedTimer = null;
+    }
+  }
+
+  /**
+   * Maps a failed send/check to what the code screen shows next. Every
+   * branch leaves a next action on screen: retry, a new code, or the contact
+   * address in the help line.
+   */
+  private async handleClaimCodeFailure(
+    error: unknown,
+    during: 'send' | 'resend' | 'confirm'
+  ): Promise<void> {
+    const avafliError = error instanceof AvafliError ? error : null;
+    const details = avafliError?.details;
+    const reason = typeof details?.reason === 'string' ? details.reason : null;
+    const status = avafliError?.httpStatus;
+    const message = error instanceof Error ? error.message : String(error);
+    const sending = during !== 'confirm';
+
+    const clearField = (): void => {
+      this.claimCodeDraft = '';
+      this.claimCodeFieldResets++;
+    };
+    const failSend = (text: string, retryable: boolean): void => {
+      this.claimCodeSend = 'failed';
+      this.claimCodeSendError = text;
+      this.claimCodeSendRetryable = retryable;
+      this.claimCodeFailedSendWasResend = during === 'resend';
+    };
+
+    switch (reason) {
+      case 'code_mismatch':
+        this.claimCodeNotice = {
+          text: claimCodeMismatchMessage(details?.attemptsRemaining),
+          tone: 'error',
+        };
+        clearField();
+        break;
+
+      case 'fresh_code_sent':
+        // The old code was dead and the server has ALREADY mailed a new one.
+        // Information, not an error; the server's sentence says which it was.
+        this.adoptClaimVerification(details?.verification);
+        this.claimCodeNotice = { text: message || AvafliV2Strings.codeFreshSent, tone: 'info' };
+        this.claimCodeSend = 'idle';
+        this.claimCodeSendError = null;
+        clearField();
+        break;
+
+      case 'resend_cooldown':
+      case 'send_limit': {
+        const retryAfter = Number(details?.retryAfterSeconds);
+        if (Number.isFinite(retryAfter) && retryAfter > 0) {
+          this.claimCodeResendAt = Date.now() + retryAfter * 1000;
+        }
+        this.claimCodeNotice = {
+          text:
+            reason === 'send_limit'
+              ? AvafliV2Strings.claimCodeSendLimit
+              : AvafliV2Strings.claimCodeCooldown,
+          tone: 'error',
+        };
+        if (sending) this.claimCodeSend = 'idle';
+        break;
+      }
+
+      case 'send_failed':
+        failSend(AvafliV2Strings.claimCodeSendFailed, true);
+        break;
+
+      case 'no_email_on_file':
+        // Retrying cannot fix this one — the way forward is the contact address.
+        failSend(AvafliV2Strings.claimCodeNoEmail, false);
+        break;
+
+      default:
+        // A definitive rejection with no reason is the claim itself speaking
+        // (window expired / no longer available / not open yet / not the
+        // winner): the code screen has nothing left to offer.
+        if (!reason && (status === 400 || status === 403)) {
+          await this.leaveUnavailableClaim(status === 400 ? message : '');
+          return;
+        }
+        if (sending) {
+          failSend(
+            status === undefined
+              ? AvafliV2Strings.claimCodeNetwork
+              : AvafliV2Strings.claimCodeSendFailed,
+            true
+          );
+        } else {
+          // What they typed stays in the field.
+          this.claimCodeNotice = { text: AvafliV2Strings.claimCodeNetwork, tone: 'error' };
+        }
+    }
+    this.notifyClaimCode();
+  }
+
+  /**
+   * The claim can no longer be made. Same exit the form's "Not the winner"
+   * rejection takes — out of the winner flow, onto the normal experience —
+   * with the reason shown as the dashboard's transient notice.
+   */
+  private async leaveUnavailableClaim(message: string): Promise<void> {
+    logger.info(`Prize claim unavailable (${message || 'rejected'}) — leaving the claim flow`);
+    this.cancelClaimCodeVerifiedHold();
+    this.onClaimCodeChange = undefined;
+    this.claimFormDraft = null;
+    this.suppressWinnerClaim = true;
+    this.dashboardNotice = message || AvafliV2Strings.claimUnavailable;
+    this.transition({ kind: 'loading' });
+    await this.load();
   }
 
   /**
@@ -1636,6 +1973,7 @@ export class V2ExperienceController {
       });
       this.isSubmittingClaim = false;
       this.submittedClaimForm = form;
+      this.claimFormDraft = null;
       // 2.9: the claim is recorded — the SHARE step comes next (never
       // blocking; closing it changes nothing about the claim), then the
       // confirmation screen. Fresh story slate for this share step.
@@ -1654,6 +1992,22 @@ export class V2ExperienceController {
     } catch (error) {
       this.isSubmittingClaim = false;
       const message = error instanceof Error ? error.message : String(error);
+      if (
+        error instanceof AvafliError &&
+        error.details?.reason === 'claim_verification_required'
+      ) {
+        // 3.2.0: the state changed underneath us — the inbox still has to be
+        // proven. Everything typed is kept in memory; the code screen opens,
+        // and a correct code returns to the form with the input intact.
+        logger.info('Prize claim needs the email code first — opening the code screen');
+        this.claimFormDraft = form;
+        this.state = {
+          ...this.state,
+          claim: { ...claim, verification: { required: true } },
+        };
+        this.enterClaimCode();
+        return;
+      }
       if (/not the winner|already submitted/i.test(message)) {
         // Stale/duplicate winner state — never trap the user in the claim
         // flow. Fall back to the normal dashboard silently.

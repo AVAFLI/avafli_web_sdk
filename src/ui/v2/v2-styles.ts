@@ -203,6 +203,19 @@ img { display: block; }
 .wv2-code-resend { background: none; border: none; cursor: pointer; margin-top: 6px; font-size: 14px; color: rgba(255,255,255,0.65); font-family: inherit; }
 .wv2-code-resend-action { color: #7fb0ff; text-decoration: underline; text-underline-offset: 3px; font-weight: 700; }
 .wv2-code-resend:hover .wv2-code-resend-action { color: #a9c9ff; }
+/* 3.2.0 claim email-ownership step: resend countdown, inline send status,
+   information-toned message, contact help line. */
+.wv2-code-resend:disabled { cursor: default; }
+.wv2-code-resend:disabled .wv2-code-resend-action,
+.wv2-code-resend:disabled:hover .wv2-code-resend-action { color: rgba(255,255,255,0.45); text-decoration: none; }
+.wv2-code-status { font-size: 13px; line-height: 1.45; text-align: center; color: rgba(255,255,255,0.75); }
+.wv2-code-status.wv2-code-status-error { color: #ff6b63; }
+.wv2-code-retry { background: none; border: none; padding: 0; cursor: pointer; font: inherit; font-weight: 700; color: #7fb0ff; text-decoration: underline; text-underline-offset: 3px; }
+.wv2-code-retry:hover { color: #a9c9ff; }
+.wv2-code-error.wv2-code-info { color: rgba(255,255,255,0.85); }
+.wv2-code-help { font-size: 13px; line-height: 1.45; color: rgba(255,255,255,0.65); }
+.wv2-code-help-link { color: #7fb0ff; text-decoration: underline; text-underline-offset: 3px; font-weight: 700; }
+.wv2-code-help-link:hover { color: #a9c9ff; }
 /* Pin the legal footer to the bottom of the code screen's scrolling stack
    (min-height:100% + margin-top:auto — same treatment as the capture
    screen's legal block) so it never trails off into a void yet stays

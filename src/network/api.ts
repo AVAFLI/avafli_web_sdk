@@ -11,6 +11,10 @@ import {
   SubmitUserProfileResponse,
   SubmitPrizeClaimRequest,
   SubmitPrizeClaimResponse,
+  SendClaimVerificationCodeRequest,
+  SendClaimVerificationCodeResponse,
+  ConfirmClaimVerificationCodeRequest,
+  ConfirmClaimVerificationCodeResponse,
 } from '../types';
 import { NetworkClient } from './client';
 import { getPerimeterToken } from '../perimeter';
@@ -79,7 +83,46 @@ export class AvafliAPI {
    * `{data}`/`{result}` callable envelope as every other endpoint.
    */
   public async submitPrizeClaim(data: SubmitPrizeClaimRequest): Promise<SubmitPrizeClaimResponse> {
-    return this.client.post<SubmitPrizeClaimResponse>('/submitPrizeClaim', data);
+    // 3.2.0: every submit declares that this client knows the
+    // email-ownership step (see SubmitPrizeClaimRequest).
+    return this.client.post<SubmitPrizeClaimResponse>('/submitPrizeClaim', {
+      ...data,
+      supportsClaimVerification: true,
+    });
+  }
+
+  /**
+   * Sends (or re-uses) the winner's six-digit claim code (3.2.0). Without
+   * `resend` it is idempotent — a live code is re-used and `sent` is false —
+   * so it is safe to call every time the code screen opens.
+   *
+   * One automatic retry only (the 401 → token-refresh path needs it): a
+   * failed send surfaces inline with its own Retry instead of being re-sent
+   * behind the person's back.
+   */
+  public async sendClaimVerificationCode(
+    data: SendClaimVerificationCodeRequest
+  ): Promise<SendClaimVerificationCodeResponse> {
+    return this.client.post<SendClaimVerificationCodeResponse>(
+      '/sendClaimVerificationCode',
+      data,
+      { retries: 2 }
+    );
+  }
+
+  /**
+   * Checks the six-digit claim code (3.2.0). Failures carry a machine-readable
+   * `details.reason` on the thrown AvafliError (`code_mismatch`,
+   * `fresh_code_sent`, …).
+   */
+  public async confirmClaimVerificationCode(
+    data: ConfirmClaimVerificationCodeRequest
+  ): Promise<ConfirmClaimVerificationCodeResponse> {
+    return this.client.post<ConfirmClaimVerificationCodeResponse>(
+      '/confirmClaimVerificationCode',
+      data,
+      { retries: 2 }
+    );
   }
 
   /**

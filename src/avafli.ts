@@ -19,7 +19,11 @@ import {
 import { NetworkClient } from './network/client';
 import { AvafliAPI, createAvafliAPI } from './network/api';
 import { AvafliV2Experience } from './ui/v2/root';
-import { V2ExperienceController, emailSubmittedStorageKey } from './ui/v2/controller';
+import {
+  V2ExperienceController,
+  adoptionCodeSentAtStorageKey,
+  emailSubmittedStorageKey,
+} from './ui/v2/controller';
 import { prewarmImage } from './ui/v2/effects';
 import { StreakEngine } from './domain/streak-engine';
 import { LocalStorageProvider } from './storage/local-storage';
@@ -170,10 +174,18 @@ export class Avafli {
   private currentController: V2ExperienceController | null = null;
   private serverSDKConfig: SDKConfig | null = null;
   /**
-   * RTD opt-out — from the backend or the persisted local flag. Once true the
-   * experience is never auto-presented.
+   * RTD opt-out — from the backend or the persisted local flag. While true the
+   * experience is never presented. 3.2.0: it lifts 24 hours after the
+   * deletion (see {@link liftOptOutIfDue}).
    */
   private currentOptedOut = false;
+  /** 3.2.0: the one post-opt-out re-registration in flight (foreground path). */
+  private rejoinInFlight: Promise<void> | null = null;
+  /**
+   * 3.2.0: the opt-out was lifted but the re-registration that follows it
+   * failed — the next foreground trigger tries the registration again.
+   */
+  private rejoinRegistrationPending = false;
   private autoOpenListenersAttached = false;
   /**
    * Cached "publisher suspended / service unavailable" state. Set when device
@@ -429,8 +441,13 @@ export class Avafli {
       // Initialize device fingerprint
       await Avafli.instance.initializeDeviceFingerprint();
 
+      // 3.2.0: a "Delete my data" older than 24 hours no longer blocks this
+      // browser — drop the opt-out and the old session (the device id stays)
+      // so the registration below starts a brand-new participant.
+      const rejoining = Avafli.instance.liftOptOutIfDue();
+
       // Register device
-      await Avafli.instance.registerDevice();
+      await Avafli.instance.registerDevice(rejoining);
       
       Avafli.isConfigured = true;
       logger.info('Avafli SDK configured successfully');
@@ -729,6 +746,8 @@ export class Avafli {
       logger.info('present() skipped: Avafli is unavailable for this publisher');
       return false;
     }
+    // 3.2.0: an opt-out older than 24 hours lifts here.
+    if (instance.rejoinCheckDue) await instance.rejoinIfOptOutLapsed();
     if (instance.isOptedOut()) {
       logger.info('present() skipped: user opted out (RTD)');
       return false;
@@ -956,7 +975,7 @@ export class Avafli {
 
     this.currentClaimedToday = response.claimedToday === true;
     this.currentEmailConsentStatus = response.emailConsentStatus === true;
-    if (response.optedOut === true) this.markOptedOut();
+    if (response.optedOut === true) this.markOptedOut(response.optedOutUntil);
     if (response.sdkConfig) this.serverSDKConfig = response.sdkConfig;
 
     // Backend is the source of truth for the streak — seed the local state so
@@ -1018,14 +1037,133 @@ export class Avafli {
     return `${AVAFLI_CONSTANTS.STORAGE_KEYS.OPTED_OUT}_${this.config.bundleId}`;
   }
 
+  private get optedOutUntilKey(): string {
+    return `${AVAFLI_CONSTANTS.STORAGE_KEYS.OPTED_OUT_UNTIL}_${this.config.bundleId}`;
+  }
+
+  /** How long "Delete my data" keeps this browser from joining again. */
+  private static readonly OPT_OUT_BLOCK_MS = 24 * 60 * 60 * 1000;
+
+  /**
+   * After a lift attempt the server answered "still opted out" with a time
+   * that is not in the future by this device's clock (clock skew, sweep lag):
+   * wait this long before asking again, so the attempt can never loop.
+   */
+  private static readonly OPT_OUT_RECHECK_MS = 15 * 60 * 1000;
+
   private isOptedOut(): boolean {
     return this.currentOptedOut || this.storage.getItem(this.optedOutKey) === 'true';
   }
 
-  /** Persist the RTD flag so the suppression holds on future loads, offline too. */
-  private markOptedOut(): void {
+  /** When the cached opt-out lifts (ms since epoch); null when no time is stored. */
+  private optedOutUntilMs(): number | null {
+    const stored = this.storage.getItem(this.optedOutUntilKey);
+    const parsed = stored ? Date.parse(stored) : NaN;
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  /**
+   * Persist the RTD flag so the suppression holds on future loads, offline
+   * too — together with the moment it lifts (3.2.0). `until` is the server's
+   * `optedOutUntil` when a response carried one; without it a time already
+   * stored is kept, and an opt-out with no time at all gets "now + 24 hours".
+   */
+  private markOptedOut(until?: string | null): void {
     this.currentOptedOut = true;
     this.storage.setItem(this.optedOutKey, 'true');
+    const parsed = until ? Date.parse(until) : NaN;
+    if (Number.isFinite(parsed)) {
+      this.storage.setItem(this.optedOutUntilKey, new Date(parsed).toISOString());
+    } else if (this.optedOutUntilMs() === null) {
+      this.storage.setItem(
+        this.optedOutUntilKey,
+        new Date(Date.now() + Avafli.OPT_OUT_BLOCK_MS).toISOString()
+      );
+    }
+  }
+
+  /**
+   * 3.2.0 — rejoin 24 hours after "Delete my data" (Rules §9).
+   *
+   * While the block is running nothing changes. Once it has lapsed the local
+   * opt-out AND every piece of the old session are dropped — the device id is
+   * kept — so the registration that follows starts a brand-new participant
+   * who sees the normal email-capture flow. A cached opt-out from before
+   * 3.2.0 carries no time: it is stamped "first seen + 24 hours" here and
+   * lifts then.
+   *
+   * Returns true when the opt-out was lifted (the caller registers next).
+   */
+  private liftOptOutIfDue(now: number = Date.now()): boolean {
+    if (!this.isOptedOut()) return false;
+    const until = this.optedOutUntilMs();
+    if (until === null) {
+      this.storage.setItem(
+        this.optedOutUntilKey,
+        new Date(now + Avafli.OPT_OUT_BLOCK_MS).toISOString()
+      );
+      return false;
+    }
+    if (now < until) return false;
+
+    logger.info('Opt-out lapsed (24 hours) — clearing the old session to register as new');
+    const bundleId = this.config.bundleId;
+    this.currentOptedOut = false;
+    this.storage.removeItem(this.optedOutKey);
+    this.storage.removeItem(this.optedOutUntilKey);
+
+    this.secureStorage.removeItem(AVAFLI_CONSTANTS.STORAGE_KEYS.TOKEN);
+    this.secureStorage.removeItem(AVAFLI_CONSTANTS.STORAGE_KEYS.REFRESH_TOKEN);
+    this.secureStorage.removeItem(AVAFLI_CONSTANTS.STORAGE_KEYS.UUID);
+
+    this.storage.removeItem(emailSubmittedStorageKey(bundleId));
+    this.storage.removeItem(AVAFLI_CONSTANTS.STORAGE_KEYS.CACHED_GIVEAWAY);
+    this.storage.removeItem(AVAFLI_CONSTANTS.STORAGE_KEYS.STREAK_STATE);
+    this.storage.removeItem(AVAFLI_CONSTANTS.STORAGE_KEYS.LAST_CLAIM_DATE);
+    this.storage.removeItem(this.lastAutoPresentKey);
+    this.storage.removeItem(this.unregisteredImpressionsKey);
+    this.storage.removeItem(adoptionCodeSentAtStorageKey(bundleId));
+    // A claim retry queued by the old session belongs to the erased account.
+    Avafli.offlineCoordinator?.clear('claim');
+
+    this.currentGiveaway = null;
+    this.currentClaimedToday = false;
+    this.currentEmailConsentStatus = false;
+    this.currentAdoptionPending = false;
+    this.registeredAsNewUser = false;
+    return true;
+  }
+
+  /** Whether {@link rejoinIfOptOutLapsed} has anything to look at. */
+  private get rejoinCheckDue(): boolean {
+    return this.isOptedOut() || this.rejoinRegistrationPending || this.rejoinInFlight !== null;
+  }
+
+  /**
+   * Foreground half of the 24-hour rejoin: when the block lapsed while the
+   * page stayed open, lift it and register again. Single-flight (focus and
+   * visibilitychange fire together). Never throws — a registration that
+   * failed in transit is retried on the next foreground trigger.
+   */
+  private rejoinIfOptOutLapsed(): Promise<void> {
+    if (this.rejoinInFlight) return this.rejoinInFlight;
+    const lifted = this.liftOptOutIfDue();
+    if (!lifted && !this.rejoinRegistrationPending) return Promise.resolve();
+    const run = this.registerDevice(true)
+      .then(() => {
+        this.rejoinRegistrationPending = false;
+      })
+      .catch((error) => {
+        // Only a transport failure is worth another try; a definitive
+        // rejection would just be rejected again.
+        this.rejoinRegistrationPending = isRetriableNetworkError(error);
+        logger.warn('Registration after the opt-out lapsed failed:', error);
+      })
+      .finally(() => {
+        this.rejoinInFlight = null;
+      });
+    this.rejoinInFlight = run;
+    return run;
   }
 
   private static dayString(date: Date): string {
@@ -1080,7 +1218,8 @@ export class Avafli {
    *  - 3.1.11: a publisher hold (holdAutoOpen) defers the whole check
    *  - unregistered (no confirmed email) users are capped at
    *    experience.unregisteredImpressionCap auto-opens (default 3)
-   *  - RTD opted-out users never see it
+   *  - RTD opted-out users never see it (3.2.0: until the 24-hour block
+   *    lapses — then the old session is cleared and the device re-registers)
    */
   private static async autoPresentIfEligible(): Promise<void> {
     if (!Avafli.isConfigured || !Avafli.instance) return;
@@ -1088,6 +1227,8 @@ export class Avafli {
     const instance = Avafli.instance;
 
     if (Avafli.serviceUnavailable || instance.serviceUnavailableError) return;
+    // 3.2.0: an opt-out older than 24 hours lifts here (tab foreground/focus).
+    if (instance.rejoinCheckDue) await instance.rejoinIfOptOutLapsed();
     if (instance.isOptedOut()) return;
 
     const experience = instance.serverSDKConfig?.experience;
@@ -1187,11 +1328,13 @@ export class Avafli {
   }
 
   /**
-   * Right-To-Delete opt-out: tombstones the person on the backend
-   * (identity-wide, PII anonymized, email suppressed) and permanently
-   * silences the experience in this browser. Wire this to the opt-out
-   * action in your privacy-policy flow. Parity with the mobile SDKs'
-   * `Avafli.optOut()`.
+   * Right-To-Delete opt-out ("Delete my data"): erases the person on the
+   * backend (identity-wide, PII anonymized) and silences the experience in
+   * this browser. Entries and streaks are forfeited and cannot be restored.
+   * 3.2.0: the block lasts 24 hours — after that the person may join again
+   * as a brand-new participant with no connection to the old profile. Wire
+   * this to the opt-out action in your privacy-policy flow. Parity with the
+   * mobile SDKs' `Avafli.optOut()`.
    */
   public static async optOut(): Promise<void> {
     if (!Avafli.ensureConfigured()) return;
@@ -1202,13 +1345,25 @@ export class Avafli {
     // registration to "catch up", because the client is now silent). The
     // caller surfaces the error and lets the user retry. Only on confirmed
     // success do we suppress locally.
-    const res = await Avafli.instance!.client.post<{ success?: boolean }>('/optOut', {});
+    const requestedAt = Date.now();
+    const res = await Avafli.instance!.client.post<{ success?: boolean; optedOutUntil?: string }>(
+      '/optOut',
+      {}
+    );
     if (res && res.success === false) {
       throw new Error('opt-out was not accepted by the server');
     }
-    Avafli.instance!.markOptedOut();
+    Avafli.instance!.markOptedOut(Avafli.optOutLiftTime(res?.optedOutUntil, requestedAt));
     analyticsAdapter.track('avafli_opted_out');
-    logger.info('User opted out — experience permanently suppressed');
+    logger.info('User opted out — experience suppressed for 24 hours');
+  }
+
+  /** The server's `optedOutUntil` when it sent one, else the call's moment + 24 hours. */
+  private static optOutLiftTime(serverUntil: string | undefined, requestedAt: number): string {
+    const parsed = serverUntil ? Date.parse(serverUntil) : NaN;
+    return new Date(
+      Number.isFinite(parsed) ? parsed : requestedAt + Avafli.OPT_OUT_BLOCK_MS
+    ).toISOString();
   }
 
   /**
@@ -1221,10 +1376,14 @@ export class Avafli {
    */
   private static async optOutFromExperience(): Promise<void> {
     if (!Avafli.ensureConfigured()) throw new Error('Avafli is not configured');
-    await Avafli.instance!.client.post<{ success?: boolean }>('/optOut', {});
-    Avafli.instance!.markOptedOut();
+    const requestedAt = Date.now();
+    const res = await Avafli.instance!.client.post<{ success?: boolean; optedOutUntil?: string }>(
+      '/optOut',
+      {}
+    );
+    Avafli.instance!.markOptedOut(Avafli.optOutLiftTime(res?.optedOutUntil, requestedAt));
     analyticsAdapter.track('avafli_opted_out');
-    logger.info('User opted out via in-experience privacy choices — experience permanently suppressed');
+    logger.info('User opted out via in-experience privacy choices — experience suppressed for 24 hours');
   }
 
   /**
@@ -1236,8 +1395,9 @@ export class Avafli {
    * drawing was fair, and left prize-claim PII orphaned.
    *
    * Use `optOut()` instead. It is the correct erasure: identity-wide, PII scrubbed
-   * everywhere including prize claims, tombstoned so it survives a reinstall, and
-   * the experience stays permanently silenced on the device.
+   * everywhere including prize claims, and tombstoned so it survives a reinstall.
+   * The experience stays silenced on the device for 24 hours (3.2.0), after which
+   * the person may join again as a brand-new participant.
    */
 
   /**
@@ -1421,7 +1581,11 @@ export class Avafli {
     return `web_${Math.abs(hash).toString(36)}`;
   }
 
-  private async registerDevice(): Promise<void> {
+  /**
+   * @param rejoining 3.2.0: this registration follows a lifted opt-out
+   *   (see {@link liftOptOutIfDue}).
+   */
+  private async registerDevice(rejoining = false): Promise<void> {
     if (!this.deviceFingerprint) {
       throw new AvafliError(
         AvafliErrorCode.InvalidState,
@@ -1491,7 +1655,22 @@ export class Avafli {
         this.currentEmailConsentStatus = true;
         this.storage.setItem(emailSubmittedStorageKey(this.config.bundleId), 'true');
       }
-      if (response.optedOut === true) this.markOptedOut();
+      if (response.optedOut === true) {
+        let until = response.optedOutUntil;
+        if (rejoining) {
+          // 3.2.0: the local time had passed but the server still reports the
+          // opt-out (clock skew, sweep lag). Adopt the server's time and try
+          // again after it — and when that time is not in the future by this
+          // device's clock, wait a fixed interval instead. Never a loop.
+          const serverUntil = until ? Date.parse(until) : NaN;
+          const earliest = Date.now() + Avafli.OPT_OUT_RECHECK_MS;
+          if (!Number.isFinite(serverUntil) || serverUntil <= Date.now()) {
+            until = new Date(earliest).toISOString();
+          }
+          logger.info('Server still reports the opt-out — will check again after', until);
+        }
+        this.markOptedOut(until);
+      }
 
       // 3.1.10: reset local state ONLY when the backend says it just MINTED
       // this user. Until now this keyed off `!isReturningUser`, which means

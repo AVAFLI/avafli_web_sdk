@@ -1,6 +1,17 @@
 # Changelog
 
 
+## 3.2.0
+
+- **Prize claims: six-digit email code before the claim form** (Official Rules §7). When the backend's `prizeClaim.verification.required` is true, the winner splash's CONTINUE opens a code screen first: "Enter the 6-digit code we sent to {masked email}", sent on open (idempotent — a live code is re-used), numeric one-time-code field with paste and auto-submit on the sixth digit, "Send a new code" with a live countdown, and a contact line. A wrong code says how many tries are left; an expired or used-up code is replaced by the server and the screen says so; a failed send is shown inline with Retry while the field stays usable. People who proved the inbox earlier skip the step.
+- The server holds all of that state. The SDK persists nothing about it and shows only the masked address, so closing the drawer, reloading or switching device resumes at the right step.
+- `submitPrizeClaim` now sends `supportsClaimVerification: true`. If the server answers `claim_verification_required`, everything typed in the form is kept in memory, the code screen opens, and a correct code returns to the review screen with the input intact.
+- Backwards compatible: with no `verification` block (older backend, or the platform flag off) the claim flow is exactly as in 3.1.11.
+- `AvafliError.details` — the network client now keeps a callable error's `details` object (`reason`, `retryAfterSeconds`, `attemptsRemaining`, …). Errors without details are unchanged.
+- **Rejoin 24 hours after "Delete my data"** (Rules §9, Terms §5.2, Privacy §6). The local opt-out now carries the moment it lifts (`optedOutUntil` from the server, or the deletion's moment + 24 hours). Until then nothing changes: nothing is presented and `present()` resolves `false`. On `configure()` and on tab foreground/focus after that moment the SDK clears the opt-out and the whole old session (tokens, user id, email flag, cached giveaway/streak/claim state, once-per-day mark, impression counter, adoption stamp) — the device id is kept — and registers again; the person is a brand-new participant and sees the normal email-capture flow. An opt-out cached by an older SDK has no time: it is stamped on first sight and lifts 24 hours later. If the server still reports the opt-out, its time is adopted and the SDK checks again after it — never in a loop.
+- Copy: the delete confirmation now reads "This permanently erases your information and ends your participation. Entries and streaks are forfeited and cannot be restored. You can join again as a new participant after 24 hours."
+- The code field on every code screen accepts a pasted code that carries spaces or dashes.
+
 ## 3.1.11
 
 - **Publisher presentation control.** New `autoOpen` on `Avafli.configure()` — `'always'` (default, unchanged), `'returningUsersOnly'` (no auto-open on the page load that registered a brand-new user; later loads auto-open as normal), `'never'` (the publisher opens it). The dashboard's new `experience.autoOpenMode` merges with it — the most restrictive wins; `autoOpenEnabled = false` stays the hard kill switch. Registration and analytics still run on `configure()` in every mode.

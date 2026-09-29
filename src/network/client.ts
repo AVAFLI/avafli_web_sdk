@@ -1,4 +1,4 @@
-import { AvafliError, AvafliErrorCode, Logger } from '../types';
+import { AvafliError, AvafliErrorCode, AvafliErrorDetails, Logger } from '../types';
 
 /**
  * HTTP client with automatic token refresh and retry logic
@@ -114,11 +114,19 @@ export class NetworkClient {
             let errorMessage = `HTTP ${response.status}`;
             let errorBody: unknown;
 
+            let errorDetails: AvafliErrorDetails | undefined;
+
             try {
               errorBody = await response.text();
-              const parsed = JSON.parse(errorBody as string) as { error?: { message?: string } | string; message?: string };
+              const parsed = JSON.parse(errorBody as string) as { error?: { message?: string; details?: unknown } | string; message?: string };
               // onCall errors come back as { error: { message, status } }.
               errorMessage = (typeof parsed.error === "object" ? parsed.error?.message : parsed.error) || parsed.message || errorMessage;
+              // 3.2.0: keep the callable's `details` (machine-readable reason
+              // + fields) for the flows that branch on it.
+              const details = typeof parsed.error === "object" ? parsed.error?.details : undefined;
+              if (details && typeof details === 'object' && !Array.isArray(details)) {
+                errorDetails = details as AvafliErrorDetails;
+              }
             } catch {
               // Use raw text or default message
               errorMessage = (typeof errorBody === 'string' ? errorBody : '') || errorMessage;
@@ -132,6 +140,7 @@ export class NetworkClient {
             // can tell a real backend response — 4xx rejection OR 5xx — from
             // a transport failure that never completed.
             httpErr.httpStatus = response.status;
+            if (errorDetails) httpErr.details = errorDetails;
             throw httpErr;
           }
 
@@ -212,6 +221,11 @@ export class NetworkClient {
     const lastStatus = (lastError as { httpStatus?: number } | null)?.httpStatus;
     if (typeof lastStatus === 'number') {
       exhausted.httpStatus = lastStatus;
+    }
+    // Same for the callable's details — a retried-out 5xx keeps its reason.
+    const lastDetails = (lastError as { details?: AvafliErrorDetails } | null)?.details;
+    if (lastDetails) {
+      exhausted.details = lastDetails;
     }
     throw exhausted;
   }

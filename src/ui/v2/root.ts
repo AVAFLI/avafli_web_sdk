@@ -5,6 +5,7 @@ import {
   renderCapture,
   renderCodeEntry,
   renderEmailVerify,
+  renderClaimCode,
   renderClaimConfirmation,
   renderClaimSteps,
   renderDashboard,
@@ -263,6 +264,9 @@ export class AvafliV2Experience {
         const step = c.winnerClaimStep;
         if (step.kind === 'splash') {
           this.sheet.appendChild(renderWinnerSplash(c, state.claim, logoUrl));
+        } else if (step.kind === 'code') {
+          // 3.2.0: the six-digit email-ownership code, before the form.
+          this.sheet.appendChild(renderClaimCode(c, state.claim, logoUrl));
         } else if (step.kind === 'form') {
           this.sheet.appendChild(renderClaimSteps(c, state.claim, logoUrl));
         } else if (step.kind === 'share') {

@@ -33,7 +33,7 @@ import {
   uploadIcon,
 } from './icons';
 import { LegalDoc, V2ExperienceController } from './controller';
-import { AvafliV2Strings } from './strings';
+import { AvafliV2Strings, claimCodeResendLabel, claimCodeSubtitle } from './strings';
 import {
   CLAIM_COUNTRY,
   PrizeClaimForm,
@@ -1595,9 +1595,15 @@ export function renderClaimSteps(
 ): HTMLElement {
   // Form + photo preview live at flow level so every step keeps its values
   // when the user navigates back and forth.
-  const form: PrizeClaimForm = c.claimFormPrefill;
-  let photoPreviewUrl: string | null = null;
-  let step: ClaimFlowStep = 1;
+  // 3.2.0: a form that was interrupted by the email code (the server answered
+  // the submit with `claim_verification_required`) comes back exactly as the
+  // person left it, on the review screen they submitted from.
+  const draft = c.claimFormDraft;
+  const form: PrizeClaimForm = draft ?? c.claimFormPrefill;
+  let photoPreviewUrl: string | null = draft?.photoBase64
+    ? `data:image/jpeg;base64,${draft.photoBase64}`
+    : null;
+  let step: ClaimFlowStep = draft ? 4 : 1;
   let animating = false;
 
   const screen = el('div', 'wv2-screen wv2-claim-screen');
@@ -2608,6 +2614,14 @@ interface CodeScreenConfig {
    * soft-verification flow is dismissible; the adoption gate is not.
    */
   onCancel?: () => void;
+  /** Replaces the standard "?"/logo/X header (3.2.0: the claim-flow header). */
+  header?: HTMLElement;
+  /** Replaces the legal footer (3.2.0: the claim step's contact help line). */
+  footer?: HTMLElement;
+  /** Digits already typed, restored into the field (3.2.0, claim step). */
+  initialCode?: string;
+  /** Called with the field's digits on every edit (3.2.0, claim step). */
+  onCodeInput?: (code: string) => void;
 }
 
 /**
@@ -2628,12 +2642,13 @@ function renderCodeScreen(
   const scroll = el('div', 'wv2-scroll');
   const stack = el('div', 'wv2-capture-stack');
   stack.appendChild(
-    renderHeader({
-      logoUrl,
-      ...(cfg.onCancel ? { showsBack: true, onBack: cfg.onCancel } : {}),
-      onInfo: () => c.showHowItWorks(),
-      onClose: () => c.requestDismiss(),
-    })
+    cfg.header ??
+      renderHeader({
+        logoUrl,
+        ...(cfg.onCancel ? { showsBack: true, onBack: cfg.onCancel } : {}),
+        onInfo: () => c.showHowItWorks(),
+        onClose: () => c.requestDismiss(),
+      })
   );
 
   const titles = el('div', 'wv2-capture-titles');
@@ -2653,6 +2668,7 @@ function renderCodeScreen(
   input.autocomplete = 'one-time-code';
   input.placeholder = '••••••';
   input.maxLength = 6;
+  if (cfg.initialCode) input.value = cfg.initialCode.replace(/\D/g, '').slice(0, 6);
   field.appendChild(input);
   form.appendChild(field);
 
@@ -2673,7 +2689,17 @@ function renderCodeScreen(
   cta.addEventListener('click', submit);
   input.addEventListener('input', () => {
     input.value = input.value.replace(/\D/g, '').slice(0, 6);
+    cfg.onCodeInput?.(input.value);
     if (input.value.length === 6) submit();   // auto-submit on the sixth digit
+  });
+  // A pasted "123 456" / "123-456" would be cut to six CHARACTERS by
+  // maxLength before the digits were picked out — take the digits ourselves.
+  input.addEventListener('paste', (event) => {
+    const digits = (event.clipboardData?.getData('text') ?? '').replace(/\D/g, '').slice(0, 6);
+    if (!digits) return;
+    event.preventDefault();
+    input.value = digits;
+    input.dispatchEvent(new Event('input'));
   });
   form.appendChild(cta);
 
@@ -2699,7 +2725,7 @@ function renderCodeScreen(
   // same as the capture screen's legal block) so it stays reachable when the
   // keyboard shrinks the visible area.
   const legal = el('div', 'wv2-code-legal');
-  legal.appendChild(renderLegalLinks(c, true));
+  legal.appendChild(cfg.footer ?? renderLegalLinks(c, true));
   stack.appendChild(legal);
   scroll.appendChild(stack);
   root.appendChild(scroll);
@@ -2754,4 +2780,140 @@ export function renderEmailVerify(c: V2ExperienceController, logoUrl?: string | 
     },
     logoUrl
   );
+}
+
+/**
+ * Prize-claim email-ownership step (3.2.0) — the SAME 6-digit code screen,
+ * between the winner splash and the claim form. The address shown is the
+ * server-masked one; the SDK never holds the raw email.
+ *
+ * Differences from the other two uses of {@link renderCodeScreen}:
+ *  - claim-flow chrome (back chevron • logo • X, no "?"); Back returns to the
+ *    splash and sends nothing;
+ *  - it paints complete on its first frame while the send runs behind it,
+ *    then updates IN PLACE (controller.onClaimCodeChange) — a send result
+ *    landing mid-typing never wipes the field or moves focus;
+ *  - "Send a new code" counts down live to the server's resend time;
+ *  - the footer is the contact help line.
+ */
+export function renderClaimCode(
+  c: V2ExperienceController,
+  claim: PrizeClaimBlock,
+  logoUrl?: string | null
+): HTMLElement {
+  // Header: the claim form's (back chevron, logo, X close).
+  const header = renderClaimHeader(logoUrl, () => c.requestDismiss());
+  const back = el('button', 'wv2-circle-btn wv2-claim-back');
+  const chev = icon(chevronLeftIcon, 'wv2-ic');
+  chev.style.cssText = 'width:10px;height:16px';
+  back.appendChild(chev);
+  back.setAttribute('aria-label', 'Back');
+  back.addEventListener('click', () => c.winnerClaimCodeBack());
+  header.insertBefore(back, header.firstChild);
+
+  // Help line: "Can't get to this email? Contact info@avafli.com" (mailto).
+  const help = el('div', 'wv2-code-help');
+  const [helpLead, helpTail] = AvafliV2Strings.claimCodeHelp.split('{email}');
+  help.appendChild(document.createTextNode(helpLead ?? ''));
+  const mail = el('a', 'wv2-code-help-link', AvafliV2Strings.claimHelpEmail);
+  mail.href = `mailto:${AvafliV2Strings.claimHelpEmail}`;
+  help.appendChild(mail);
+  if (helpTail) help.appendChild(document.createTextNode(helpTail));
+
+  const root = renderCodeScreen(
+    c,
+    {
+      title: AvafliV2Strings.claimCodeTitle,
+      subtitle: claimCodeSubtitle(claim.maskedEmail),
+      onSubmit: (code) => void c.confirmClaimCode(code),
+      onResend: () => void c.resendClaimCode(),
+      header,
+      footer: help,
+      initialCode: c.claimCodeDraft,
+      onCodeInput: (code) => {
+        c.claimCodeDraft = code;
+      },
+    },
+    logoUrl
+  );
+  root.classList.add('wv2-claim-screen');
+
+  const form = root.querySelector('.wv2-capture-form') as HTMLElement;
+  const input = root.querySelector('.wv2-code-input') as HTMLInputElement;
+  const cta = root.querySelector('.wv2-capture-form .wv2-pill') as HTMLButtonElement;
+  const resend = root.querySelector('.wv2-code-resend') as HTMLButtonElement;
+  const resendAction = root.querySelector('.wv2-code-resend-action') as HTMLElement;
+
+  // Small inline status for the send ("Sending your code…" / "Code sent" /
+  // the failure + Retry), above the field; the check's message below it.
+  const status = el('div', 'wv2-code-status');
+  status.setAttribute('role', 'status');
+  form.insertBefore(status, form.firstChild);
+  const notice = el('div', 'wv2-code-error');
+  notice.setAttribute('role', 'status');
+  form.insertBefore(notice, cta);
+
+  let seenResets = c.claimCodeFieldResets;
+
+  const syncResend = (): void => {
+    const left = c.claimCodeResendSecondsLeft();
+    const busy = c.claimCodeSend === 'sending' || c.claimCodeVerified;
+    resend.disabled = left > 0 || busy;
+    resendAction.textContent = claimCodeResendLabel(left);
+  };
+
+  const sync = (): void => {
+    status.textContent = '';
+    status.classList.remove('wv2-code-status-error');
+    if (c.claimCodeVerified) {
+      status.textContent = AvafliV2Strings.emailVerified;
+    } else if (c.claimCodeSend === 'sending') {
+      status.textContent = AvafliV2Strings.claimCodeSending;
+    } else if (c.claimCodeSend === 'sent') {
+      status.textContent = AvafliV2Strings.claimCodeSent;
+    } else if (c.claimCodeSend === 'failed' && c.claimCodeSendError) {
+      status.classList.add('wv2-code-status-error');
+      status.appendChild(el('span', undefined, `${c.claimCodeSendError} `));
+      if (c.claimCodeSendRetryable) {
+        const retry = el('button', 'wv2-code-retry', AvafliV2Strings.claimCodeRetry);
+        retry.type = 'button';
+        retry.addEventListener('click', () => c.retryClaimCodeSend());
+        status.appendChild(retry);
+      }
+    }
+    status.style.display = status.childNodes.length > 0 ? '' : 'none';
+
+    const message = c.claimCodeVerified ? null : c.claimCodeNotice;
+    notice.textContent = message?.text ?? '';
+    notice.classList.toggle('wv2-code-info', message?.tone === 'info');
+    notice.style.display = message ? '' : 'none';
+
+    // Mismatch / fresh code: empty the field and keep the cursor in it.
+    if (c.claimCodeFieldResets !== seenResets) {
+      seenResets = c.claimCodeFieldResets;
+      input.value = '';
+      input.focus();
+    }
+
+    const checking = c.isVerifyingClaimCode;
+    cta.textContent = checking ? 'CHECKING…' : 'VERIFY';
+    cta.disabled = checking || c.claimCodeVerified;
+    syncResend();
+  };
+
+  c.onClaimCodeChange = sync;
+  sync();
+
+  // Live countdown. Stops itself once this screen is no longer the one the
+  // controller updates (replaced by a newer render, or the step was left) or
+  // has left the page (the experience was closed).
+  const ticker = setInterval(() => {
+    if (c.onClaimCodeChange !== sync || !root.isConnected) {
+      clearInterval(ticker);
+      return;
+    }
+    syncResend();
+  }, 1000);
+
+  return root;
 }
