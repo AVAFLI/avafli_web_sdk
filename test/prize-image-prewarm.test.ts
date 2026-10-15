@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { isImageWarmed, prewarmImage, resetImageWarmer } from '../src/ui/v2/effects';
 import { renderPrizeHero } from '../src/ui/v2/screens';
-import { V2_IMAGES } from '../src/ui/v2/assets.generated';
+import { V2_IMAGES } from '../src/ui/v2/assets';
 
 /**
  * Remote-image prewarming (2.3.3).

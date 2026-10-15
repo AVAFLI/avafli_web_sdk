@@ -240,10 +240,10 @@ export interface EmailCaptureConsent {
  */
 export const DEFAULT_MARKETING_CONSENT_TEXT = 'I agree to receive marketing emails from this app';
 
-/** Non-PII "email submitted" flag key — shared with the auto-open engine. */
-export function emailSubmittedStorageKey(bundleId: string): string {
-  return `${AVAFLI_CONSTANTS.STORAGE_KEYS.EMAIL_SUBMITTED}_${bundleId}`;
-}
+// The per-bundle keys live in storage/keys.ts (shared with the boot chunk's
+// auto-open engine); re-exported here for existing importers.
+export { emailSubmittedStorageKey, adoptionCodeSentAtStorageKey } from '../../storage/keys';
+import { emailSubmittedStorageKey, adoptionCodeSentAtStorageKey } from '../../storage/keys';
 
 /**
  * Adoption re-entry cooldown: a parked cross-device link re-sends its 6-digit
@@ -253,9 +253,6 @@ export function emailSubmittedStorageKey(bundleId: string): string {
  */
 export const ADOPTION_CODE_RESEND_COOLDOWN_MS = 10 * 60 * 1000;
 
-export function adoptionCodeSentAtStorageKey(bundleId: string): string {
-  return `${AVAFLI_CONSTANTS.STORAGE_KEYS.ADOPTION_CODE_SENT_AT}_${bundleId}`;
-}
 
 /**
  * The server's resend cooldown (functions/src/claimverify.ts). A countdown

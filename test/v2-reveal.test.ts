@@ -3,7 +3,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { V2ExperienceController, V2ControllerDeps } from '../src/ui/v2/controller';
 import { COMEBACK_TOAST_HOLD_MS, renderDashboard } from '../src/ui/v2/screens';
 import { CONFETTI_BURST_DURATION_MS } from '../src/ui/v2/effects';
-import { V2_IMAGES } from '../src/ui/v2/assets.generated';
 import {
   ClaimDailyEntriesResponse,
   GetActiveGiveawayResponse,

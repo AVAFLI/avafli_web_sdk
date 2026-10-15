@@ -19,13 +19,14 @@ import {
 } from './types';
 import { NetworkClient } from './network/client';
 import { AvafliAPI, createAvafliAPI } from './network/api';
-import { AvafliV2Experience } from './ui/v2/root';
-import {
-  V2ExperienceController,
-  adoptionCodeSentAtStorageKey,
-  emailSubmittedStorageKey,
-} from './ui/v2/controller';
-import { prewarmImage } from './ui/v2/effects';
+// 3.2.1: the drawer UI (src/ui/v2/**) is a lazily imported chunk — only
+// TYPES are imported here; the classes arrive through loadExperienceModule().
+import type { AvafliV2Experience } from './ui/v2/root';
+import type { V2ExperienceController } from './ui/v2/controller';
+import { loadExperienceModule } from './experience-loader';
+import { adoptionCodeSentAtStorageKey, emailSubmittedStorageKey } from './storage/keys';
+import { prewarmImage } from './services/image-warmer';
+import { setAssetBaseUrl } from './assets';
 import { StreakEngine } from './domain/streak-engine';
 import { LocalStorageProvider } from './storage/local-storage';
 import { SessionStorageProvider } from './storage/session-storage';
@@ -92,6 +93,8 @@ export class Avafli {
   private static serviceUnavailable: AvafliError | null = null;
   /** An auto-open is on screen but not yet settled — no second one may start. */
   private static autoPresentPending = false;
+  /** presentExperience() is between its guard and currentExperience being set (3.2.1 lazy UI). */
+  private static experienceMounting = false;
   /**
    * 3.1.11: {@link Avafli.holdAutoOpen} is in effect. Static so a publisher
    * can hold BEFORE configure(); while held the auto-open check backs out
@@ -223,6 +226,9 @@ export class Avafli {
 
   private constructor(config: AvafliConfiguration) {
     this.config = config;
+    // 3.2.1: fonts/imagery come from the asset host; a self-hosting publisher
+    // points the SDK at its copy.
+    setAssetBaseUrl(config.assetBaseUrl);
     this.storage = new LocalStorageProvider();
     this.secureStorage = new SessionStorageProvider();
     this.streakEngine = new StreakEngine();
@@ -859,13 +865,16 @@ export class Avafli {
       return;
     }
 
-    // Don't stack on top of an already-presented experience.
-    if (Avafli.instance!.currentExperience) {
+    // Don't stack on top of an already-presented experience — or one whose
+    // UI chunk is still on its way (3.2.1: the first open awaits the lazy
+    // import, so "on screen" starts a tick before currentExperience is set).
+    if (Avafli.instance!.currentExperience || Avafli.experienceMounting) {
       logger.debug('presentExperience() skipped: experience already on screen');
       return;
     }
 
     let experience: AvafliV2Experience | null = null;
+    Avafli.experienceMounting = true;
     try {
       // Track presentation (the controller fetches fresh giveaway/claim state
       // itself in a single getActiveGiveaway round-trip after mount).
@@ -873,7 +882,7 @@ export class Avafli {
         giveawayId: Avafli.instance!.currentGiveaway?.id,
       });
 
-      experience = Avafli.instance!.createExperience(options);
+      experience = await Avafli.instance!.createExperience(options);
       await experience.present();
 
     } catch (error) {
@@ -898,6 +907,8 @@ export class Avafli {
       logger.error('Failed to present modal:', avafliError);
       options?.onError?.(avafliError);
       throw avafliError;
+    } finally {
+      Avafli.experienceMounting = false;
     }
   }
 
@@ -924,7 +935,10 @@ export class Avafli {
    * The controller re-fetches getActiveGiveaway on mount, auto-claims when
    * eligible, and keeps this instance's caches in sync via the refresh hook.
    */
-  private createExperience(options?: PresentationOptions): AvafliV2Experience {
+  private async createExperience(options?: PresentationOptions): Promise<AvafliV2Experience> {
+    // 3.2.1: the drawer's code is a separate chunk in the ESM build, fetched
+    // on the first open; later opens resolve from the cached module.
+    const { AvafliV2Experience, V2ExperienceController } = await loadExperienceModule();
     const controller = new V2ExperienceController({
       api: this.api,
       storage: this.storage,

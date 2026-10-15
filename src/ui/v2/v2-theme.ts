@@ -1,5 +1,5 @@
 import { MilestoneConfig } from '../../types';
-import { V2_FONT_FACES } from './assets.generated';
+import { fontFaces } from './assets';
 
 /**
  * Design system for the V2 experience — tokens, fonts, and ladder math ported
@@ -88,10 +88,13 @@ export function ensureV2Fonts(): void {
   fontsInjected = true;
   if (document.getElementById('avafli-v2-fonts')) return;
 
-  const css = V2_FONT_FACES.map(
+  // 3.2.1: the faces are fetched from the asset host (content-hashed,
+  // immutable, CORS) instead of being embedded as data URIs. font-display:
+  // swap keeps text visible in the fallback face until each file lands.
+  const css = fontFaces().map(
     (f) =>
       `@font-face{font-family:'${f.family}';font-style:normal;font-weight:${f.weight};` +
-      `font-display:swap;src:url(${f.dataUri}) format('woff2')}`
+      `font-display:swap;src:url(${f.url}) format('woff2')}`
   ).join('\n');
 
   const style = document.createElement('style');

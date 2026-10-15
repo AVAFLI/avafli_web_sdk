@@ -1,6 +1,6 @@
 import { logoNode } from './logo-cache';
 import { Giveaway, GiveawayWinner, PrizeClaimBlock, AVAFLI_CONSTANTS } from '../../types';
-import { V2_IMAGES } from './assets.generated';
+import { V2_IMAGES, assetImage } from './assets';
 import {
   CONFETTI_BURST_DURATION_MS,
   createAnimatedCheck,
@@ -1014,7 +1014,7 @@ export function renderPrizeHero(prizeImageUrl?: string | null): HTMLImageElement
   hero.alt = '';
 
   if (!prizeImageUrl) {
-    hero.src = V2_IMAGES.cashHero; // bundled data URI — always instant
+    assetImage(hero, 'cashHero'); // CDN asset: placeholder paints until it lands
     return hero;
   }
 
@@ -1037,7 +1037,7 @@ export function renderPrizeHero(prizeImageUrl?: string | null): HTMLImageElement
     // Broken publisher URL — swap in the bundled cash hero, unfaded. The
     // load handler stands down so the swap can't re-trigger the fade.
     hero.classList.remove('wv2-img-fade', 'wv2-img-ready');
-    hero.src = V2_IMAGES.cashHero;
+    assetImage(hero, 'cashHero');
   };
   hero.addEventListener('load', onLoad);
   hero.addEventListener('error', onError, { once: true });
@@ -1162,7 +1162,7 @@ function renderStreakTile(
   const iconWrap = el('div', 'wv2-tile-icon');
   if (state === 'completed') {
     const img = el('img');
-    img.src = V2_IMAGES.checkCompleted;
+    assetImage(img, 'checkCompleted');
     img.alt = '';
     iconWrap.appendChild(img);
   } else if (state === 'active') {
@@ -1507,11 +1507,11 @@ export function renderWinnerSplash(
   // Trophy over the gold-sparkle art.
   const art = el('div', 'wv2-claim-trophy-art');
   const bg = el('img', 'wv2-claim-trophy-bg');
-  bg.src = V2_IMAGES.winnerModalBg;
+  assetImage(bg, 'winnerModalBg');
   bg.alt = '';
   art.appendChild(bg);
   const trophy = el('img', 'wv2-claim-trophy');
-  trophy.src = V2_IMAGES.trophy;
+  assetImage(trophy, 'trophy');
   trophy.alt = '';
   art.appendChild(trophy);
   stack.appendChild(art);
@@ -1612,7 +1612,7 @@ export function renderClaimSteps(
   // the frames).
   const backdrop = el('div', 'wv2-claim-form-bg');
   const backdropImg = el('img');
-  backdropImg.src = V2_IMAGES.winnerModalBg;
+  assetImage(backdropImg, 'winnerModalBg');
   backdropImg.alt = '';
   backdrop.appendChild(backdropImg);
   backdrop.appendChild(el('div', 'wv2-claim-form-bg-grad'));
@@ -2269,7 +2269,7 @@ export function renderWinnerShare(
   // Same gold-sparkle backdrop as the stepped form.
   const backdrop = el('div', 'wv2-claim-form-bg');
   const backdropImg = el('img');
-  backdropImg.src = V2_IMAGES.winnerModalBg;
+  assetImage(backdropImg, 'winnerModalBg');
   backdropImg.alt = '';
   backdrop.appendChild(backdropImg);
   backdrop.appendChild(el('div', 'wv2-claim-form-bg-grad'));
@@ -2411,7 +2411,7 @@ export function renderClaimConfirmation(
   // (Joe's confirmation frame — same treatment as the stepped form).
   const backdrop = el('div', 'wv2-claim-form-bg wv2-claim-done-bg');
   const backdropImg = el('img');
-  backdropImg.src = V2_IMAGES.winnerModalBg;
+  assetImage(backdropImg, 'winnerModalBg');
   backdropImg.alt = '';
   backdrop.appendChild(backdropImg);
   backdrop.appendChild(el('div', 'wv2-claim-form-bg-grad'));
@@ -2451,7 +2451,7 @@ export function renderClaimConfirmation(
   // breaking the top border, serif name, award month + claim number.
   const card = el('div', 'wv2-gold-card');
   const trophy = el('img', 'wv2-gold-trophy');
-  trophy.src = V2_IMAGES.trophy;
+  assetImage(trophy, 'trophy');
   trophy.alt = '';
   card.appendChild(trophy);
 
@@ -2504,7 +2504,7 @@ export function renderClaimConfirmation(
 export function renderWinnerBanner(onTap: () => void): HTMLElement {
   const banner = el('button', 'wv2-winner-banner');
   const trophy = el('img', 'wv2-winner-banner-trophy');
-  trophy.src = V2_IMAGES.trophy;
+  assetImage(trophy, 'trophy');
   trophy.alt = '';
   banner.appendChild(trophy);
   const col = el('div', 'wv2-winner-banner-col');
@@ -2529,7 +2529,7 @@ export function renderWinnerModal(winner: GiveawayWinner, onDismiss: () => void)
   // Gold-sparkle art behind the content.
   const bg = el('div', 'wv2-winner-bg');
   const bgImg = el('img');
-  bgImg.src = V2_IMAGES.winnerModalBg;
+  assetImage(bgImg, 'winnerModalBg');
   bgImg.alt = '';
   bg.appendChild(bgImg);
   bg.appendChild(el('div', 'wv2-winner-bg-grad'));
@@ -2541,7 +2541,7 @@ export function renderWinnerModal(winner: GiveawayWinner, onDismiss: () => void)
   const top = el('div', 'wv2-winner-top');
   const trophyWrap = el('div', 'wv2-winner-trophy-wrap');
   const trophy = el('img', 'wv2-winner-trophy');
-  trophy.src = V2_IMAGES.trophy;
+  assetImage(trophy, 'trophy');
   trophy.alt = '';
   trophyWrap.appendChild(trophy);
   top.appendChild(trophyWrap);

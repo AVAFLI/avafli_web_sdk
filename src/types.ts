@@ -65,6 +65,15 @@ export interface AvafliConfiguration {
   options?: AvafliOptions;
   /** Custom branding configuration */
   branding?: AvafliBranding;
+  /**
+   * Where the drawer's fonts and imagery are fetched from (3.2.1). Default
+   * `https://sdk.avafli.com/sdk-assets/v2` — content-hashed files served
+   * immutable for a year with CORS. Set it to self-host: copy the files
+   * (names included) and give the directory's URL or same-origin path, e.g.
+   * `'https://cdn.example.com/avafli'` or `'/vendor/avafli'`. A trailing
+   * slash is ignored; blank falls back to the default.
+   */
+  assetBaseUrl?: string;
 }
 
 export interface AvafliBranding {
@@ -850,7 +859,7 @@ export interface PresentationOptions {
 // ─── Constants ───
 
 export const AVAFLI_CONSTANTS = {
-  SDK_VERSION: '3.2.0',
+  SDK_VERSION: '3.2.1',
   PLATFORM_OS: 'Web',
   /**
    * Canonical Avafli privacy policy. 2.9.3: every "Privacy Policy" link used to

@@ -137,7 +137,13 @@ const foreground = async (): Promise<void> => {
 };
 
 const winnerSplashShown = async (): Promise<void> => {
-  await vi.waitFor(() => expect(shadow()?.querySelector('.wv2-claim-congrats')).not.toBeNull());
+  // `?? null`: with no drawer yet, `shadow()?.querySelector()` is undefined,
+  // which `.not.toBeNull()` would accept — the wait must actually wait for the
+  // mount (3.2.1: the drawer's code is a lazily imported chunk, so the first
+  // open lands a tick after configure()).
+  await vi.waitFor(() =>
+    expect(shadow()?.querySelector('.wv2-claim-congrats') ?? null).not.toBeNull()
+  );
 };
 
 /**
@@ -156,7 +162,7 @@ function shownAt(bundle: string): number {
 /** Closes the drawer the way a person does, and waits for it to be gone. */
 async function closeDrawer(): Promise<void> {
   await vi.waitFor(() =>
-    expect(shadow()?.querySelector('button[aria-label="Close"]')).not.toBeNull()
+    expect(shadow()?.querySelector('button[aria-label="Close"]') ?? null).not.toBeNull()
   );
   (shadow()!.querySelector('button[aria-label="Close"]') as HTMLButtonElement).click();
   await vi.waitFor(() => expect(host()).toBeNull());
