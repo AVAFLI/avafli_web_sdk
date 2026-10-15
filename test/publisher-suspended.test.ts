@@ -191,8 +191,11 @@ describe('publisher suspended handling', () => {
       ok: false,
       status: 500,
       headers: { get: () => 'application/json' },
-      text: async () => JSON.stringify({ message: 'internal error' }),
-      json: async () => ({ message: 'internal error' }),
+      // A callable-bodied 500 (the function itself threw) is an app error:
+      // surfaced at once. A NON-callable 500 would be an infra refusal and
+      // take the 3.2.2 retry schedule — see test/infra-refusal-retry.test.ts.
+      text: async () => JSON.stringify({ error: { message: 'internal error', status: 'INTERNAL' } }),
+      json: async () => ({ error: { message: 'internal error', status: 'INTERNAL' } }),
     })) as unknown as typeof fetch;
     const { Avafli, AvafliErrorCode } = await import('../src/index');
 

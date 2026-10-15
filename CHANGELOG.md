@@ -1,6 +1,15 @@
 # Changelog
 
 
+## 3.2.2
+
+- **Infrastructure refusals are retried** (RESILIENCE_SPEC, Oct 15). When a traffic step outruns warm Cloud Run instances the platform refuses the overflow at once with HTTP 429 or 500 and a plain-text body ("The request was aborted because there was no available instance."); instances arrive within ~10–30 s. The network client now classifies every non-2xx response: a **callable error** (`{"error":{"message","status",…}}` — our own rate limiter, resend cooldowns, geo, consent, already-claimed, a function that threw) is surfaced immediately, whatever the status; an **infrastructure refusal** (429, 500, 502, 503 or 504 with a non-callable body: plain text, HTML, empty) is retried up to four times on base delays of 1 s, 2 s, 4 s, 8 s with full jitter (`random(0, base)` + 250 ms floor, ≈15 s worst case). A `Retry-After` header (seconds) is honoured instead of the jittered delay, capped at 10 s. Each retry is logged at debug level with status, attempt and delay. Only after the retries are exhausted does the host app see the usual `NetworkError` (with `httpStatus` set).
+- Behaviour change for callable-bodied 5xx: previously retried twice (1 s, 2 s) before surfacing; now surfaced at once — retrying a function that threw only delayed the real message.
+- Transport failures (offline, DNS, timeout — no response at all) keep their three attempts, now spaced by the same jittered schedule instead of fixed 1 s / 2 s.
+- The offline retry queue is unchanged: it still queues only transport failures. An exhausted infra refusal carries its HTTP status and is NOT queued — the server answered, it was just busy.
+- 401 refresh-once and immediate surfacing of other 4xx are unchanged. No new public API.
+- Tests: `test/infra-refusal-retry.test.ts` pins the spec's six cases with injected sleep and fake timers.
+
 ## 3.2.1
 
 - **Bundle diet (SCALE_SPEC §5).** The eight Inter/Oswald faces and five images (~720 KB of base64 on every page load) are no longer embedded. They are served as content-hashed, immutable files from `https://sdk.avafli.com/sdk-assets/v2/<name>.<hash>.<ext>` (`Cache-Control: public, max-age=31536000, immutable`, CORS `*`); the bundles carry only the file names. Each bundled `<img>` reserves its intrinsic box and paints a 1-line solid-colour SVG placeholder until the bytes land (no layout shift); `@font-face` uses `font-display: swap`.

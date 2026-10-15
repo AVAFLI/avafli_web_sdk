@@ -385,6 +385,27 @@ await Avafli.configure({
 - `avafli_claim_email_verified` — Winner entered the correct email code before the claim form (3.2.0)
 - `avafli_opted_out` — Right-to-delete opt-out completed
 
+## Networking and offline behaviour
+
+Every call goes to a Firebase callable function and the SDK handles the
+unhappy paths for you — nothing to configure.
+
+- **Offline / transport failures** (no response at all: offline, DNS,
+  timeout): a same-day registration or daily claim is queued and retried
+  automatically when connectivity returns or the tab comes back to the
+  foreground. Analytics events are buffered and flushed.
+- **Infrastructure refusals** (3.2.2): under a sudden traffic surge the
+  platform can answer 429/500/502/503/504 with a plain-text body before a
+  warm instance is available. The SDK retries these up to four times with
+  exponential backoff and full jitter (1 s, 2 s, 4 s, 8 s base; ≈15 s worst
+  case) and honours a `Retry-After` header up to 10 s. The host app only
+  sees an error if every retry fails — and such an error is *not* added to
+  the offline queue, because the server did answer.
+- **Backend rejections** (a callable error body such as "You've already
+  entered today", consent required, geo, our rate limiter, a code cooldown)
+  are surfaced immediately and never retried or queued. A 401 triggers one
+  token refresh and a single retry.
+
 ## Account deletion in your app
 
 If your app has its own delete-account flow, call `optOut()` from it so the

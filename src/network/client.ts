@@ -1,6 +1,57 @@
 import { AvafliError, AvafliErrorCode, AvafliErrorDetails, Logger } from '../types';
 
 /**
+ * 3.2.2 (RESILIENCE_SPEC): bounded retry for infrastructure refusals.
+ *
+ * When a traffic step outruns warm Cloud Run instances the platform answers
+ * at once with HTTP 429 or 500 and a plain-text body ("The request was
+ * aborted because there was no available instance."). Instances arrive
+ * within ~10–30 s. Base delays 1 s, 2 s, 4 s, 8 s (four retries, ≈15 s worst
+ * case), each `random(0, base) + 250 ms` (full jitter). A `Retry-After`
+ * header (seconds) is honoured instead, capped at 10 s.
+ */
+const INFRA_RETRY_BASE_DELAYS_MS: readonly number[] = [1000, 2000, 4000, 8000];
+const RETRY_JITTER_FLOOR_MS = 250;
+const RETRY_AFTER_CAP_MS = 10000;
+const INFRA_REFUSAL_STATUSES: ReadonlySet<number> = new Set([429, 500, 502, 503, 504]);
+
+/** Internal tag — never a public field on AvafliError. */
+interface InfraRefusalTag {
+  retryAfterMs?: number;
+}
+const infraRefusals = new WeakMap<AvafliError, InfraRefusalTag>();
+
+/**
+ * A Firebase callable (onCall) error body: `{"error":{"message","status",…}}`.
+ * Anything else — plain text, HTML, empty, or JSON of another shape — is the
+ * platform speaking, not our function.
+ */
+function isCallableErrorBody(parsed: unknown): boolean {
+  if (!parsed || typeof parsed !== 'object') return false;
+  const error = (parsed as { error?: unknown }).error;
+  if (!error || typeof error !== 'object') return false;
+  const { message, status } = error as { message?: unknown; status?: unknown };
+  return typeof message === 'string' || typeof status === 'string';
+}
+
+/**
+ * Infra refusal = 429/500/502/503/504 AND the body is NOT a callable error.
+ * A callable-bodied 429 ("Too many requests…", RESOURCE_EXHAUSTED) is our own
+ * rate limiter and is surfaced at once.
+ */
+export function isInfraRefusal(status: number, callableBody: boolean): boolean {
+  return INFRA_REFUSAL_STATUSES.has(status) && !callableBody;
+}
+
+/** `Retry-After` in whole seconds → ms, capped. Non-numeric (HTTP-date) is ignored. */
+function parseRetryAfterMs(header: string | null): number | undefined {
+  if (!header) return undefined;
+  const seconds = Number(header.trim());
+  if (!Number.isFinite(seconds) || seconds < 0) return undefined;
+  return Math.min(seconds * 1000, RETRY_AFTER_CAP_MS);
+}
+
+/**
  * HTTP client with automatic token refresh and retry logic
  */
 export class NetworkClient {
@@ -13,6 +64,10 @@ export class NetworkClient {
   private tokenProvider?: () => string | null | Promise<string | null>;
   private refreshHandler?: () => Promise<string | null>;
   private logger?: Logger;
+  /** Injectable so tests drive the backoff with fake timers. */
+  private sleepFn: (ms: number) => Promise<void>;
+  /** Injectable jitter source in [0, 1). */
+  private randomFn: () => number;
 
   constructor(options: {
     baseURL: string;
@@ -20,12 +75,16 @@ export class NetworkClient {
     tokenProvider?: () => string | null | Promise<string | null>;
     refreshHandler?: () => Promise<string | null>;
     logger?: Logger;
+    sleep?: (ms: number) => Promise<void>;
+    random?: () => number;
   }) {
     this.baseURL = options.baseURL.replace(/\/$/, ''); // Remove trailing slash
     this.apiKey = options.apiKey;
     this.tokenProvider = options.tokenProvider;
     this.refreshHandler = options.refreshHandler;
     this.logger = options.logger;
+    this.sleepFn = options.sleep ?? ((ms) => new Promise(resolve => setTimeout(resolve, ms)));
+    this.randomFn = options.random ?? Math.random;
   }
 
   /**
@@ -49,8 +108,10 @@ export class NetworkClient {
     const url = `${this.baseURL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
     
     let lastError: Error | null = null;
+    let attempts = 0;
 
-    for (let attempt = 0; attempt < retries; attempt++) {
+    for (let attempt = 0; ; attempt++) {
+      attempts = attempt + 1;
       try {
         const headers = new Headers(fetchOptions.headers);
         // The backend functions are Firebase callable (onCall): POST + JSON only.
@@ -115,10 +176,13 @@ export class NetworkClient {
             let errorBody: unknown;
 
             let errorDetails: AvafliErrorDetails | undefined;
+            // App error (callable JSON body) vs infra refusal (platform text/HTML/empty).
+            let callableBody = false;
 
             try {
               errorBody = await response.text();
               const parsed = JSON.parse(errorBody as string) as { error?: { message?: string; details?: unknown } | string; message?: string };
+              callableBody = isCallableErrorBody(parsed);
               // onCall errors come back as { error: { message, status } }.
               errorMessage = (typeof parsed.error === "object" ? parsed.error?.message : parsed.error) || parsed.message || errorMessage;
               // 3.2.0: keep the callable's `details` (machine-readable reason
@@ -141,6 +205,11 @@ export class NetworkClient {
             // a transport failure that never completed.
             httpErr.httpStatus = response.status;
             if (errorDetails) httpErr.details = errorDetails;
+            if (isInfraRefusal(response.status, callableBody)) {
+              infraRefusals.set(httpErr, {
+                retryAfterMs: parseRetryAfterMs(response.headers.get('retry-after')),
+              });
+            }
             throw httpErr;
           }
 
@@ -190,44 +259,75 @@ export class NetworkClient {
           }
         }
 
-        // Definitive client errors (4xx) are NOT retryable — retrying just masks the
-        // real backend message ("You've already entered today", consent required,
-        // geo, validation) as a generic "Request failed after N attempts". Surface
-        // the real error immediately. Only transient failures (network/timeout/5xx)
-        // fall through to the retry/backoff below.
+        const infra = error instanceof AvafliError ? infraRefusals.get(error) : undefined;
         const httpStatus = (error as { httpStatus?: number }).httpStatus;
-        if (typeof httpStatus === 'number' && httpStatus >= 400 && httpStatus < 500) {
+
+        // App errors — the function answered with a callable error body — are
+        // NOT retryable, whatever the status: a 4xx would only be rejected
+        // again and masking the real message ("You've already entered today",
+        // consent required, geo, validation, our own rate limiter) as a
+        // generic "Request failed after N attempts" helps nobody. Surface the
+        // real error immediately. Only transient failures fall through:
+        // transport/timeout (no status) and infra refusals (429/5xx with a
+        // non-callable body — the platform had no instance to run us).
+        if (typeof httpStatus === 'number' && !infra) {
           throw error;
         }
 
-        // Log retry attempts
-        if (attempt < retries - 1) {
-          const delay = Math.pow(2, attempt) * 1000; // Exponential backoff
-          this.logger?.debug(`Request failed, retrying in ${delay}ms (attempt ${attempt + 1}/${retries})`);
-          await this.sleep(delay);
+        // Retry budget: infra refusals get the spec's four retries; transport
+        // failures keep the caller's `retries` (default 3 attempts).
+        const maxRetries = infra ? INFRA_RETRY_BASE_DELAYS_MS.length : retries - 1;
+        if (attempt >= maxRetries) {
+          break;
         }
+
+        const delay = this.retryDelayMs(attempt, infra?.retryAfterMs);
+        if (infra) {
+          this.logger?.debug(
+            `Infrastructure refusal (HTTP ${httpStatus}), retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries + 1})`
+          );
+        } else {
+          this.logger?.debug(`Request failed, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries + 1})`);
+        }
+        await this.sleepFn(delay);
       }
     }
 
     // If we get here, all retries failed
     const exhausted = new AvafliError(
       AvafliErrorCode.NetworkError,
-      `Request failed after ${retries} attempts`,
+      `Request failed after ${attempts} attempts`,
       lastError ?? undefined
     );
-    // Propagate the last HTTP status (a retried-out 5xx) so the ABSENCE of
-    // httpStatus on this wrapper reliably means "the request never
+    // Propagate the last HTTP status (a retried-out infra refusal) so the
+    // ABSENCE of httpStatus on this wrapper reliably means "the request never
     // completed" — the transport-only signal the offline retry queue needs.
+    // An exhausted infra refusal is therefore NOT queued: the server
+    // answered, it was just busy.
     const lastStatus = (lastError as { httpStatus?: number } | null)?.httpStatus;
     if (typeof lastStatus === 'number') {
       exhausted.httpStatus = lastStatus;
     }
-    // Same for the callable's details — a retried-out 5xx keeps its reason.
+    // Same for the callable's details — a retried-out error keeps its reason.
     const lastDetails = (lastError as { details?: AvafliErrorDetails } | null)?.details;
     if (lastDetails) {
       exhausted.details = lastDetails;
     }
     throw exhausted;
+  }
+
+  /**
+   * Delay before retry `attempt` (0-based). `Retry-After` wins when the server
+   * sent one (already capped at 10 s); otherwise full jitter over the base
+   * schedule. The 250 ms floor applies to both.
+   */
+  private retryDelayMs(attempt: number, retryAfterMs?: number): number {
+    if (typeof retryAfterMs === 'number') {
+      return Math.max(RETRY_JITTER_FLOOR_MS, retryAfterMs);
+    }
+    const last = INFRA_RETRY_BASE_DELAYS_MS.length - 1;
+    const base = INFRA_RETRY_BASE_DELAYS_MS[Math.min(attempt, last)] ?? INFRA_RETRY_BASE_DELAYS_MS[last] ?? 8000;
+    return Math.floor(this.randomFn() * base) + RETRY_JITTER_FLOOR_MS;
   }
 
   /**
@@ -321,10 +421,6 @@ export class NetworkClient {
         return AvafliErrorCode.NetworkError;
     }
   }
-
-  private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
 }
 
 /**
@@ -336,6 +432,8 @@ export function createNetworkClient(options: {
   tokenProvider?: () => string | null | Promise<string | null>;
   refreshHandler?: () => Promise<string | null>;
   logger?: Logger;
+  sleep?: (ms: number) => Promise<void>;
+  random?: () => number;
 }): NetworkClient {
   return new NetworkClient(options);
 }
