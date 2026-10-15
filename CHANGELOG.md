@@ -1,6 +1,16 @@
 # Changelog
 
 
+## 3.2.1
+
+- **Bundle diet (SCALE_SPEC §5).** The eight Inter/Oswald faces and five images (~720 KB of base64 on every page load) are no longer embedded. They are served as content-hashed, immutable files from `https://sdk.avafli.com/sdk-assets/v2/<name>.<hash>.<ext>` (`Cache-Control: public, max-age=31536000, immutable`, CORS `*`); the bundles carry only the file names. Each bundled `<img>` reserves its intrinsic box and paints a 1-line solid-colour SVG placeholder until the bytes land (no layout shift); `@font-face` uses `font-display: swap`.
+- New `assetBaseUrl` on `Avafli.configure()` for publishers who self-host the files (copy `public/sdk-assets/v2/` from the website repo, hashed names included, and pass the directory URL or same-origin path). README: "Where the UI assets are served from".
+- **ESM build is code-split.** `avafli-sdk.esm.js` is the boot chunk (configure → registerDevice, auto-open engine, offline queue — 49 KB minified); the drawer (`src/ui/v2/**`) lands in `avafli-sdk.ui.esm.js` (165 KB), fetched through a dynamic `import()` on the first open — auto-open, `Avafli.present()`, or a pending-claim reopen. Keep the two files side by side when self-hosting. The UMD build inlines the chunk and stays a single file (214 KB minified, down from 1.26 MB). `present()` still resolves after the drawer is mounted; the auto-open now lands a tick later than `configure()` — it was already asynchronous.
+- A failed chunk load (offline, blocked CDN) surfaces through the usual `onError`/`present()` → `false` path and is retried on the next open; the once-per-day mark is not written.
+- `test/bundle-size.test.ts` builds the production bundles and holds the line: UMD ≤ 250 KB, ESM boot ≤ 120 KB, boot reaches the UI only via `import()`, no embedded font/image data URIs.
+- `scripts/generate-assets.mjs` (`npm run assets`) now writes the hashed files into `avafli-website/public/sdk-assets/v2` (override with `AVAFLI_ASSET_OUT`) and the manifest `src/ui/v2/assets.generated.ts`; old files are left in place for already-shipped SDK versions.
+- Internal: `prewarmImage` moved to `services/image-warmer.ts` and the per-bundle storage keys to `storage/keys.ts` (both re-exported from their old modules) so the boot chunk never pulls the UI in. `V2_IMAGES` is now exported from `src/ui/v2/assets.ts` (URLs, resolved against the configured base).
+
 ## 3.2.0
 
 - **Prize claims: six-digit email code before the claim form** (Official Rules §7). When the backend's `prizeClaim.verification.required` is true, the winner splash's CONTINUE opens a code screen first: "Enter the 6-digit code we sent to {masked email}", sent on open (idempotent — a live code is re-used), numeric one-time-code field with paste and auto-submit on the sixth digit, "Send a new code" with a live countdown, and a contact line. A wrong code says how many tries are left; an expired or used-up code is replaced by the server and the screen says so; a failed send is shown inline with "Try again" while the field stays usable. People who proved the inbox earlier skip the step.
