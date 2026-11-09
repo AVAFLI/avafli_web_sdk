@@ -652,7 +652,30 @@ function renderPrizeStrip(giveaway: Giveaway | null): HTMLElement {
       strip.appendChild(el('div', 'wv2-prize-strip-value', `$${formatInt(value)}.00 Value!`));
     }
   }
+  appendSponsorDisclosure(strip, giveaway, 'wv2-sponsor-strip');
   return strip;
+}
+
+/**
+ * 3.3.0 — network giveaway sponsor-of-record line ("Sponsored by Avafli LLC").
+ *
+ * Legally it must appear wherever the prize is presented, so every prize
+ * surface (Day-1 capture strip, Day-2+ prize card headline, winner splash
+ * strip) routes through here. The server string is set via `textContent`
+ * (never innerHTML). When `sponsorDisclosure` is absent — every exclusive
+ * giveaway — nothing is appended and the surface is byte-for-byte what it
+ * was before 3.3.0.
+ */
+export function appendSponsorDisclosure(
+  parent: HTMLElement,
+  giveaway: Pick<Giveaway, 'sponsorDisclosure'> | null | undefined,
+  variantClass: string
+): HTMLElement | null {
+  const text = typeof giveaway?.sponsorDisclosure === 'string' ? giveaway.sponsorDisclosure.trim() : '';
+  if (!text) return null;
+  const line = el('div', `wv2-sponsor ${variantClass}`, text);
+  parent.appendChild(line);
+  return line;
 }
 
 // ─── Return-user dashboard (Day 2+ drawer) ───
@@ -983,6 +1006,9 @@ function renderPrizeCard(c: V2ExperienceController, preReveal = false): HTMLElem
     const lockup = el('div', 'wv2-ph-cash');
     lockup.appendChild(el('div', 'wv2-ph-cash-win', `WIN $${formatInt(value)}`));
     lockup.appendChild(el('div', 'wv2-ph-cash-sub', 'CASH PRIZE'));
+    // 3.3.0: network giveaway sponsor line, directly beneath the lockup
+    // (inherits the lockup's alignment: right for cash, centered otherwise).
+    appendSponsorDisclosure(lockup, giveaway, 'wv2-sponsor-card');
     headline.appendChild(lockup);
   } else {
     // Centered "Win a {Prize}" + accent "$X.00 VALUE!".
@@ -993,6 +1019,7 @@ function renderPrizeCard(c: V2ExperienceController, preReveal = false): HTMLElem
     if (showsValueLine(description, value)) {
       lockup.appendChild(el('div', 'wv2-ph-prize-value', `$${formatInt(value)}.00 VALUE!`));
     }
+    appendSponsorDisclosure(lockup, giveaway, 'wv2-sponsor-card');
     headline.appendChild(lockup);
   }
   card.appendChild(headline);
@@ -1522,13 +1549,18 @@ export function renderWinnerSplash(
 
   // Full-width white strip with the prize-derived headline (same derivation
   // as the Day-1 capture strip).
-  stack.appendChild(
-    el(
-      'div',
-      'wv2-claim-strip',
-      stripHeadline(claim.prizeDescription, Math.round(claim.prizeValue))
-    )
+  const claimStrip = el(
+    'div',
+    'wv2-claim-strip',
+    stripHeadline(claim.prizeDescription, Math.round(claim.prizeValue))
   );
+  // 3.3.0: the claim block carries no sponsor line; for a network giveaway
+  // the prize being presented is the active giveaway's, so its disclosure
+  // rides under the headline here too. Different/absent giveaway → nothing.
+  if (c.giveaway && c.giveaway.id === claim.giveawayId) {
+    appendSponsorDisclosure(claimStrip, c.giveaway, 'wv2-sponsor-strip');
+  }
+  stack.appendChild(claimStrip);
 
   stack.appendChild(
     el('div', 'wv2-claim-body-copy', 'To process your prize, we just need a few details.')

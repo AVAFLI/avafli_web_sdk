@@ -191,6 +191,20 @@ export interface Giveaway {
    * (default hidden).
    */
   latestWinner?: GiveawayWinner;
+  /**
+   * 3.3.0: `"network"` when this is a network giveaway — one shared prize
+   * pool across many publisher apps, with Avafli LLC as Sponsor of Record.
+   * Absent (or `"publisher"`) for a normal exclusive giveaway.
+   */
+  scope?: 'publisher' | 'network';
+  /**
+   * 3.3.0: short sponsor-of-record line (e.g. "Sponsored by Avafli LLC"),
+   * present only for network giveaways. Legally it MUST be shown wherever the
+   * prize is presented, so the SDK renders it as a muted line directly under
+   * the prize headline on the capture strip, the dashboard prize card and the
+   * winner splash. Absent → nothing is rendered and no layout changes.
+   */
+  sponsorDisclosure?: string;
 }
 
 export interface GiveawayWinner {
@@ -859,7 +873,7 @@ export interface PresentationOptions {
 // ─── Constants ───
 
 export const AVAFLI_CONSTANTS = {
-  SDK_VERSION: '3.2.2',
+  SDK_VERSION: '3.3.0',
   PLATFORM_OS: 'Web',
   /**
    * Canonical Avafli privacy policy. 2.9.3: every "Privacy Policy" link used to

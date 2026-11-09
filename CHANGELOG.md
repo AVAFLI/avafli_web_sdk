@@ -1,6 +1,11 @@
 # Changelog
 
 
+## 3.3.0
+
+- **Network giveaway: sponsor disclosure.** The giveaway payload may carry `scope: "network"` and `sponsorDisclosure` (e.g. "Sponsored by Avafli LLC"); both are new optional fields on the exported `Giveaway` type. The SDK shows the sponsor line — small, muted, a single line — directly under the prize headline wherever the prize is presented: the Day-1 capture strip, the Day-2+ prize card and the winner splash strip. Rendered via `textContent`, never markup. No change for exclusive giveaways: when the field is absent no element is emitted and the layout is byte-for-byte what it was.
+- Tests: `test/sponsor-disclosure.test.ts`.
+
 ## 3.2.2
 
 - **Infrastructure refusals are retried** (RESILIENCE_SPEC, Oct 15). When a traffic step outruns warm Cloud Run instances the platform refuses the overflow at once with HTTP 429 or 500 and a plain-text body ("The request was aborted because there was no available instance."); instances arrive within ~10–30 s. The network client now classifies every non-2xx response: a **callable error** (`{"error":{"message","status",…}}` — our own rate limiter, resend cooldowns, geo, consent, already-claimed, a function that threw) is surfaced immediately, whatever the status; an **infrastructure refusal** (429, 500, 502, 503 or 504 with a non-callable body: plain text, HTML, empty) is retried up to four times on base delays of 1 s, 2 s, 4 s, 8 s with full jitter (`random(0, base)` + 250 ms floor, ≈15 s worst case). A `Retry-After` header (seconds) is honoured instead of the jittered delay, capped at 10 s. Each retry is logged at debug level with status, attempt and delay. Only after the retries are exhausted does the host app see the usual `NetworkError` (with `httpStatus` set).

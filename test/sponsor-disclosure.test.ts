@@ -1,0 +1,223 @@
+// @vitest-environment happy-dom
+import { describe, it, expect, vi } from 'vitest';
+import { V2ControllerDeps, V2ExperienceController } from '../src/ui/v2/controller';
+import {
+  appendSponsorDisclosure,
+  renderCapture,
+  renderDashboard,
+  renderWinnerSplash,
+} from '../src/ui/v2/screens';
+import { AVAFLI_CONSTANTS, Giveaway, GetActiveGiveawayResponse, PrizeClaimBlock } from '../src/types';
+import { AvafliAPI } from '../src/network/api';
+import { LocalStorageProvider } from '../src/storage/local-storage';
+
+/**
+ * 3.3.0 — network giveaway sponsor disclosure.
+ *
+ * A network giveaway (one shared prize pool across many publisher apps, with
+ * Avafli LLC as Sponsor of Record) arrives with `scope: "network"` and a
+ * `sponsorDisclosure` string. Legally the disclosure must appear wherever the
+ * prize is presented. An exclusive giveaway carries neither field and must
+ * render EXACTLY as before — no element, no layout change.
+ */
+
+const EXCLUSIVE: Giveaway = {
+  id: 'g1',
+  title: 'Test Giveaway',
+  prizeDescription: 'Cash Prize',
+  prizeValue: 1000,
+  startDate: '2026-01-01T00:00:00Z',
+  endDate: '2027-01-01T00:00:00Z',
+  streakLadder: [10, 30, 60, 130, 240, 300],
+  doublingEnabled: false,
+  maxDailyBaseEntries: 300,
+  rulesUrl: 'https://example.com/rules',
+  milestones: [],
+};
+
+const DISCLOSURE = 'Sponsored by Avafli LLC';
+
+const NETWORK: Giveaway = {
+  ...EXCLUSIVE,
+  id: 'net1',
+  scope: 'network',
+  sponsorDisclosure: DISCLOSURE,
+};
+
+function fakeStorage(consented: boolean): LocalStorageProvider {
+  const store = new Map<string, string>();
+  if (consented) store.set('winr_email_submitted_com.test', 'true');
+  return {
+    getItem: (k: string) => store.get(k) ?? null,
+    setItem: (k: string, v: string) => void store.set(k, v),
+    removeItem: (k: string) => void store.delete(k),
+    clear: () => store.clear(),
+  } as unknown as LocalStorageProvider;
+}
+
+function makeController(
+  giveaway: Giveaway,
+  consented: boolean,
+  status: Partial<GetActiveGiveawayResponse> = {}
+): V2ExperienceController {
+  const api = {
+    getActiveGiveaway: vi.fn(async () => ({
+      giveaway,
+      claimedToday: true,
+      streakDay: 3,
+      totalEntries: 100,
+      emailConsentStatus: consented,
+      ...status,
+    })),
+    claimDailyEntries: vi.fn(async () => ({ entries: 10, streakDay: 3, totalEntries: 110 })),
+  };
+  const deps: V2ControllerDeps = {
+    api: api as unknown as AvafliAPI,
+    storage: fakeStorage(consented),
+    bundleId: 'com.test',
+    submitEmailAndAdopt: vi.fn(async () => ({ success: true })),
+    hasRegisteredUuid: () => true,
+  };
+  return new V2ExperienceController(deps);
+}
+
+const sponsorLines = (root: HTMLElement): HTMLElement[] =>
+  Array.from(root.querySelectorAll<HTMLElement>('.wv2-sponsor'));
+
+describe('Giveaway type: scope + sponsorDisclosure parse through untouched', () => {
+  it('both fields are undefined on an exclusive giveaway payload', () => {
+    // The SDK stores the server's giveaway object as-is (JSON passthrough),
+    // so a round-trip through JSON must keep the fields exactly as sent.
+    const parsed = JSON.parse(JSON.stringify(EXCLUSIVE)) as Giveaway;
+    expect(parsed.scope).toBeUndefined();
+    expect(parsed.sponsorDisclosure).toBeUndefined();
+    expect('sponsorDisclosure' in parsed).toBe(false);
+  });
+
+  it('both fields survive on a network giveaway payload', () => {
+    const parsed = JSON.parse(JSON.stringify(NETWORK)) as Giveaway;
+    expect(parsed.scope).toBe('network');
+    expect(parsed.sponsorDisclosure).toBe(DISCLOSURE);
+  });
+
+  it('SDK_VERSION is 3.3.0', () => {
+    expect(AVAFLI_CONSTANTS.SDK_VERSION).toBe('3.3.0');
+  });
+});
+
+describe('appendSponsorDisclosure', () => {
+  it('appends nothing when the field is absent, empty or whitespace', () => {
+    for (const g of [null, undefined, EXCLUSIVE, { sponsorDisclosure: '' }, { sponsorDisclosure: '   ' }]) {
+      const parent = document.createElement('div');
+      expect(appendSponsorDisclosure(parent, g, 'wv2-sponsor-strip')).toBeNull();
+      expect(parent.childNodes.length).toBe(0);
+    }
+  });
+
+  it('renders the server string as text, never as markup', () => {
+    const parent = document.createElement('div');
+    const hostile = 'Sponsored by <img src=x onerror="alert(1)"> & co';
+    const line = appendSponsorDisclosure(parent, { sponsorDisclosure: hostile }, 'wv2-sponsor-card');
+    expect(line).not.toBeNull();
+    expect(line!.textContent).toBe(hostile);
+    expect(line!.querySelector('img')).toBeNull();
+    expect(line!.children.length).toBe(0);
+    expect(line!.className).toBe('wv2-sponsor wv2-sponsor-card');
+  });
+});
+
+describe('Day-1 capture strip (renderCapture)', () => {
+  it('exclusive giveaway: no sponsor element, strip markup unchanged', async () => {
+    const c = makeController(EXCLUSIVE, false);
+    await c.load();
+    expect(c.state.kind).toBe('emailCapture');
+    const screen = renderCapture(c, null);
+    expect(sponsorLines(screen)).toHaveLength(0);
+    const strip = screen.querySelector<HTMLElement>('.wv2-prize-strip')!;
+    expect(strip.children.length).toBe(1); // just the cash headline
+  });
+
+  it('network giveaway: one muted line directly under the prize headline', async () => {
+    const c = makeController(NETWORK, false);
+    await c.load();
+    const screen = renderCapture(c, null);
+    const lines = sponsorLines(screen);
+    expect(lines).toHaveLength(1);
+    expect(lines[0].textContent).toBe(DISCLOSURE);
+    const strip = screen.querySelector<HTMLElement>('.wv2-prize-strip')!;
+    expect(strip.lastElementChild).toBe(lines[0]);
+    expect(lines[0].previousElementSibling?.className).toBe('wv2-prize-strip-cash');
+    expect(lines[0].classList.contains('wv2-sponsor-strip')).toBe(true);
+  });
+});
+
+describe('Day-2+ prize card (renderDashboard)', () => {
+  it('exclusive giveaway: no sponsor element in the headline lockup', async () => {
+    const c = makeController(EXCLUSIVE, true);
+    await c.load();
+    expect(c.state.kind).toBe('dashboard');
+    const dash = renderDashboard(c, null, () => {});
+    expect(sponsorLines(dash)).toHaveLength(0);
+    expect(dash.querySelector('.wv2-ph-cash')!.children.length).toBe(2); // WIN $X + CASH PRIZE
+  });
+
+  it('network giveaway (cash): sponsor line is the last child of the cash lockup', async () => {
+    const c = makeController(NETWORK, true);
+    await c.load();
+    const dash = renderDashboard(c, null, () => {});
+    const lines = sponsorLines(dash);
+    expect(lines).toHaveLength(1);
+    expect(lines[0].textContent).toBe(DISCLOSURE);
+    const lockup = dash.querySelector<HTMLElement>('.wv2-ph-cash')!;
+    expect(lockup.lastElementChild).toBe(lines[0]);
+    expect(lines[0].previousElementSibling?.className).toBe('wv2-ph-cash-sub');
+    expect(lines[0].classList.contains('wv2-sponsor-card')).toBe(true);
+  });
+
+  it('network giveaway (physical prize): sponsor line sits under the title/value lockup', async () => {
+    const c = makeController(
+      { ...NETWORK, prizeDescription: 'Amazon Gift Card', prizeValue: 500 },
+      true
+    );
+    await c.load();
+    const dash = renderDashboard(c, null, () => {});
+    const lines = sponsorLines(dash);
+    expect(lines).toHaveLength(1);
+    const lockup = dash.querySelector<HTMLElement>('.wv2-ph-prize')!;
+    expect(lockup.lastElementChild).toBe(lines[0]);
+  });
+});
+
+describe('Winner splash (renderWinnerSplash)', () => {
+  const claimFor = (g: Giveaway): PrizeClaimBlock => ({
+    status: 'pending',
+    giveawayId: g.id,
+    prizeDescription: g.prizeDescription,
+    prizeValue: g.prizeValue,
+  });
+
+  it('exclusive giveaway: claim strip carries no sponsor element', async () => {
+    const c = makeController(EXCLUSIVE, true, { prizeClaim: claimFor(EXCLUSIVE) });
+    await c.load();
+    const splash = renderWinnerSplash(c, claimFor(EXCLUSIVE), null);
+    expect(sponsorLines(splash)).toHaveLength(0);
+    expect(splash.querySelector('.wv2-claim-strip')!.children.length).toBe(0);
+  });
+
+  it('network giveaway: sponsor line rides under the claim strip headline', async () => {
+    const c = makeController(NETWORK, true, { prizeClaim: claimFor(NETWORK) });
+    await c.load();
+    const splash = renderWinnerSplash(c, claimFor(NETWORK), null);
+    const lines = sponsorLines(splash);
+    expect(lines).toHaveLength(1);
+    expect(lines[0].textContent).toBe(DISCLOSURE);
+    expect(lines[0].parentElement?.classList.contains('wv2-claim-strip')).toBe(true);
+  });
+
+  it('claim for a DIFFERENT giveaway than the active one: nothing is shown', async () => {
+    const c = makeController(NETWORK, true, { prizeClaim: claimFor(EXCLUSIVE) });
+    await c.load();
+    const splash = renderWinnerSplash(c, claimFor(EXCLUSIVE), null);
+    expect(sponsorLines(splash)).toHaveLength(0);
+  });
+});

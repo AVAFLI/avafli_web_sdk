@@ -187,6 +187,18 @@ img { display: block; }
   .wv2-prize-strip-cash, .wv2-prize-strip-title { font-size: 19px; }
 }
 
+/* 3.3.0: network giveaway sponsor-of-record line, one muted line directly
+   under the prize headline. Rendered ONLY when the giveaway carries
+   sponsorDisclosure; exclusive giveaways never emit the element. */
+.wv2-sponsor {
+  font-size: 12px; font-weight: 500; line-height: 1.3; letter-spacing: 0;
+  white-space: normal; text-align: inherit; margin-top: 3px;
+}
+/* On the white strips (capture + winner splash): muted gunmetal. */
+.wv2-sponsor-strip { color: ${c.gunmetal}; opacity: 0.72; }
+/* On the prize card's dark scrim: muted white (AA on the 55–90% black ramp). */
+.wv2-sponsor-card { color: rgba(255,255,255,0.82); font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.6); }
+
 .wv2-capture-form { display: flex; flex-direction: column; gap: 14px; padding: 0 22px; }
 .wv2-email-field {
   display: flex; align-items: center; gap: 10px;
@@ -1111,6 +1123,7 @@ button.wv2-dash-notice { cursor: pointer; }
   .wv2-prize-strip-cash { font-size: 27px; letter-spacing: -0.81px; }
   .wv2-prize-strip-title { font-size: 27px; letter-spacing: -0.81px; }
   .wv2-prize-strip-value { font-size: 18px; }
+  .wv2-sponsor { font-size: 13px; }
   .wv2-capture-form { width: 374px; padding: 0; margin: 0 auto; gap: 15px; }
   .wv2-capture-form .wv2-pill { width: 360px; margin: 0 auto; }
   .wv2-capture-disclaimer { padding: 0 52px; }

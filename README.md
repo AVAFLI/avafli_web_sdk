@@ -306,6 +306,10 @@ A winner can always get back to a claim they have not finished (3.2.0): while th
 
 Before the claim form opens, a winner enters a **6-digit code** sent to the email address on file, proving the inbox is theirs (Official Rules §7). People who proved the inbox earlier — the cross-device code, or a verified email — skip the step. The server holds all of the step's state, so a winner who closes the drawer, reloads or switches device resumes exactly where they were; the SDK stores nothing about it and only ever shows the masked address. Nothing for the host app to do.
 
+### Network giveaways: sponsor disclosure (3.3.0)
+
+A publisher can opt into the **network giveaway** — one shared prize pool across many Avafli apps, with Avafli LLC as Sponsor of Record. The `Giveaway` object (the `giveaway` field of `registerDevice` / `Avafli.getAPI().getActiveGiveaway()`, exported type `Giveaway`) then carries `scope: "network"` and a short `sponsorDisclosure` string (for example "Sponsored by Avafli LLC"). The SDK shows that line, small and muted, directly under the prize headline wherever the prize is presented: the Day-1 email-capture strip, the Day-2+ prize card and the winner splash. The disclosure is legally required and cannot be turned off. For an exclusive (publisher-sponsored) giveaway both fields are absent and nothing changes — the drawer looks exactly as before. Nothing for the host app to do.
+
 ## Push Notifications
 
 Streak reminder pushes are a mobile-SDK feature. On the web, `Avafli.registerForPushNotifications()` is a **logged no-op unless web push is configured** — functional web push needs a VAPID application-server key and a service worker, which this build does not ship. It is also gated on `enablePushReminders`. Web engagement runs through the daily auto-open experience itself, not browser notifications.
