@@ -19,11 +19,12 @@ Avafli lets you add daily-entry sweepstakes and prize experiences to your app in
 - **Cross-device verified adoption** — When a typed email matches an existing account, the SDK confirms a 6-digit code before merging the streak across devices
 - **Soft email verification** — A brand-new typed email shows a persistent, dismissible "Verify your email" chip; it never blocks play or the prize draw; confirming early means no code step if they win
 - **Winner claim flow** — "WE HAVE A WINNER!" splash and a guided prize-claim flow (name, shipping address incl. DC, optional photo), followed by a post-submit share step (optional story + real share actions) and a claim-number confirmation
+- **Network giveaway sponsor line** — When a publisher opts into the shared network giveaway (Avafli LLC as Sponsor of Record), a small "Sponsored by Avafli LLC" line renders under the prize; exclusive giveaways show nothing extra
 - **Responsive V2 design** — Bottom drawer on mobile (<768px), centered modal card on desktop (≥768px, widened with a modest type/spacing scale-up at ≥900px)
 - **Publisher branding** — Logo, primary color, and prize image configured from the Avafli dashboard
 - **GDPR/CCPA compliant** — Built-in consent flows, RTD opt-out via `optOut()`, and a self-serve "Delete my data & stop participating" section inside the in-experience Privacy Policy
 - **Analytics forwarding** — Route SDK events to your existing analytics stack
-- **Shadow DOM isolation** — Styles never leak into your page; fonts and imagery are bundled (no CDN fetches)
+- **Shadow DOM isolation** — Styles never leak into your page; fonts and imagery load lazily from Avafli's asset host (or your own via `assetBaseUrl`)
 
 ## Quick Start
 
