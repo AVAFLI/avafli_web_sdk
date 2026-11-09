@@ -588,6 +588,21 @@ export interface PrizeClaimBlock {
    * opens the form directly, exactly as before.
    */
   verification?: ClaimVerificationBlock;
+  /**
+   * 3.3.0: `"network"` when the prize was won in a network giveaway (shared
+   * prize pool, Avafli LLC as Sponsor of Record). ABSENT for exclusive
+   * giveaways. Carried on the claim itself because the draw clears the
+   * publisher's network pointer — by the time the winner opens the page
+   * there is usually no served giveaway to borrow it from.
+   */
+  scope?: 'network';
+  /**
+   * 3.3.0: the sponsor-of-record line ("Sponsored by Avafli LLC") that must
+   * appear wherever this prize is presented — the winner splash sources it
+   * from here first, falling back to the served giveaway only when the block
+   * has none. ABSENT for exclusive giveaways.
+   */
+  sponsorDisclosure?: string;
 }
 
 /** Payload for `submitPrizeClaim` (exact backend field names). */

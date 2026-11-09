@@ -661,21 +661,43 @@ function renderPrizeStrip(giveaway: Giveaway | null): HTMLElement {
  *
  * Legally it must appear wherever the prize is presented, so every prize
  * surface (Day-1 capture strip, Day-2+ prize card headline, winner splash
- * strip) routes through here. The server string is set via `textContent`
- * (never innerHTML). When `sponsorDisclosure` is absent — every exclusive
- * giveaway — nothing is appended and the surface is byte-for-byte what it
- * was before 3.3.0.
+ * strip) routes through here. `source` is whatever carries the line — a
+ * `Giveaway` or a `PrizeClaimBlock` (the claim block carries its own copy
+ * because the draw clears the network pointer, so the winner usually has no
+ * served giveaway). The server string is set via `textContent` (never
+ * innerHTML). When `sponsorDisclosure` is absent — every exclusive giveaway —
+ * nothing is appended and the surface is byte-for-byte what it was before
+ * 3.3.0.
  */
 export function appendSponsorDisclosure(
   parent: HTMLElement,
-  giveaway: Pick<Giveaway, 'sponsorDisclosure'> | null | undefined,
+  source: { sponsorDisclosure?: string } | null | undefined,
   variantClass: string
 ): HTMLElement | null {
-  const text = typeof giveaway?.sponsorDisclosure === 'string' ? giveaway.sponsorDisclosure.trim() : '';
+  const text = typeof source?.sponsorDisclosure === 'string' ? source.sponsorDisclosure.trim() : '';
   if (!text) return null;
   const line = el('div', `wv2-sponsor ${variantClass}`, text);
   parent.appendChild(line);
   return line;
+}
+
+/**
+ * 3.3.0 — which object the winner-flow sponsor line comes from. The claim
+ * block wins when it carries a non-blank `sponsorDisclosure` (3.3.0+
+ * backends put it there for network giveaways). Otherwise the served
+ * giveaway is used, but only when it is the giveaway the claim is for — a
+ * different (or absent) giveaway's line must never be attached to this
+ * prize. Returns null when neither applies (every exclusive giveaway).
+ */
+export function sponsorDisclosureSource(
+  claim: Pick<PrizeClaimBlock, 'giveawayId' | 'sponsorDisclosure'>,
+  served: Pick<Giveaway, 'id' | 'sponsorDisclosure'> | null | undefined
+): { sponsorDisclosure?: string } | null {
+  if (typeof claim.sponsorDisclosure === 'string' && claim.sponsorDisclosure.trim()) {
+    return claim;
+  }
+  if (served && served.id === claim.giveawayId) return served;
+  return null;
 }
 
 // ─── Return-user dashboard (Day 2+ drawer) ───
@@ -1554,12 +1576,14 @@ export function renderWinnerSplash(
     'wv2-claim-strip',
     stripHeadline(claim.prizeDescription, Math.round(claim.prizeValue))
   );
-  // 3.3.0: the claim block carries no sponsor line; for a network giveaway
-  // the prize being presented is the active giveaway's, so its disclosure
-  // rides under the headline here too. Different/absent giveaway → nothing.
-  if (c.giveaway && c.giveaway.id === claim.giveawayId) {
-    appendSponsorDisclosure(claimStrip, c.giveaway, 'wv2-sponsor-strip');
-  }
+  // 3.3.0: for a network giveaway the sponsor line rides under the headline.
+  // The claim block is the primary source — the draw clears the publisher's
+  // network pointer, so by the time the winner opens the page there is
+  // usually NO served giveaway (c.giveaway is null or a different one). Only
+  // when the block carries no line do we fall back to the served giveaway,
+  // and only if it is the one the claim is for. Exclusive → nothing.
+  const sponsorSource = sponsorDisclosureSource(claim, c.giveaway);
+  appendSponsorDisclosure(claimStrip, sponsorSource, 'wv2-sponsor-strip');
   stack.appendChild(claimStrip);
 
   stack.appendChild(

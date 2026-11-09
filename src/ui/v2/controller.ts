@@ -909,7 +909,8 @@ export class V2ExperienceController {
         this.state = { kind: 'winnerClaim', claim: pendingPrizeClaim };
         if (
           shown.prizeDescription !== pendingPrizeClaim.prizeDescription ||
-          shown.prizeValue !== pendingPrizeClaim.prizeValue
+          shown.prizeValue !== pendingPrizeClaim.prizeValue ||
+          shown.sponsorDisclosure !== pendingPrizeClaim.sponsorDisclosure
         ) {
           this.onChange?.(this.state);
         }

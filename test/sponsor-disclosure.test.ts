@@ -6,6 +6,7 @@ import {
   renderCapture,
   renderDashboard,
   renderWinnerSplash,
+  sponsorDisclosureSource,
 } from '../src/ui/v2/screens';
 import { AVAFLI_CONSTANTS, Giveaway, GetActiveGiveawayResponse, PrizeClaimBlock } from '../src/types';
 import { AvafliAPI } from '../src/network/api';
@@ -56,7 +57,7 @@ function fakeStorage(consented: boolean): LocalStorageProvider {
 }
 
 function makeController(
-  giveaway: Giveaway,
+  giveaway: Giveaway | null,
   consented: boolean,
   status: Partial<GetActiveGiveawayResponse> = {}
 ): V2ExperienceController {
@@ -188,14 +189,63 @@ describe('Day-2+ prize card (renderDashboard)', () => {
   });
 });
 
-describe('Winner splash (renderWinnerSplash)', () => {
-  const claimFor = (g: Giveaway): PrizeClaimBlock => ({
-    status: 'pending',
-    giveawayId: g.id,
-    prizeDescription: g.prizeDescription,
-    prizeValue: g.prizeValue,
+/** A claim block exactly as the backend emits it: no sponsor fields unless network. */
+const claimFor = (g: Giveaway): PrizeClaimBlock => ({
+  status: 'pending',
+  giveawayId: g.id,
+  prizeDescription: g.prizeDescription,
+  prizeValue: g.prizeValue,
+});
+
+/** 3.3.0+ backend: a network win carries the sponsor line on the claim itself. */
+const networkClaim: PrizeClaimBlock = {
+  ...claimFor(NETWORK),
+  scope: 'network',
+  sponsorDisclosure: DISCLOSURE,
+};
+
+describe('PrizeClaimBlock type: scope + sponsorDisclosure', () => {
+  it('both fields are undefined on an exclusive claim block (JSON round-trip)', () => {
+    const parsed = JSON.parse(JSON.stringify(claimFor(EXCLUSIVE))) as PrizeClaimBlock;
+    expect(parsed.scope).toBeUndefined();
+    expect(parsed.sponsorDisclosure).toBeUndefined();
+    expect('scope' in parsed).toBe(false);
+    expect('sponsorDisclosure' in parsed).toBe(false);
   });
 
+  it('both fields survive a JSON round-trip on a network claim block', () => {
+    const parsed = JSON.parse(JSON.stringify(networkClaim)) as PrizeClaimBlock;
+    expect(parsed.scope).toBe('network');
+    expect(parsed.sponsorDisclosure).toBe(DISCLOSURE);
+    expect(parsed.giveawayId).toBe(NETWORK.id);
+  });
+});
+
+describe('sponsorDisclosureSource (claim block first, served giveaway as fallback)', () => {
+  it('claim block with a line wins, whatever the served giveaway is', () => {
+    expect(sponsorDisclosureSource(networkClaim, null)).toBe(networkClaim);
+    expect(sponsorDisclosureSource(networkClaim, EXCLUSIVE)).toBe(networkClaim);
+    expect(sponsorDisclosureSource(networkClaim, { ...NETWORK, sponsorDisclosure: 'Other' })).toBe(
+      networkClaim
+    );
+  });
+
+  it('block without a line: falls back to the served giveaway ONLY when ids match', () => {
+    const bare = claimFor(NETWORK);
+    expect(sponsorDisclosureSource(bare, NETWORK)).toBe(NETWORK);
+    expect(sponsorDisclosureSource(bare, EXCLUSIVE)).toBeNull();
+    expect(sponsorDisclosureSource(bare, null)).toBeNull();
+    expect(sponsorDisclosureSource(bare, undefined)).toBeNull();
+  });
+
+  it('a blank line on the block does not count as present', () => {
+    const blank: PrizeClaimBlock = { ...claimFor(NETWORK), sponsorDisclosure: '   ' };
+    expect(sponsorDisclosureSource(blank, NETWORK)).toBe(NETWORK);
+    expect(sponsorDisclosureSource(blank, null)).toBeNull();
+  });
+});
+
+describe('Winner splash (renderWinnerSplash)', () => {
   it('exclusive giveaway: claim strip carries no sponsor element', async () => {
     const c = makeController(EXCLUSIVE, true, { prizeClaim: claimFor(EXCLUSIVE) });
     await c.load();
@@ -204,7 +254,53 @@ describe('Winner splash (renderWinnerSplash)', () => {
     expect(splash.querySelector('.wv2-claim-strip')!.children.length).toBe(0);
   });
 
-  it('network giveaway: sponsor line rides under the claim strip headline', async () => {
+  it('network claim block, NO served giveaway (production: the draw cleared the pointer)', async () => {
+    const c = makeController(null, true, { prizeClaim: networkClaim });
+    await c.load();
+    expect(c.giveaway).toBeNull();
+    const splash = renderWinnerSplash(c, networkClaim, null);
+    const lines = sponsorLines(splash);
+    expect(lines).toHaveLength(1);
+    expect(lines[0].textContent).toBe(DISCLOSURE);
+    expect(lines[0].classList.contains('wv2-sponsor-strip')).toBe(true);
+    expect(lines[0].parentElement?.classList.contains('wv2-claim-strip')).toBe(true);
+  });
+
+  it('network claim block, served giveaway is a DIFFERENT one: the block line still shows', async () => {
+    const c = makeController(EXCLUSIVE, true, { prizeClaim: networkClaim });
+    await c.load();
+    expect(c.giveaway?.id).toBe(EXCLUSIVE.id);
+    const splash = renderWinnerSplash(c, networkClaim, null);
+    const lines = sponsorLines(splash);
+    expect(lines).toHaveLength(1);
+    expect(lines[0].textContent).toBe(DISCLOSURE);
+  });
+
+  it('block line beats the served giveaway line when both exist', async () => {
+    const c = makeController({ ...NETWORK, sponsorDisclosure: 'Sponsored by Someone Else' }, true, {
+      prizeClaim: networkClaim,
+    });
+    await c.load();
+    const splash = renderWinnerSplash(c, networkClaim, null);
+    const lines = sponsorLines(splash);
+    expect(lines).toHaveLength(1);
+    expect(lines[0].textContent).toBe(DISCLOSURE);
+  });
+
+  it('block line is set as text, never parsed as markup', async () => {
+    const hostile = '<img src=x onerror="alert(1)">Sponsored';
+    const c = makeController(null, true, {
+      prizeClaim: { ...networkClaim, sponsorDisclosure: hostile },
+    });
+    await c.load();
+    const splash = renderWinnerSplash(c, { ...networkClaim, sponsorDisclosure: hostile }, null);
+    const lines = sponsorLines(splash);
+    expect(lines).toHaveLength(1);
+    expect(lines[0].textContent).toBe(hostile);
+    expect(lines[0].querySelector('img')).toBeNull();
+  });
+
+  it('legacy fallback: block without a line, served giveaway IS the network one → its line shows', async () => {
     const c = makeController(NETWORK, true, { prizeClaim: claimFor(NETWORK) });
     await c.load();
     const splash = renderWinnerSplash(c, claimFor(NETWORK), null);
@@ -214,7 +310,7 @@ describe('Winner splash (renderWinnerSplash)', () => {
     expect(lines[0].parentElement?.classList.contains('wv2-claim-strip')).toBe(true);
   });
 
-  it('claim for a DIFFERENT giveaway than the active one: nothing is shown', async () => {
+  it('block without a line, claim for a DIFFERENT giveaway than the served one: nothing is shown', async () => {
     const c = makeController(NETWORK, true, { prizeClaim: claimFor(EXCLUSIVE) });
     await c.load();
     const splash = renderWinnerSplash(c, claimFor(EXCLUSIVE), null);

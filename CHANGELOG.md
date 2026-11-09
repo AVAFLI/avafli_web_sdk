@@ -4,6 +4,7 @@
 ## 3.3.0
 
 - **Network giveaway: sponsor disclosure.** The giveaway payload may carry `scope: "network"` and `sponsorDisclosure` (e.g. "Sponsored by Avafli LLC"); both are new optional fields on the exported `Giveaway` type. The SDK shows the sponsor line — small, muted, a single line — directly under the prize headline wherever the prize is presented: the Day-1 capture strip, the Day-2+ prize card and the winner splash strip. Rendered via `textContent`, never markup. No change for exclusive giveaways: when the field is absent no element is emitted and the layout is byte-for-byte what it was.
+- **Winner splash and claim screens show the sponsor line from the claim block.** `PrizeClaimBlock` gains optional `scope: "network"` and `sponsorDisclosure` (absent for exclusive giveaways). The draw clears the publisher's network pointer, so a winner usually opens the page with no served giveaway — the splash now reads the line from the claim itself first and falls back to the served giveaway only when the block has none (and only when it is the giveaway the claim is for). New `sponsorDisclosureSource()` export; `appendSponsorDisclosure()` accepts any `{ sponsorDisclosure?: string }`.
 - Tests: `test/sponsor-disclosure.test.ts`.
 
 ## 3.2.2
