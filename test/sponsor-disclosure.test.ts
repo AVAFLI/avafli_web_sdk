@@ -13,9 +13,9 @@ import { AvafliAPI } from '../src/network/api';
 import { LocalStorageProvider } from '../src/storage/local-storage';
 
 /**
- * 3.3.0 — network giveaway sponsor disclosure.
+ * 3.3.0 — shared giveaway sponsor disclosure.
  *
- * A network giveaway (one shared prize pool across many publisher apps, with
+ * A shared giveaway (one shared prize pool across many publisher apps, with
  * Avafli LLC as Sponsor of Record) arrives with `scope: "network"` and a
  * `sponsorDisclosure` string. Legally the disclosure must appear wherever the
  * prize is presented. An exclusive giveaway carries neither field and must
@@ -95,7 +95,7 @@ describe('Giveaway type: scope + sponsorDisclosure parse through untouched', () 
     expect('sponsorDisclosure' in parsed).toBe(false);
   });
 
-  it('both fields survive on a network giveaway payload', () => {
+  it('both fields survive on a shared giveaway payload', () => {
     const parsed = JSON.parse(JSON.stringify(NETWORK)) as Giveaway;
     expect(parsed.scope).toBe('network');
     expect(parsed.sponsorDisclosure).toBe(DISCLOSURE);
@@ -138,7 +138,7 @@ describe('Day-1 capture strip (renderCapture)', () => {
     expect(strip.children.length).toBe(1); // just the cash headline
   });
 
-  it('network giveaway: one muted line directly under the prize headline', async () => {
+  it('shared giveaway: one muted line directly under the prize headline', async () => {
     const c = makeController(NETWORK, false);
     await c.load();
     const screen = renderCapture(c, null);
@@ -162,7 +162,7 @@ describe('Day-2+ prize card (renderDashboard)', () => {
     expect(dash.querySelector('.wv2-ph-cash')!.children.length).toBe(2); // WIN $X + CASH PRIZE
   });
 
-  it('network giveaway (cash): sponsor line is the last child of the cash lockup', async () => {
+  it('shared giveaway (cash): sponsor line is the last child of the cash lockup', async () => {
     const c = makeController(NETWORK, true);
     await c.load();
     const dash = renderDashboard(c, null, () => {});
@@ -175,7 +175,7 @@ describe('Day-2+ prize card (renderDashboard)', () => {
     expect(lines[0].classList.contains('wv2-sponsor-card')).toBe(true);
   });
 
-  it('network giveaway (physical prize): sponsor line sits under the title/value lockup', async () => {
+  it('shared giveaway (physical prize): sponsor line sits under the title/value lockup', async () => {
     const c = makeController(
       { ...NETWORK, prizeDescription: 'Amazon Gift Card', prizeValue: 500 },
       true

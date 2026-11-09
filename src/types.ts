@@ -192,14 +192,14 @@ export interface Giveaway {
    */
   latestWinner?: GiveawayWinner;
   /**
-   * 3.3.0: `"network"` when this is a network giveaway — one shared prize
+   * 3.3.0: `"network"` when this is a shared giveaway — one shared prize
    * pool across many publisher apps, with Avafli LLC as Sponsor of Record.
    * Absent (or `"publisher"`) for a normal exclusive giveaway.
    */
   scope?: 'publisher' | 'network';
   /**
    * 3.3.0: short sponsor-of-record line (e.g. "Sponsored by Avafli LLC"),
-   * present only for network giveaways. Legally it MUST be shown wherever the
+   * present only for shared giveaways. Legally it MUST be shown wherever the
    * prize is presented, so the SDK renders it as a muted line directly under
    * the prize headline on the capture strip, the dashboard prize card and the
    * winner splash. Absent → nothing is rendered and no layout changes.
@@ -589,7 +589,7 @@ export interface PrizeClaimBlock {
    */
   verification?: ClaimVerificationBlock;
   /**
-   * 3.3.0: `"network"` when the prize was won in a network giveaway (shared
+   * 3.3.0: `"network"` when the prize was won in a shared giveaway (shared
    * prize pool, Avafli LLC as Sponsor of Record). ABSENT for exclusive
    * giveaways. Carried on the claim itself because the draw clears the
    * publisher's network pointer — by the time the winner opens the page

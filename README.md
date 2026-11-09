@@ -19,7 +19,7 @@ Avafli lets you add daily-entry sweepstakes and prize experiences to your app in
 - **Cross-device verified adoption** — When a typed email matches an existing account, the SDK confirms a 6-digit code before merging the streak across devices
 - **Soft email verification** — A brand-new typed email shows a persistent, dismissible "Verify your email" chip; it never blocks play or the prize draw; confirming early means no code step if they win
 - **Winner claim flow** — "WE HAVE A WINNER!" splash and a guided prize-claim flow (name, shipping address incl. DC, optional photo), followed by a post-submit share step (optional story + real share actions) and a claim-number confirmation
-- **Network giveaway sponsor line** — When a publisher opts into the shared network giveaway (Avafli LLC as Sponsor of Record), a small "Sponsored by Avafli LLC" line renders under the prize; exclusive giveaways show nothing extra
+- **Shared giveaway sponsor line** — When a publisher opts into the shared giveaway (Avafli LLC as Sponsor of Record), a small "Sponsored by Avafli LLC" line renders under the prize; exclusive giveaways show nothing extra
 - **Responsive V2 design** — Bottom drawer on mobile (<768px), centered modal card on desktop (≥768px, widened with a modest type/spacing scale-up at ≥900px)
 - **Publisher branding** — Logo, primary color, and prize image configured from the Avafli dashboard
 - **GDPR/CCPA compliant** — Built-in consent flows, RTD opt-out via `optOut()`, and a self-serve "Delete my data & stop participating" section inside the in-experience Privacy Policy
@@ -307,9 +307,9 @@ A winner can always get back to a claim they have not finished (3.2.0): while th
 
 Before the claim form opens, a winner enters a **6-digit code** sent to the email address on file, proving the inbox is theirs (Official Rules §7). People who proved the inbox earlier — the cross-device code, or a verified email — skip the step. The server holds all of the step's state, so a winner who closes the drawer, reloads or switches device resumes exactly where they were; the SDK stores nothing about it and only ever shows the masked address. Nothing for the host app to do.
 
-### Network giveaways: sponsor disclosure (3.3.0)
+### Shared giveaways: sponsor disclosure (3.3.0)
 
-A publisher can opt into the **network giveaway** — one shared prize pool across many Avafli apps, with Avafli LLC as Sponsor of Record. The `Giveaway` object (the `giveaway` field of `registerDevice` / `Avafli.getAPI().getActiveGiveaway()`, exported type `Giveaway`) then carries `scope: "network"` and a short `sponsorDisclosure` string (for example "Sponsored by Avafli LLC"). The SDK shows that line, small and muted, directly under the prize headline wherever the prize is presented: the Day-1 email-capture strip, the Day-2+ prize card and the winner splash. The disclosure is legally required and cannot be turned off. For an exclusive (publisher-sponsored) giveaway both fields are absent and nothing changes — the drawer looks exactly as before. Nothing for the host app to do.
+A publisher can opt into the **shared giveaway** — one shared prize pool across many Avafli apps, with Avafli LLC as Sponsor of Record. The `Giveaway` object (the `giveaway` field of `registerDevice` / `Avafli.getAPI().getActiveGiveaway()`, exported type `Giveaway`) then carries `scope: "network"` and a short `sponsorDisclosure` string (for example "Sponsored by Avafli LLC"). The SDK shows that line, small and muted, directly under the prize headline wherever the prize is presented: the Day-1 email-capture strip, the Day-2+ prize card and the winner splash. The disclosure is legally required and cannot be turned off. For an exclusive (publisher-sponsored) giveaway both fields are absent and nothing changes — the drawer looks exactly as before. Nothing for the host app to do.
 
 ## Push Notifications
 

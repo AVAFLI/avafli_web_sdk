@@ -187,7 +187,7 @@ img { display: block; }
   .wv2-prize-strip-cash, .wv2-prize-strip-title { font-size: 19px; }
 }
 
-/* 3.3.0: network giveaway sponsor-of-record line, one muted line directly
+/* 3.3.0: shared giveaway sponsor-of-record line, one muted line directly
    under the prize headline. Rendered ONLY when the giveaway carries
    sponsorDisclosure; exclusive giveaways never emit the element. */
 .wv2-sponsor {

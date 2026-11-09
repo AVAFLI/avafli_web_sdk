@@ -657,7 +657,7 @@ function renderPrizeStrip(giveaway: Giveaway | null): HTMLElement {
 }
 
 /**
- * 3.3.0 — network giveaway sponsor-of-record line ("Sponsored by Avafli LLC").
+ * 3.3.0 — shared giveaway sponsor-of-record line ("Sponsored by Avafli LLC").
  *
  * Legally it must appear wherever the prize is presented, so every prize
  * surface (Day-1 capture strip, Day-2+ prize card headline, winner splash
@@ -684,7 +684,7 @@ export function appendSponsorDisclosure(
 /**
  * 3.3.0 — which object the winner-flow sponsor line comes from. The claim
  * block wins when it carries a non-blank `sponsorDisclosure` (3.3.0+
- * backends put it there for network giveaways). Otherwise the served
+ * backends put it there for shared giveaways). Otherwise the served
  * giveaway is used, but only when it is the giveaway the claim is for — a
  * different (or absent) giveaway's line must never be attached to this
  * prize. Returns null when neither applies (every exclusive giveaway).
@@ -1028,7 +1028,7 @@ function renderPrizeCard(c: V2ExperienceController, preReveal = false): HTMLElem
     const lockup = el('div', 'wv2-ph-cash');
     lockup.appendChild(el('div', 'wv2-ph-cash-win', `WIN $${formatInt(value)}`));
     lockup.appendChild(el('div', 'wv2-ph-cash-sub', 'CASH PRIZE'));
-    // 3.3.0: network giveaway sponsor line, directly beneath the lockup
+    // 3.3.0: shared giveaway sponsor line, directly beneath the lockup
     // (inherits the lockup's alignment: right for cash, centered otherwise).
     appendSponsorDisclosure(lockup, giveaway, 'wv2-sponsor-card');
     headline.appendChild(lockup);
@@ -1576,7 +1576,7 @@ export function renderWinnerSplash(
     'wv2-claim-strip',
     stripHeadline(claim.prizeDescription, Math.round(claim.prizeValue))
   );
-  // 3.3.0: for a network giveaway the sponsor line rides under the headline.
+  // 3.3.0: for a shared giveaway the sponsor line rides under the headline.
   // The claim block is the primary source — the draw clears the publisher's
   // network pointer, so by the time the winner opens the page there is
   // usually NO served giveaway (c.giveaway is null or a different one). Only
