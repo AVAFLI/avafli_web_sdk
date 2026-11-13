@@ -2139,8 +2139,9 @@ export class V2ExperienceController {
   // covering the drawer/lightbox — instead of a new tab. The privacy page
   // loads with `?app=1`, which makes sdk.avafli.com/sdk/privacy render its
   // "Delete my data" section; in the framed case that section posts
-  // `{ type: "winr-delete" }` to the parent, and the bridge below routes it
-  // into the EXISTING destructive opt-out confirmation + erasure flow.
+  // `{ type: "avafli-delete" }` (legacy `"winr-delete"` still accepted) to the
+  // parent, and the bridge below routes it into the EXISTING destructive
+  // opt-out confirmation + erasure flow.
 
   /** The only postMessage origin the delete bridge accepts. */
   public static readonly LEGAL_BRIDGE_ORIGIN = 'https://sdk.avafli.com';

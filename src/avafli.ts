@@ -248,6 +248,12 @@ export class Avafli {
    * Internal accessor for the authed, typed API client bound to the singleton.
    * Used by UI components so they route through the authenticated network
    * client instead of constructing their own unauthenticated one.
+   *
+   * Public on the class for the drawer's sake, not a stable host-page API —
+   * the publisher-facing surface is `configure` / `present` / `holdAutoOpen` /
+   * `releaseAutoOpen` / `dismiss` / `optOut` / `isAvailable` /
+   * `unavailableReason` / `refreshConfig`. Throws `not_configured` before
+   * `configure()` has succeeded.
    */
   public static getAPI(): AvafliAPI {
     Avafli.ensureConfigured();
@@ -259,6 +265,8 @@ export class Avafli {
    * this publisher (cross-device streak unification), switch this session to that
    * canonical user's credentials so the streak follows the person across devices.
    * Tokens are read fresh on each request, so persisting them here is sufficient.
+   *
+   * Internal (the drawer's capture screen calls it); not a stable host-page API.
    */
   public static async submitEmailAndAdopt(request: SubmitEmailRequest): Promise<SubmitEmailResponse> {
     Avafli.ensureConfigured();
@@ -290,7 +298,10 @@ export class Avafli {
     logger.info('Adopted existing account — streak unified across devices');
   }
 
-  /** Expose the resolved consent / age-gate config to UI components. */
+  /**
+   * Expose the resolved consent / age-gate config to UI components.
+   * Internal; not a stable host-page API.
+   */
   public static getResolvedSDKConfig(): SDKConfig {
     Avafli.ensureConfigured();
     return Avafli.instance!.getCurrentSDKConfig();
@@ -1468,8 +1479,14 @@ export class Avafli {
    * this browser. Entries and streaks are forfeited and cannot be restored.
    * 3.2.0: the block lasts 24 hours — after that the person may join again
    * as a brand-new participant with no connection to the old profile. Wire
-   * this to the opt-out action in your privacy-policy flow. Parity with the
-   * mobile SDKs' `Avafli.optOut()`.
+   * this to your own delete-account flow (visitors can also delete themselves
+   * from the Privacy Policy inside the drawer). Parity with the mobile SDKs'
+   * `Avafli.optOut()`.
+   *
+   * Throws (and changes nothing locally) when the request does not reach the
+   * backend or the backend answers `success: false`; throws `not_configured`
+   * before `configure()` has succeeded. Only a confirmed erasure marks the
+   * browser opted out and emits `avafli_opted_out`.
    */
   public static async optOut(): Promise<void> {
     if (!Avafli.ensureConfigured()) return;
@@ -1504,10 +1521,12 @@ export class Avafli {
   /**
    * The in-experience RTD opt-out (2.9.5: the privacy page's "Delete my
    * data" section inside the legal overlay bridges into the destructive
-   * confirmation). Unlike the public {@link optOut}, a failed backend call THROWS
-   * and marks NOTHING locally — the experience shows an honest error and the
-   * user can retry; the deletion is only announced once the backend has
-   * actually tombstoned the person.
+   * confirmation). Same contract as the public {@link optOut}: a failed
+   * backend call THROWS and marks NOTHING locally — the experience shows an
+   * honest error and the user can retry; the deletion is only announced once
+   * the backend has actually tombstoned the person. (Differs only in that a
+   * `success: false` body is not re-checked here — the drawer treats any
+   * resolved call as confirmed.)
    */
   private static async optOutFromExperience(): Promise<void> {
     if (!Avafli.ensureConfigured()) throw new Error('Avafli is not configured');

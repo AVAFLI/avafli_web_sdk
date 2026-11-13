@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — documentation only (no code or version change)
+
+- README rewritten against the 3.3.0 source for a developer with fifteen minutes: Requirements → Install (npm + the real CDN URL `https://sdk.avafli.com/avafli-sdk.umd.js`, served `max-age=300`, no version segment) → Configure (one copy-pasteable example with the `avafli_test_` sandbox key) → What the visitor sees → Controlling presentation → Account deletion and the 24-hour rejoin → Testing checklist → Analytics → CSP → SSR/Next.js → Self-hosting → Networking → API reference.
+- Corrections: `npm run build` is the **unminified** build — the shipped sizes (UMD 221 KB / 62 KB gzipped; ESM boot 51 KB + UI chunk 170 KB) come from `npm run build:prod`; `options.debug` is not read by the shipped bundles (they log at `warn`); the marketing-consent checkbox is unchecked by default (the `SubmitEmailRequest.marketingConsent` TSDoc said pre-checked); `Avafli.unavailableReason`, `branding`, `deviceFingerprintProvider`, `enableAgeGate`/`ageGateMinAge` and `environment` were undocumented; `getAPI()` / `submitEmailAndAdopt()` / `getResolvedSDKConfig()` are marked internal in TSDoc; the claim window (per giveaway, default 3 days) and the CSP directives the drawer needs are now stated; the "+10/day ladder" line is replaced by the actual ladder semantics; "Contact AVAFLI (pricing)" for a key is replaced by the dashboard.
+- Analytics facts verified in the browser: `avafli_device_registered` is emitted before the publisher adapter is attached, so it does not reach the adapter on the `configure()` that installs it; `avafli_modal_dismissed` is emitted only by `Avafli.dismiss()`, not when the visitor closes the drawer. The invisible reCAPTCHA Enterprise perimeter on registration (script from `www.google.com`, never blocking) is now documented together with its CSP entries.
+- `example/index.html`: the winner-banner checkbox now also sends `experience.winnerBannerEnabled` (the banner is default-off, so the checkbox did nothing); adds an `autoOpen` mode selector, an "Open now — `Avafli.present()`" button, a "Delete my data — `Avafli.optOut()`" button with a mock `/optOut` that honours the 24-hour `optedOutUntil` contract, an `isNewUser`-aware mock `registerDevice`, a logging analytics adapter, and the reset also clears the `avafli_did` device-id cookie.
 
 ## 3.3.0
 

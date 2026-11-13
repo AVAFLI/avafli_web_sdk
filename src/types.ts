@@ -7,7 +7,11 @@
 export interface AvafliOptions {
   /** API environment */
   environment?: 'production';
-  /** Enable debug logging */
+  /**
+   * Reserved. NOT read by 3.3.0: the shipped bundles log at `warn` level and
+   * above regardless of this flag (verbose logging exists only in a
+   * development build of the SDK itself). Setting it is harmless.
+   */
   debug?: boolean;
   /** Enable streak reminder push notifications */
   enablePushReminders?: boolean;
@@ -675,9 +679,9 @@ export interface SubmitEmailRequest {
    */
   ageConfirmed?: boolean;
   /**
-   * The capture screen's MARKETING-consent checkbox — pre-checked, and
-   * unchecking it does NOT block entry. Marketing email only: winner contact
-   * is unaffected.
+   * The capture screen's MARKETING-consent checkbox — UNCHECKED by default
+   * (consent must be an affirmative act), and leaving it unchecked does NOT
+   * block entry. Marketing email only: winner contact is unaffected.
    */
   marketingConsent?: boolean;
   publisherUserId?: string;
@@ -898,7 +902,8 @@ export const AVAFLI_CONSTANTS = {
    *
    * 2.9.5: in-experience this loads inside the legal overlay with `?app=1`
    * appended, which makes the page render its "Delete my data" section (the
-   * page posts `{ type: "winr-delete" }` back to the SDK via postMessage).
+   * page posts `{ type: "avafli-delete" }` — legacy `"winr-delete"` is still
+   * accepted — back to the SDK via postMessage, origin-locked to this host).
    */
   PRIVACY_URL: 'https://sdk.avafli.com/sdk/privacy',
   getApiBaseUrl: (_environment: 'production' = 'production'): string => {

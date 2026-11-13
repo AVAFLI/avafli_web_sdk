@@ -2,7 +2,7 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "winr-demo",
+      "name": "avafli-demo",
       "runtimeExecutable": "npx",
       "runtimeArgs": ["-y", "http-server", "-c-1", "-p", "8787", "."],
       "port": 8787

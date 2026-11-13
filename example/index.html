@@ -23,7 +23,7 @@
 <body>
 <div class="wrap">
   <h1>Avafli Web SDK — V2 Demo</h1>
-  <p class="sub">The experience <strong>auto-opens on the first visit of each calendar day</strong> (drawer &lt;768px wide, centered modal &ge;768px). Resize the window and re-open to see both presentations.</p>
+  <p class="sub">The experience <strong>auto-opens on the first visit of each calendar day</strong> (drawer &lt;768px wide, centered modal &ge;768px). Resize the window and re-open to see both presentations. Build first with <code>npm run build:prod</code> (this page loads <code>../dist/avafli-sdk.umd.js</code>).</p>
 
   <div class="card">
     <h2>Scenario (mock backend)</h2>
@@ -40,19 +40,28 @@
         <option value="visit">visit (never resets)</option>
       </select>
     </label>
-    <label><input type="checkbox" id="winner" checked> latestWinner set (shows "WE HAVE A WINNER!" banner)</label>
+    <label><input type="checkbox" id="winner" checked> latestWinner set + experience.winnerBannerEnabled (shows "WE HAVE A WINNER!" banner)</label>
     <label>Brand accent <input type="color" id="accent" value="#268fff"></label>
     <label><input type="checkbox" id="autoOpen" checked> server kill switch: experience.autoOpenEnabled</label>
+    <label>autoOpen mode (publisher side)
+      <select id="autoOpenMode">
+        <option value="always">always (default — once a day)</option>
+        <option value="returningUsersOnly">returningUsersOnly (skip the very first visit)</option>
+        <option value="never">never (open it with Avafli.present())</option>
+      </select>
+    </label>
     <p class="hint">Scenario changes are saved and applied on reload.</p>
     <button id="applyBtn">Apply scenario &amp; reload</button>
   </div>
 
   <div class="card">
     <h2>Actions</h2>
-    <button id="replayBtn">Replay auto-open (same day)</button>
+    <button id="presentBtn">Open now — Avafli.present()</button>
+    <button id="replayBtn" class="secondary">Replay auto-open (same day)</button>
     <button id="nextDayBtn" class="secondary">Simulate next day &amp; reload (auto-open again)</button>
+    <button id="optOutBtn" class="danger">Delete my data — Avafli.optOut()</button>
     <button id="resetBtn" class="danger">Reset user (fresh install) &amp; reload</button>
-    <p class="hint">By default the experience auto-opens once a day; since 3.1.11 a publisher can narrow that with <code>autoOpen</code> and open it themselves with <code>Avafli.present()</code>. "Replay auto-open" clears today's once-per-day mark and reloads so the auto-open engine fires again (same streak day). "Simulate next day" also clears the mock claim, so the SDK auto-opens and auto-claims the next streak day. "Reset user" clears everything (email consent, streak, impression cap).</p>
+    <p class="hint">By default the experience auto-opens once a day; a publisher can narrow that with <code>autoOpen</code> and open it themselves with <code>Avafli.present()</code> (which bypasses the once-per-day mark — try it after the auto-open closed). "Replay auto-open" clears today's once-per-day mark and reloads so the auto-open engine fires again (same streak day). "Simulate next day" also clears the mock claim, so the SDK auto-opens and auto-claims the next streak day. "Delete my data" calls the right-to-delete; afterwards <code>present()</code> resolves <code>false</code> for 24 hours (the mock backend reports the block). "Reset user" clears everything (email consent, streak, impression cap, opt-out, device-id cookie).</p>
   </div>
 
   <div class="card">
@@ -68,12 +77,12 @@ const STATE_KEY = 'avafli_demo_state';
 const BUNDLE_ID = 'com.example.demo';
 
 const demo = Object.assign(
-  { prize: 'cash', mode: 'daily', winner: true, accent: '#268fff', autoOpen: true },
+  { prize: 'cash', mode: 'daily', winner: true, accent: '#268fff', autoOpen: true, autoOpenMode: 'always' },
   JSON.parse(localStorage.getItem(DEMO_KEY) || '{}')
 );
 // Per-user mock backend state.
 const state = Object.assign(
-  { streakDay: 0, totalEntries: 0, emailConsent: false, claimedOn: null },
+  { streakDay: 0, totalEntries: 0, emailConsent: false, claimedOn: null, optedOutUntil: null },
   JSON.parse(localStorage.getItem(STATE_KEY) || '{}')
 );
 const saveState = () => localStorage.setItem(STATE_KEY, JSON.stringify(state));
@@ -83,6 +92,7 @@ document.getElementById('mode').value = demo.mode;
 document.getElementById('winner').checked = demo.winner;
 document.getElementById('accent').value = demo.accent;
 document.getElementById('autoOpen').checked = demo.autoOpen;
+document.getElementById('autoOpenMode').value = demo.autoOpenMode;
 
 const logEl = document.getElementById('log');
 const log = (...args) => {
@@ -142,8 +152,14 @@ function giveaway() {
 const sdkConfig = () => ({
   branding: { primaryColor: demo.accent },
   rulesUrl: 'https://example.com/rules',
-  experience: { autoOpenEnabled: demo.autoOpen, unregisteredImpressionCap: 3 },
+  // winnerBannerEnabled is default OFF in the SDK — the banner renders only
+  // when the server sends it as exactly true (and latestWinner exists).
+  experience: { autoOpenEnabled: demo.autoOpen, unregisteredImpressionCap: 3, winnerBannerEnabled: demo.winner },
 });
+
+// "Delete my data" block: 24 hours in the real backend; the mock honours the
+// same optedOutUntil contract so the SDK's rejoin logic can be watched.
+const optedOut = () => !!state.optedOutUntil && Date.parse(state.optedOutUntil) > Date.now();
 
 const fakeJwt = () => {
   const b64 = (o) => btoa(JSON.stringify(o)).replace(/=+$/,'');
@@ -156,7 +172,8 @@ const userPayload = () => ({
   totalEntries: state.totalEntries,
   emailConsentStatus: state.emailConsent,
   weeklyCurrent: 0, monthlyCurrent: 0,
-  optedOut: false,
+  optedOut: optedOut(),
+  ...(optedOut() ? { optedOutUntil: state.optedOutUntil } : {}),
 });
 
 const realFetch = window.fetch.bind(window);
@@ -170,10 +187,22 @@ window.fetch = async (url, init) => {
   await new Promise(r => setTimeout(r, 250)); // a touch of latency
 
   switch (endpoint) {
-    case 'registerDevice':
-      log('→ registerDevice', body.deviceFingerprint || '');
+    case 'registerDevice': {
+      log('→ registerDevice', body.deviceFingerprint || '', '(sdkVersion ' + body.sdkVersion + ')');
+      // isNewUser: the backend just minted this user (first registration, or
+      // the first one after a lapsed opt-out) — drives autoOpen: 'returningUsersOnly'.
+      const isNewUser = !state.registered;
+      state.registered = true; saveState();
       return ok({ token: fakeJwt(), refreshToken: 'rt', uuid: 'demo-user-1',
-        giveaway: giveaway(), isReturningUser: state.streakDay > 0, sdkConfig: sdkConfig(), ...userPayload() });
+        giveaway: giveaway(), isReturningUser: false, isNewUser, sdkConfig: sdkConfig(), ...userPayload() });
+    }
+    case 'optOut': {
+      state.optedOutUntil = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      state.registered = false; state.emailConsent = false; state.streakDay = 0; state.totalEntries = 0; state.claimedOn = null;
+      saveState();
+      log('→ optOut → erased; blocked until', state.optedOutUntil);
+      return ok({ success: true, optedOut: true, optedOutUntil: state.optedOutUntil });
+    }
     case 'refreshToken':
       return ok({ token: fakeJwt(), refreshToken: 'rt' });
     case 'getActiveGiveaway':
@@ -204,13 +233,34 @@ window.fetch = async (url, init) => {
 <script src="../dist/avafli-sdk.umd.js"></script>
 <script>
 /* ─── SDK integration ─── */
+log('SDK ' + Avafli.AVAFLI_CONSTANTS.SDK_VERSION + ' — autoOpen: ' + demo.autoOpenMode);
 Avafli.configure({
-  apiKey: 'demo-api-key',
+  apiKey: 'avafli_test_demo',          // the mock backend ignores it; a real page uses the dashboard key
   bundleId: BUNDLE_ID,
+  autoOpen: demo.autoOpenMode,
   user: { id: 'demo-user-1', firstName: 'Demo', lastName: 'User' },
-  options: { environment: 'production', debug: true },
-}).then(() => log('SDK configured — auto-open will fire on the first visit of the day'))
+  options: {
+    analyticsAdapter: {
+      track: (event, props) => log('analytics.track', event, props || ''),
+      identify: (userId, traits) => log('analytics.identify', userId, traits || ''),
+    },
+  },
+}).then(() => log('SDK configured — available: ' + Avafli.isAvailable))
   .catch((e) => log('configure failed:', e.message));
+
+document.getElementById('presentBtn').addEventListener('click', async () => {
+  const shown = await Avafli.present();
+  log('Avafli.present() →', shown, shown ? '(closed by the visitor)' : '(nothing to show: opted out / no giveaway / not configured)');
+});
+
+document.getElementById('optOutBtn').addEventListener('click', async () => {
+  try {
+    await Avafli.optOut();
+    log('Avafli.optOut() → confirmed; the experience stays silent for 24 hours');
+  } catch (e) {
+    log('Avafli.optOut() failed (nothing changed locally):', e.message);
+  }
+});
 
 // Replay = clear the SDK's once-per-day auto-open mark, then reload. On load,
 // Avafli.configure() re-runs the internal auto-open check, which fires again.
@@ -226,6 +276,7 @@ document.getElementById('applyBtn').addEventListener('click', () => {
     winner: document.getElementById('winner').checked,
     accent: document.getElementById('accent').value,
     autoOpen: document.getElementById('autoOpen').checked,
+    autoOpenMode: document.getElementById('autoOpenMode').value,
   }));
   location.reload();
 });
@@ -240,6 +291,9 @@ document.getElementById('resetBtn').addEventListener('click', () => {
   // SDK state keys keep the legacy winr_ prefix; demo keys use avafli_.
   Object.keys(localStorage).filter(k => k.startsWith('winr') || k.startsWith('avafli')).forEach(k => localStorage.removeItem(k));
   sessionStorage.clear();
+  // The device id is mirrored in a first-party cookie; without clearing it the
+  // SDK restores the same browser identity on the next load.
+  document.cookie = 'avafli_did=; Max-Age=0; Path=/';
   location.reload();
 });
 </script>
