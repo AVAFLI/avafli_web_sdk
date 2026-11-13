@@ -8,9 +8,13 @@ export interface AvafliOptions {
   /** API environment */
   environment?: 'production';
   /**
-   * Reserved. NOT read by 3.3.0: the shipped bundles log at `warn` level and
-   * above regardless of this flag (verbose logging exists only in a
-   * development build of the SDK itself). Setting it is harmless.
+   * Verbose SDK logging (3.3.1). The shipped bundles log at `warn` level and
+   * above; `debug: true` raises the SDK's logger to `debug` on `configure()`
+   * so its debug/info lines (registration, auto-open decisions, token
+   * refresh, retries) reach the console, prefixed `[Avafli]`. Leave it off
+   * in production — the lines include user and giveaway identifiers.
+   * Absent or `false` changes nothing (a development build of the SDK keeps
+   * its own default).
    */
   debug?: boolean;
   /** Enable streak reminder push notifications */
@@ -892,7 +896,7 @@ export interface PresentationOptions {
 // ─── Constants ───
 
 export const AVAFLI_CONSTANTS = {
-  SDK_VERSION: '3.3.0',
+  SDK_VERSION: '3.3.1',
   PLATFORM_OS: 'Web',
   /**
    * Canonical Avafli privacy policy. 2.9.3: every "Privacy Policy" link used to

@@ -79,6 +79,46 @@ describe('bundle size budget', () => {
     expect(uiSrc).not.toMatch(/import\(/);
   });
 
+  it('3.3.1 public surface: optOut is gone from the typings and the UMD global; the drawer-only accessors are stripped from the typings', () => {
+    const dts = readFileSync(join(outDir, 'avafli-sdk.d.ts'), 'utf8');
+    // Removed from the host-page API (declarations only — the TSDoc of the
+    // private in-drawer path may still mention the old name).
+    expect(dts).not.toMatch(/^\s*static (async )?optOut\s*\(/m);
+    expect(dts).not.toMatch(/\boptOut\(\): Promise/);
+    // Drawer-only accessors — `@internal` + stripInternal.
+    expect(dts).not.toMatch(/\bgetAPI\s*\(/);
+    expect(dts).not.toMatch(/\bsubmitEmailAndAdopt\s*\(/);
+    expect(dts).not.toMatch(/\bgetResolvedSDKConfig\s*\(/);
+    // The documented surface is intact.
+    for (const member of [
+      'static configure(config: AvafliConfiguration): Promise<void>;',
+      'static present(): Promise<boolean>;',
+      'static holdAutoOpen(): void;',
+      'static releaseAutoOpen(): void;',
+      'static dismiss(): void;',
+      'static get isAvailable(): boolean;',
+      'static get unavailableReason(): AvafliError | null;',
+      'static refreshConfig(): Promise<void>;',
+      'static registerForPushNotifications(): Promise<void>;',
+      'debug?: boolean;',
+    ]) {
+      expect(dts, member).toContain(member);
+    }
+
+    // The script-tag global is the class itself: no `optOut` static may ship
+    // on it, while the in-drawer erasure (the legal overlay's delete bridge)
+    // still does. Terser does not mangle method names.
+    const umd = readFileSync(join(outDir, 'avafli-sdk.umd.js'), 'utf8');
+    expect(umd).not.toMatch(/static\s+(async\s+)?optOut\s*\(/);
+    expect(umd).toMatch(/optOutFromExperience\s*\(/);
+    // The dismissal reasons are in the UI code of both builds.
+    for (const f of ['avafli-sdk.umd.js', 'avafli-sdk.ui.esm.js']) {
+      const src = readFileSync(join(outDir, f), 'utf8');
+      expect(src, f).toContain('avafli_modal_dismissed');
+      expect(src, f).toContain('"deleted"');
+    }
+  });
+
   it('no bundle embeds the fonts or imagery as data URIs', () => {
     for (const f of ['avafli-sdk.umd.js', 'avafli-sdk.esm.js', 'avafli-sdk.ui.esm.js']) {
       const src = readFileSync(join(outDir, f), 'utf8');

@@ -101,8 +101,8 @@ describe('Giveaway type: scope + sponsorDisclosure parse through untouched', () 
     expect(parsed.sponsorDisclosure).toBe(DISCLOSURE);
   });
 
-  it('SDK_VERSION is 3.3.0', () => {
-    expect(AVAFLI_CONSTANTS.SDK_VERSION).toBe('3.3.0');
+  it('SDK_VERSION is 3.3.1', () => {
+    expect(AVAFLI_CONSTANTS.SDK_VERSION).toBe('3.3.1');
   });
 });
 

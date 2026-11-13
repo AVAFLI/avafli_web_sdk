@@ -30,7 +30,7 @@ import { setAssetBaseUrl } from './assets';
 import { StreakEngine } from './domain/streak-engine';
 import { LocalStorageProvider } from './storage/local-storage';
 import { SessionStorageProvider } from './storage/session-storage';
-import { logger } from './services/logger';
+import { logger, LogLevel } from './services/logger';
 import { analyticsAdapter } from './services/analytics';
 import {
   BufferingAnalyticsAdapter,
@@ -251,9 +251,12 @@ export class Avafli {
    *
    * Public on the class for the drawer's sake, not a stable host-page API —
    * the publisher-facing surface is `configure` / `present` / `holdAutoOpen` /
-   * `releaseAutoOpen` / `dismiss` / `optOut` / `isAvailable` /
-   * `unavailableReason` / `refreshConfig`. Throws `not_configured` before
-   * `configure()` has succeeded.
+   * `releaseAutoOpen` / `dismiss` / `isAvailable` / `unavailableReason` /
+   * `refreshConfig` / `registerForPushNotifications`. Throws `not_configured`
+   * before `configure()` has succeeded.
+   *
+   * 3.3.1: stripped from the published typings (`stripInternal`).
+   * @internal
    */
   public static getAPI(): AvafliAPI {
     Avafli.ensureConfigured();
@@ -267,6 +270,8 @@ export class Avafli {
    * Tokens are read fresh on each request, so persisting them here is sufficient.
    *
    * Internal (the drawer's capture screen calls it); not a stable host-page API.
+   * 3.3.1: stripped from the published typings (`stripInternal`).
+   * @internal
    */
   public static async submitEmailAndAdopt(request: SubmitEmailRequest): Promise<SubmitEmailResponse> {
     Avafli.ensureConfigured();
@@ -300,7 +305,11 @@ export class Avafli {
 
   /**
    * Expose the resolved consent / age-gate config to UI components.
-   * Internal; not a stable host-page API.
+   * Internal; not a stable host-page API. (The drawer currently receives the
+   * config through its `resolveSdkConfig` dependency instead; nothing in the
+   * SDK, the demo page or the website calls this.)
+   * 3.3.1: stripped from the published typings (`stripInternal`).
+   * @internal
    */
   public static getResolvedSDKConfig(): SDKConfig {
     Avafli.ensureConfigured();
@@ -390,6 +399,17 @@ export class Avafli {
   }
 
   private static async runConfigure(config: AvafliConfiguration): Promise<void> {
+    // 3.3.1: `options.debug` is honoured. Shipped bundles log at `warn`;
+    // the publisher's explicit opt-in raises the shared logger to `debug` so
+    // the SDK's debug/info lines (registration, auto-open decisions, token
+    // refresh, retries) reach the console. Only ever RAISES verbosity — a
+    // development build of the SDK already logs at debug, and `debug: false`
+    // (or absent) leaves the level exactly where it was.
+    if (config.options?.debug) {
+      logger.setLevel(LogLevel.Debug);
+      logger.debug('Debug logging enabled (options.debug)');
+    }
+
     if (Avafli.isConfigured) {
       // Documented upgrade path: "when your user signs in, call configure
       // again with the real user". A repeat call with a DIFFERENT signed-in
@@ -481,6 +501,20 @@ export class Avafli {
       // attempt so a transport failure below can queue its retry.
       Avafli.ensureOfflineMachinery(config, Avafli.instance.storage);
 
+      // Attach the publisher's analytics adapter BEFORE registration (3.3.1)
+      // — routed through the offline buffering wrapper so events emitted
+      // while offline are queued (bounded, persisted) and flushed with their
+      // original timestamps. Until 3.3.0 this ran after registerDevice(), so
+      // `avafli_device_registered` went to the default console adapter on
+      // the very configure() that installed the publisher's adapter and was
+      // never delivered to it. Every other event keeps its order
+      // (device_registered → identify → modal_presented → …).
+      if (config.options?.analyticsAdapter) {
+        analyticsAdapter.setAdapter(
+          Avafli.offlineAnalytics ?? config.options.analyticsAdapter
+        );
+      }
+
       // Initialize device fingerprint
       await Avafli.instance.initializeDeviceFingerprint();
 
@@ -494,15 +528,6 @@ export class Avafli {
       
       Avafli.isConfigured = true;
       logger.info('Avafli SDK configured successfully');
-      
-      // Initialize analytics if provided — routed through the offline
-      // buffering wrapper so events emitted while offline are queued
-      // (bounded, persisted) and flushed with their original timestamps.
-      if (config.options?.analyticsAdapter) {
-        analyticsAdapter.setAdapter(
-          Avafli.offlineAnalytics ?? config.options.analyticsAdapter
-        );
-      }
 
       // Auto-setup user from configuration
       const user = config.user;
@@ -924,18 +949,22 @@ export class Avafli {
   }
 
   /**
-   * Dismiss any currently presented modal
+   * Dismiss any currently presented modal from the host page.
+   *
+   * 3.3.1: `avafli_modal_dismissed` is emitted by the experience itself on
+   * EVERY dismissal path, with `reason: 'host'` for this call, `'user'` when
+   * the visitor closes the drawer (X, GOT IT, backdrop, Escape) and
+   * `'deleted'` when it closes after an in-drawer "Delete my data". Exactly
+   * once per dismissal — a drawer that is already closing emits nothing.
    */
   public static dismiss(): void {
     if (!Avafli.ensureConfigured()) return;
 
     if (Avafli.instance!.currentExperience) {
-      Avafli.instance!.currentExperience.dismiss();
+      Avafli.instance!.currentExperience.dismiss('host');
       Avafli.instance!.currentExperience = null;
       Avafli.instance!.currentController = null;
-
-      analyticsAdapter.track('avafli_modal_dismissed');
-      logger.debug('Modal dismissed');
+      logger.debug('Modal dismissed by the host page');
     }
   }
 
@@ -1473,42 +1502,14 @@ export class Avafli {
     }
   }
 
-  /**
-   * Right-To-Delete opt-out ("Delete my data"): erases the person on the
-   * backend (identity-wide, PII anonymized) and silences the experience in
-   * this browser. Entries and streaks are forfeited and cannot be restored.
-   * 3.2.0: the block lasts 24 hours — after that the person may join again
-   * as a brand-new participant with no connection to the old profile. Wire
-   * this to your own delete-account flow (visitors can also delete themselves
-   * from the Privacy Policy inside the drawer). Parity with the mobile SDKs'
-   * `Avafli.optOut()`.
-   *
-   * Throws (and changes nothing locally) when the request does not reach the
-   * backend or the backend answers `success: false`; throws `not_configured`
-   * before `configure()` has succeeded. Only a confirmed erasure marks the
-   * browser opted out and emits `avafli_opted_out`.
-   */
-  public static async optOut(): Promise<void> {
-    if (!Avafli.ensureConfigured()) return;
-
-    // A right-to-delete request MUST reach the backend. If the network call
-    // fails we throw and mark NOTHING locally — silencing the client on a
-    // failed erasure would drop the request forever (there is no later
-    // registration to "catch up", because the client is now silent). The
-    // caller surfaces the error and lets the user retry. Only on confirmed
-    // success do we suppress locally.
-    const requestedAt = Date.now();
-    const res = await Avafli.instance!.client.post<{ success?: boolean; optedOutUntil?: string }>(
-      '/optOut',
-      {}
-    );
-    if (res && res.success === false) {
-      throw new Error('opt-out was not accepted by the server');
-    }
-    Avafli.instance!.markOptedOut(Avafli.optOutLiftTime(res?.optedOutUntil, requestedAt));
-    analyticsAdapter.track('avafli_opted_out');
-    logger.info('User opted out — experience suppressed for 24 hours');
-  }
+  // ─── Right-To-Delete ("Delete my data") ───
+  //
+  // 3.3.1: the public `Avafli.optOut()` is REMOVED (product decision): a host
+  // page must not be able to erase a person's Avafli data. Deletion is
+  // self-serve from the Privacy Policy screen inside the experience — the
+  // legal overlay's delete bridge raises the destructive confirmation, and
+  // optOutFromExperience() below performs the erasure. There is nothing for
+  // the host page to call; the 24-hour rejoin is unchanged.
 
   /** The server's `optedOutUntil` when it sent one, else the call's moment + 24 hours. */
   private static optOutLiftTime(serverUntil: string | undefined, requestedAt: number): string {
@@ -1521,12 +1522,19 @@ export class Avafli {
   /**
    * The in-experience RTD opt-out (2.9.5: the privacy page's "Delete my
    * data" section inside the legal overlay bridges into the destructive
-   * confirmation). Same contract as the public {@link optOut}: a failed
-   * backend call THROWS and marks NOTHING locally — the experience shows an
-   * honest error and the user can retry; the deletion is only announced once
-   * the backend has actually tombstoned the person. (Differs only in that a
-   * `success: false` body is not re-checked here — the drawer treats any
-   * resolved call as confirmed.)
+   * confirmation). 3.3.1: the ONLY erasure path — the public `optOut()` is
+   * gone. The erasure is identity-wide (every device of that person), PII is
+   * anonymised everywhere including prize-claim records, the account is
+   * tombstoned, and the browser is marked opted out until the server's
+   * `optedOutUntil` (else the call's moment + 24 hours), after which the
+   * person may join again as a brand-new participant.
+   *
+   * A right-to-delete request MUST reach the backend: a failed call THROWS
+   * and marks NOTHING locally — silencing the client on a failed erasure
+   * would drop the request forever — so the experience shows an honest error
+   * and the user can retry; the deletion is only announced once the backend
+   * has actually tombstoned the person. Only a confirmed erasure marks the
+   * browser opted out and emits `avafli_opted_out`.
    */
   private static async optOutFromExperience(): Promise<void> {
     if (!Avafli.ensureConfigured()) throw new Error('Avafli is not configured');
@@ -1548,10 +1556,11 @@ export class Avafli {
    * the same day farmed unlimited entries. It also destroyed the records proving the
    * drawing was fair, and left prize-claim PII orphaned.
    *
-   * Use `optOut()` instead. It is the correct erasure: identity-wide, PII scrubbed
-   * everywhere including prize claims, and tombstoned so it survives a reinstall.
-   * The experience stays silenced on the device for 24 hours (3.2.0), after which
-   * the person may join again as a brand-new participant.
+   * The in-experience "Delete my data" ({@link optOutFromExperience}) is the
+   * correct erasure: identity-wide, PII scrubbed everywhere including prize
+   * claims, and tombstoned so it survives a reinstall. The experience stays
+   * silenced on the device for 24 hours (3.2.0), after which the person may
+   * join again as a brand-new participant. 3.3.1: no host-page entry point.
    */
 
   /**

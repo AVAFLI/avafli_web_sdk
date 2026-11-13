@@ -98,6 +98,16 @@ export type WinnerClaimStep =
 export type LegalDoc = 'rules' | 'privacy';
 
 /**
+ * Why the experience closed (3.3.1) — the `reason` property of
+ * `avafli_modal_dismissed`:
+ *  - `'user'`    the visitor closed it (X, GOT IT, RETURN TO APP, the
+ *                backdrop, Escape, the empty / geo-blocked close button);
+ *  - `'host'`    the host page called `Avafli.dismiss()`;
+ *  - `'deleted'` the SDK closed it after an in-drawer "Delete my data".
+ */
+export type DismissReason = 'user' | 'host' | 'deleted';
+
+/**
  * Appends `app=1` to a URL — the flag that makes sdk.avafli.com/sdk/privacy
  * render its in-experience "Delete my data" section (parallel build on the
  * website side). URL-API based so a target that already carries a query
@@ -182,9 +192,10 @@ export interface V2ControllerDeps {
   /**
    * Performs the RTD opt-out (the in-experience "Delete my data" flow — the
    * privacy page inside the legal overlay bridges into the destructive
-   * confirmation). MUST reject on failure — unlike the public
-   * `Avafli.optOut()`, the in-experience flow shows an honest error instead of
-   * pretending the deletion succeeded (wired to `Avafli.optOutFromExperience`).
+   * confirmation). MUST reject on failure — the in-experience flow shows an
+   * honest error instead of pretending the deletion succeeded (wired to
+   * `Avafli.optOutFromExperience`). 3.3.1: this is the only erasure path;
+   * the public `Avafli.optOut()` no longer exists.
    */
   optOut?: () => Promise<void>;
   /** Warm-start data cached by Avafli from device registration. */
@@ -471,8 +482,12 @@ export class V2ExperienceController {
 
   /** Re-render hook (root view). */
   public onChange?: (state: V2State) => void;
-  /** X buttons / GOT IT on the dashboard → close the whole experience. */
-  public onDismissRequest?: () => void;
+  /**
+   * X buttons / GOT IT on the dashboard → close the whole experience. The
+   * reason travels with the request (3.3.1) so the root can report it on
+   * `avafli_modal_dismissed`; `undefined` means `'user'`.
+   */
+  public onDismissRequest?: (reason?: DismissReason) => void;
   /** A claim succeeded (present()'s completion contract). */
   public onComplete?: (grant: DailyEntryGrant) => void;
   public onError?: (error: AvafliError) => void;
@@ -2128,9 +2143,13 @@ export class V2ExperienceController {
     }
   }
 
-  /** Close the whole experience (X buttons / GOT IT on the dashboard). */
-  public requestDismiss(): void {
-    this.onDismissRequest?.();
+  /**
+   * Close the whole experience. Every screen's X / GOT IT / RETURN TO APP
+   * calls this with no argument (`'user'`); the post-deletion auto-close
+   * passes `'deleted'`.
+   */
+  public requestDismiss(reason: DismissReason = 'user'): void {
+    this.onDismissRequest?.(reason);
   }
 
   // ─── In-experience legal overlay (Official Rules / Privacy Policy) ───
@@ -2269,7 +2288,12 @@ export class V2ExperienceController {
       await this.deps.optOut();
       this.optOutPhase = 'done';
       this.onChange?.(this.state);
-      setTimeout(() => this.requestDismiss(), V2ExperienceController.OPT_OUT_SUCCESS_HOLD_MS);
+      // 3.3.1: the SDK closes the drawer itself after the deletion — reported
+      // as `reason: 'deleted'`, not a visitor close.
+      setTimeout(
+        () => this.requestDismiss('deleted'),
+        V2ExperienceController.OPT_OUT_SUCCESS_HOLD_MS
+      );
     } catch (error) {
       logger.error('Opt-out failed:', error);
       this.optOutPhase = 'failed';

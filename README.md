@@ -6,7 +6,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0%2B-blue.svg?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/AVAFLI/avafli_web_sdk/blob/main/LICENSE)
 
-Current release: **avafli-sdk 3.3.0** (npm) — the same build is served from the CDN at `https://sdk.avafli.com/avafli-sdk.umd.js`.
+Current release: **avafli-sdk 3.3.1** (npm) — the same build is served from the CDN at `https://sdk.avafli.com/avafli-sdk.umd.js`.
 
 The SDK registers the browser with Avafli, captures an email through its own opt-in screen, and opens a self-contained drawer once a day in which the visitor's daily entries are claimed automatically. Branding, copy, prize, streak ladder and behaviour flags all come from your publisher dashboard; the page integrates once.
 
@@ -17,16 +17,15 @@ The SDK registers the browser with Avafli, captures an email through its own opt
 3. [Configure](#3-configure)
 4. [What the visitor sees](#4-what-the-visitor-sees)
 5. [Controlling when the drawer opens](#5-controlling-when-the-drawer-opens)
-6. [Account deletion and the 24-hour rejoin](#6-account-deletion-and-the-24-hour-rejoin)
-7. [Testing checklist](#7-testing-checklist)
-8. [Analytics](#8-analytics)
-9. [Content Security Policy](#9-content-security-policy)
-10. [Frameworks, SSR and Next.js](#10-frameworks-ssr-and-nextjs)
-11. [Self-hosting the bundle and its assets](#11-self-hosting-the-bundle-and-its-assets)
-12. [Networking and offline behaviour](#12-networking-and-offline-behaviour)
-13. [API reference](#13-api-reference)
-14. [Demo page](#14-demo-page)
-15. [Links](#15-links)
+6. [Testing checklist](#6-testing-checklist)
+7. [Analytics](#7-analytics)
+8. [Content Security Policy](#8-content-security-policy)
+9. [Frameworks, SSR and Next.js](#9-frameworks-ssr-and-nextjs)
+10. [Self-hosting the bundle and its assets](#10-self-hosting-the-bundle-and-its-assets)
+11. [Networking and offline behaviour](#11-networking-and-offline-behaviour)
+12. [API reference](#12-api-reference)
+13. [Demo page](#13-demo-page)
+14. [Links](#14-links)
 
 ---
 
@@ -45,14 +44,14 @@ The SDK registers the browser with Avafli, captures an email through its own opt
 <script src="https://sdk.avafli.com/avafli-sdk.umd.js"></script>
 ```
 
-- Served from Avafli's CDN with `Cache-Control: public, max-age=300` — browsers pick up a new release within five minutes. The URL has no version segment; the file is always the current release (3.3.0 today).
+- Served from Avafli's CDN with `Cache-Control: public, max-age=300` — browsers pick up a new release within five minutes. The URL has no version segment; the file is always the current release (3.3.1 today).
 - One file, 221 KB minified (62 KB gzipped). It exposes a global `Avafli`.
-- Because the URL always serves the latest release, a Subresource Integrity hash would break on every update — do not add `integrity=` to this tag. To pin a version (and use SRI), self-host the file: see [Self-hosting](#11-self-hosting-the-bundle-and-its-assets).
+- Because the URL always serves the latest release, a Subresource Integrity hash would break on every update — do not add `integrity=` to this tag. To pin a version (and use SRI), self-host the file: see [Self-hosting](#10-self-hosting-the-bundle-and-its-assets).
 
 ### npm / yarn / pnpm (Vite, webpack, Next.js, …)
 
 ```bash
-npm install avafli-sdk@^3.3.0
+npm install avafli-sdk@^3.3.1
 ```
 
 ```typescript
@@ -126,7 +125,7 @@ Script-tag equivalent:
 | `autoOpen` | `'always' \| 'returningUsersOnly' \| 'never'` | no | When the SDK may open the drawer on its own. Default `'always'`. [Section 5](#5-controlling-when-the-drawer-opens) |
 | `options` | `AvafliOptions` | no | See the table below |
 | `branding` | `AvafliBranding` | no | Client-side fallback for `logoUrl` and `primaryColor` only. The dashboard's branding always wins when set; the other fields on the type are accepted but not used by the current drawer |
-| `assetBaseUrl` | `string` | no | Where the drawer's fonts and images are fetched from. Default `https://sdk.avafli.com/sdk-assets/v2`. [Section 11](#11-self-hosting-the-bundle-and-its-assets) |
+| `assetBaseUrl` | `string` | no | Where the drawer's fonts and images are fetched from. Default `https://sdk.avafli.com/sdk-assets/v2`. [Section 11](#10-self-hosting-the-bundle-and-its-assets) |
 
 ### `AvafliUser`
 
@@ -147,13 +146,13 @@ Three identity cases:
 
 | Field | Type | Default | What it does |
 | --- | --- | --- | --- |
-| `analyticsAdapter` | `{ track, identify }` | — | Receives every SDK event. [Section 8](#8-analytics) |
+| `analyticsAdapter` | `{ track, identify }` | — | Receives every SDK event. [Section 8](#7-analytics) |
 | `enableAgeGate` | `boolean` | `true` | Fallback only — the dashboard's `ageGateEnabled` wins when set |
 | `ageGateMinAge` | `number` | `18` | Fallback only — the dashboard's `ageGateMinAge` wins when set |
 | `deviceFingerprintProvider` | `() => Promise<string>` | — | Supply your own stable browser id instead of the SDK's random one. Called once per browser; the result is stored and reused |
 | `environment` | `'production'` | `'production'` | The only value. There is no separate staging endpoint — the sandbox key is how you test |
-| `enablePushReminders` | `boolean` | `false` | Gate for `Avafli.registerForPushNotifications()`, which is a logged no-op on the web in 3.3.0 (no VAPID key / service worker ships with the SDK) |
-| `debug` | `boolean` | `false` | **Not read by 3.3.0.** The shipped bundles log at `warn` level and above regardless; verbose logging is only available in a development build of the SDK itself. Setting it is harmless |
+| `enablePushReminders` | `boolean` | `false` | Gate for `Avafli.registerForPushNotifications()`, which is a logged no-op on the web in 3.3.1 (no VAPID key / service worker ships with the SDK) |
+| `debug` | `boolean` | `false` | Verbose SDK logging (3.3.1). `true` raises the SDK's logger to `debug` on `configure()`, so its debug/info lines (registration, auto-open decisions, token refresh, retries) reach the console prefixed `[Avafli]`; otherwise the bundles log at `warn` and above. Leave it off in production — the lines include user and giveaway identifiers |
 
 ### Sandbox key (`avafli_test_`)
 
@@ -171,7 +170,7 @@ Sandbox users can never enter or win your real giveaway, sandbox traffic never c
 1. Validates the config, mints a guest id if there is no `user`.
 2. Resolves the browser's device id: `web_` + 24 hex characters, generated once from the CSPRNG and kept in localStorage (`winr_device_fingerprint`) **and** mirrored in a first-party cookie `avafli_did` (400 days, `SameSite=Lax`, `Secure` on https). If localStorage comes back empty but the cookie survived, the id — and the account — is restored instead of a new visitor being minted. Browsers with site data blocked get a deterministic hash of browser signals so a page session is at least internally consistent.
 3. Mints an invisible reCAPTCHA Enterprise token (best effort, 4 s cap, never blocking — see [section 4](#4-what-the-visitor-sees)), then calls `registerDevice` (unauthenticated) and stores the session: ID token, refresh token and user id in **sessionStorage** (`winr_token`, `winr_refresh_token`, `winr_uuid`); the giveaway, streak state, consent flag and auto-open marks in localStorage (all `winr_`-prefixed; per-bundle keys end in `_<bundleId>`). Tokens are refreshed proactively before expiry and once more on a 401.
-4. Fires `avafli_device_registered`, submits `firstName`/`lastName`/`phone` if any were given (fire-and-forget), calls `identify` on your analytics adapter.
+4. Fires `avafli_device_registered` to your analytics adapter (attached before registration, so it is the first event you receive — 3.3.1), submits `firstName`/`lastName`/`phone` if any were given (fire-and-forget), calls `identify` on your adapter.
 5. Runs the auto-open check ([section 5](#5-controlling-when-the-drawer-opens)). The drawer's code and assets are only fetched when it actually opens.
 
 `configure()` resolves once registration has succeeded. It rejects with an `AvafliError`:
@@ -206,7 +205,9 @@ Everything in this section is SDK-driven. Nothing here needs host-page code.
 
 **No active giveaway.** The drawer does not open; `Avafli.present()` resolves `false`.
 
-**Privacy.** Both legal links open an in-drawer overlay (an `<iframe>` of your rules URL or `https://sdk.avafli.com/sdk/privacy`). The privacy page contains "Delete my data & stop participating" — the in-experience right-to-delete, see [section 6](#6-account-deletion-and-the-24-hour-rejoin).
+**Privacy.** Both legal links open an in-drawer overlay (an `<iframe>` of your rules URL or `https://sdk.avafli.com/sdk/privacy`). The privacy page contains "Delete my data & stop participating" — the in-experience right-to-delete.
+
+**Deletion.** Visitors delete their own Avafli data from the Privacy Policy screen inside the experience: the erasure is identity-wide (every device of that person — PII anonymised everywhere including prize-claim records, the account tombstoned so a storage wipe cannot resurrect it; de-identified entry records are kept as the legally required evidence that drawings were fair), entries and streaks are forfeited, `Avafli.present()` resolves `false` until the block lifts, and after 24 hours the person may join again as a brand-new participant with no connection to the old profile. There is nothing for the host page to do — no API triggers or observes a deletion beyond the `avafli_opted_out` analytics event.
 
 ## 5. Controlling when the drawer opens
 
@@ -258,47 +259,25 @@ A winner who closed the drawer must be able to get back to the claim without wai
 
 ### `Avafli.dismiss()`
 
-Closes the drawer programmatically (fires `avafli_modal_dismissed`).
+Closes the drawer programmatically (fires `avafli_modal_dismissed` with `reason: 'host'`).
 
-## 6. Account deletion and the 24-hour rejoin
-
-Visitors can delete their own data at any time from the Privacy Policy screen inside the drawer — no integration needed. If your site has its own delete-account flow, call `optOut()` from it so the person's Avafli data goes with their account:
-
-```typescript
-try {
-  await Avafli.optOut();
-} catch (e) {
-  // The request did not reach the backend — nothing was changed locally.
-  // Show an error and let the user retry.
-}
-```
-
-What it does, in order:
-
-1. POSTs the authenticated `/optOut` request. The erasure is **identity-wide** (every device of that person), PII is anonymised everywhere including prize-claim records, and the account is tombstoned so a reinstall or storage wipe cannot resurrect it. De-identified entry records are retained as the legally required evidence that drawings were fair (GDPR Art. 17(3)).
-2. Only after the backend confirms: marks the browser opted out (`winr_opted_out_<bundleId>` plus the lift time `winr_opted_out_until_<bundleId>`, from the server's `optedOutUntil` or the call's moment + 24 hours) and fires `avafli_opted_out`. A failed request **throws and marks nothing**, so a deletion can never be silently lost.
-3. Until the block lifts nothing is presented and `Avafli.present()` resolves `false`.
-4. After 24 hours the person may join again as a brand-new participant with no connection to the old profile: on the next `configure()`, or when the tab returns to the foreground, the SDK drops the old session (tokens, user id, email flag, cached giveaway/streak/claim state, day mark, impression counter) — the device id is kept — registers again, and shows the normal email-capture flow. If the server still reports the block, its time is adopted and the SDK checks again after it.
-
-Entries and streaks are forfeited and cannot be restored; the in-drawer confirmation says so. There is no separate "delete user data" call — `optOut()` is the erasure.
-
-## 7. Testing checklist
+## 6. Testing checklist
 
 1. **Use the `avafli_test_` key** on every non-production host. The backend validates the `bundleId` value you pass, not the page's origin, so a page on `localhost` or `staging.yourdomain.com` can pass `bundleId: 'yourdomain.com'` as long as that domain is registered — the sandbox accepts the live key's list.
 2. **Watch the network panel.** A working load shows `POST …cloudfunctions.net/registerDevice` → 200. The drawer's own `getActiveGiveaway` and `claimDailyEntries` follow when it opens. A 4xx with a JSON `error` body is a backend refusal (unknown bundleId, suspended key) and is surfaced by `configure()` immediately.
 3. **First visit:** the capture screen appears (auto-open) or `await Avafli.present()` resolves `true` after you close it. Submit an email; the dashboard greets with "YOU'RE IN!" and day 1 checked; `avafli_email_captured` then `avafli_daily_entry_claimed` reach your adapter.
 4. **Return visit (same day):** reload — no auto-open (day mark set); `Avafli.present()` shows the dashboard with today claimed.
 5. **Next day:** reload after local midnight — the drawer auto-opens and claims day 2 with the celebration. To simulate without waiting, clear `localStorage['winr_last_auto_present_<bundleId>']` and reload (the sandbox backend still enforces one claim per local day).
-6. **Reset to a fresh visitor:** remove every `localStorage` key starting with `winr_` or `avafli_`, clear `sessionStorage`, and delete the `avafli_did` cookie — the cookie mirror restores the account otherwise. The [demo page](#14-demo-page) has a one-click reset.
+6. **Reset to a fresh visitor:** remove every `localStorage` key starting with `winr_` or `avafli_`, clear `sessionStorage`, and delete the `avafli_did` cookie — the cookie mirror restores the account otherwise. The [demo page](#13-demo-page) has a one-click reset.
 7. **Cross-device adoption:** register in a second browser (or private window after a reset) with the same email — the 6-digit code screen must appear before the streak carries over.
 8. **Guest → signed-in:** `configure()` without `user`, then again with `user: { id }` — the second call re-registers (watch for a second `registerDevice`).
 9. **Presentation:** try `autoOpen: 'never'` with a button calling `Avafli.present()`, and `holdAutoOpen()` before `configure()` / `releaseAutoOpen()` later.
-10. **Deletion:** Privacy Policy → "Delete my data" (or `Avafli.optOut()`), confirm; `present()` must resolve `false`, and 24 hours later (or after clearing the two `winr_opted_out*` keys) the capture flow returns.
+10. **Deletion:** inside the drawer, Privacy Policy → "Delete my data", confirm; `avafli_opted_out` reaches your adapter, `present()` must resolve `false`, and 24 hours later (or after clearing the two `winr_opted_out*` keys) the capture flow returns as a brand-new participant.
 11. **Safari specifically** (iPhone and Mac): confirm the account survives closing and reopening the browser (device-id cookie), that Private Browsing behaves as a new visitor per tab (expected — site data is blocked), that the legal overlay loads (it is blocked only if *your* CSP's `frame-src` excludes `sdk.avafli.com`), and that the software keyboard never hides VERIFY / submit buttons on the code and claim screens.
 13. **Winner flow:** once a draw has been run against your sandbox giveaway, reload the winner's browser: splash → code → form → confirmation. Close the drawer and reload — it must reopen on the splash.
-12. **CSP:** with your production policy applied, open the drawer and the Privacy Policy and check the console for blocked fonts, images, frames or `connect-src` — [section 9](#9-content-security-policy).
+12. **CSP:** with your production policy applied, open the drawer and the Privacy Policy and check the console for blocked fonts, images, frames or `connect-src` — [section 9](#8-content-security-policy).
 
-## 8. Analytics
+## 7. Analytics
 
 Pass a plain object with `track` and `identify` in `options.analyticsAdapter`. The TypeScript interface is `AnalyticsAdapter`.
 
@@ -317,13 +296,13 @@ Events (all strings; `properties` is a plain object or `undefined`):
 
 | Event | When | Notable properties |
 | --- | --- | --- |
-| `avafli_device_registered` | `configure()` registered the browser. **Not delivered on the `configure()` call that installs your adapter** — it fires before the adapter is attached, so you only see it on a later re-configure (guest → user) or an offline registration retry | `isReturningUser` (known under another publisher), `giveawayId` |
+| `avafli_device_registered` | `configure()` registered the browser — the first event your adapter receives, on the very `configure()` that installs it (3.3.1; earlier builds attached the adapter after registration and lost it) | `isReturningUser` (known under another publisher), `giveawayId` |
 | `avafli_modal_presented` | The drawer opened (auto-open or `present()`) | `giveawayId` |
 | `avafli_email_captured` | The capture form was submitted | — |
 | `avafli_adoption_verified` | The cross-device 6-digit code was accepted | — |
 | `avafli_email_verified` | The soft-verification chip's code was accepted | — |
 | `avafli_daily_entry_claimed` | Today's entries were granted | `day`, `entries`; `recovered_offline: true` when a queued retry landed it |
-| `avafli_modal_dismissed` | Your code called `Avafli.dismiss()`. Not emitted when the visitor closes the drawer (GOT IT, the X, the backdrop) | — |
+| `avafli_modal_dismissed` | The drawer closed, on every path, exactly once per dismissal (3.3.1; earlier builds emitted it only for `Avafli.dismiss()`) | `reason`: `'user'` (the visitor — X, GOT IT, CLOSE, the backdrop, Escape), `'host'` (`Avafli.dismiss()`), `'deleted'` (the SDK closed it after an in-drawer deletion) |
 | `avafli_winner_claim_shown` | The winner splash was shown | — |
 | `avafli_claim_email_verified` | The winner's claim-time code was accepted | — |
 | `avafli_prize_claim_submitted` | The claim form was submitted | — |
@@ -331,7 +310,7 @@ Events (all strings; `properties` is a plain object or `undefined`):
 
 `identify(user.id, { firstName, lastName })` is called once per `configure()`. Events emitted while offline are buffered (last 100, persisted) and flushed with `original_timestamp` / `original_timestamp_ms` when the browser is back online.
 
-## 9. Content Security Policy
+## 8. Content Security Policy
 
 If your site sends a CSP, allow these — otherwise the SDK fails silently at the blocked step:
 
@@ -348,7 +327,7 @@ If your site sends a CSP, allow these — otherwise the SDK fails silently at th
 
 The delete bridge inside the privacy page only accepts `postMessage` events whose origin is exactly `https://sdk.avafli.com` and whose data is `{ type: 'avafli-delete' }` (or the legacy `winr-delete`), and only while the overlay is open.
 
-## 10. Frameworks, SSR and Next.js
+## 9. Frameworks, SSR and Next.js
 
 - **Importing is side-effect free** on the server: the module touches `window`/`document` only inside guarded code. **Calling `configure()` is not** — it would register from Node (`fetch` exists there). Call it from browser-only code: a `useEffect`, a `'use client'` component, `onMounted`, or a script tag.
 - Call `configure()` **once per page load**, not per route change. In a SPA it stays configured across client-side navigation; the auto-open re-checks on tab focus, not on route change.
@@ -371,7 +350,7 @@ export function AvafliLoader({ user }: { user?: { id: string; email?: string } }
 }
 ```
 
-## 11. Self-hosting the bundle and its assets
+## 10. Self-hosting the bundle and its assets
 
 **The bundle.** Build from this repo and serve the output yourself (pins a version, keeps third-party script off your page):
 
@@ -396,7 +375,7 @@ await Avafli.configure({
 
 A trailing slash is ignored; blank falls back to the Avafli host. The file list for the version you run is `src/ui/v2/assets.generated.ts`.
 
-## 12. Networking and offline behaviour
+## 11. Networking and offline behaviour
 
 Every call is a Firebase callable function on `https://us-central1-winr-9c11f.cloudfunctions.net` with a 10 s timeout. Nothing to configure:
 
@@ -405,7 +384,7 @@ Every call is a Firebase callable function on `https://us-central1-winr-9c11f.cl
 - **Backend rejections** (a callable error body: already entered today, consent required, geo-blocked, rate limit, code cooldown): surfaced at once, never retried. The error's `details` (`reason`, `retryAfterSeconds`, `attemptsRemaining`, …) is on `AvafliError.details`.
 - **401:** one token refresh, then one retry. Concurrent callers share a single refresh.
 
-## 13. API reference
+## 12. API reference
 
 All methods are `static` on the `Avafli` class. In the script-tag build the global `Avafli` *is* this class.
 
@@ -414,14 +393,13 @@ All methods are `static` on the `Avafli` class. In the script-tag build the glob
 | `configure` | `(config: AvafliConfiguration) => Promise<void>` | [Section 3](#3-configure). Rejects with `AvafliError` |
 | `present` | `() => Promise<boolean>` | Open now. `false` when there is nothing to show |
 | `holdAutoOpen` / `releaseAutoOpen` | `() => void` | Defer / resume the once-a-day auto-open. Safe before `configure()` |
-| `dismiss` | `() => void` | Close the drawer |
-| `optOut` | `() => Promise<void>` | Right-to-delete; throws if the backend did not confirm. [Section 6](#6-account-deletion-and-the-24-hour-rejoin) |
+| `dismiss` | `() => void` | Close the drawer (`avafli_modal_dismissed` with `reason: 'host'`) |
 | `isAvailable` | `boolean` (getter) | `false` until configured, and whenever the account/key is suspended or revoked |
 | `unavailableReason` | `AvafliError \| null` (getter) | The `service_unavailable` error when suspended, else `null` |
 | `refreshConfig` | `() => Promise<void>` | Re-fetch the dashboard config (branding, flags) without reopening. Rejects with `network_error` on failure |
-| `registerForPushNotifications` | `() => Promise<void>` | Logged no-op on the web in 3.3.0 (needs `enablePushReminders` and, in a future build, VAPID + a service worker) |
+| `registerForPushNotifications` | `() => Promise<void>` | Logged no-op on the web in 3.3.1 (needs `enablePushReminders` and, in a future build, VAPID + a service worker) |
 
-`Avafli.getAPI()`, `Avafli.submitEmailAndAdopt()` and `Avafli.getResolvedSDKConfig()` are also public on the class; they exist for the drawer's own code and are not a stable host-page API.
+There is no deletion method: visitors delete their own data from the Privacy Policy screen inside the experience ([section 4](#4-what-the-visitor-sees)); `Avafli.optOut()` was removed in 3.3.1. `Avafli.getAPI()`, `Avafli.submitEmailAndAdopt()` and `Avafli.getResolvedSDKConfig()` exist on the class for the drawer's own code only; since 3.3.1 they are stripped from the published typings and are not a host-page API.
 
 ### Other exports
 
@@ -429,17 +407,17 @@ All methods are `static` on the `Avafli` class. In the script-tag build the glob
 | --- | --- | --- |
 | `AvafliError` | class | `code: AvafliErrorCode`, `message`, `originalError?`, `httpStatus?`, `details?`; `error.name === 'AvafliError'` |
 | `AvafliErrorCode` | enum | `not_configured`, `invalid_state`, `authentication_required`, `network_error`, `ineligible_today`, `giveaway_not_active`, `invalid_email`, `age_verification_required`, `rewarded_video_unavailable`, `invalid_configuration`, `service_unavailable` |
-| `AVAFLI_CONSTANTS` | object | `SDK_VERSION` (`'3.3.0'`, always equal to the package version), `PLATFORM_OS`, `PRIVACY_URL`, `DEFAULT_STREAK_LADDER`, `STORAGE_KEYS` |
+| `AVAFLI_CONSTANTS` | object | `SDK_VERSION` (`'3.3.1'`, always equal to the package version), `PLATFORM_OS`, `PRIVACY_URL`, `DEFAULT_STREAK_LADDER`, `STORAGE_KEYS` |
 | `AvafliConfiguration`, `AvafliOptions`, `AvafliUser`, `AvafliBranding`, `AvafliAutoOpen` | types | The `configure()` input |
 | `AnalyticsAdapter` (alias `AnalyticsAdapterInterface`) | type | Your adapter |
-| `Giveaway`, `GiveawayWinner`, `StreakState`, `MilestoneConfig`, `MilestoneAward`, `DailyEntryGrant`, `AdConfig`, `SDKConfig`, `ExperienceConfig`, `Theme`, `StorageProvider`, `Logger` | types | Payload shapes, for publishers reading `getAPI()` responses |
+| `Giveaway`, `GiveawayWinner`, `StreakState`, `MilestoneConfig`, `MilestoneAward`, `DailyEntryGrant`, `AdConfig`, `SDKConfig`, `ExperienceConfig`, `Theme`, `StorageProvider`, `Logger` | types | Payload shapes (the giveaway your analytics events refer to, `AvafliError.details`, the streak state) |
 | `StreakEngine`, `NetworkClient`, `LocalStorageProvider`, `SessionStorageProvider`, `createTheme` | classes / function | Internals exported for advanced use; the drawer does not depend on you using them |
 
 In the UMD build these are attached to the global: `Avafli.AvafliError`, `Avafli.AvafliErrorCode`, `Avafli.AVAFLI_CONSTANTS`, `Avafli.StreakEngine`, `Avafli.LocalStorageProvider`, `Avafli.SessionStorageProvider`, `Avafli.NetworkClient`, `Avafli.createTheme` (and `Avafli.Avafli` / `Avafli.default` for compatibility).
 
-## 14. Demo page
+## 13. Demo page
 
-[`example/index.html`](example/index.html) is a self-contained page with a mock backend (it intercepts the SDK's `fetch` calls, so no key is needed). It exercises the auto-open, email capture, the day-1 "YOU'RE IN!" dashboard, the day-2+ celebration, `autoOpen` modes with an "Open now" button (`Avafli.present()`), "Delete my data" (`Avafli.optOut()` and the 24-hour block), streak modes, the winner banner and the responsive drawer/modal split, and logs every analytics event.
+[`example/index.html`](example/index.html) is a self-contained page with a mock backend (it intercepts the SDK's `fetch` calls, so no key is needed). It exercises the auto-open, email capture, the day-1 "YOU'RE IN!" dashboard, the day-2+ celebration, `autoOpen` modes with an "Open now" button (`Avafli.present()`), the in-drawer "Delete my data" (Privacy Policy → delete; the mock backend honours the 24-hour block), streak modes, the winner banner and the responsive drawer/modal split, and logs every analytics event.
 
 ```bash
 npm install
@@ -448,7 +426,7 @@ npm run demo        # serves the repo at http://localhost:8787
 # open http://localhost:8787/example/
 ```
 
-## 15. Links
+## 14. Links
 
 - **Publisher dashboard (keys, Bundle IDs, giveaways, branding):** [sdk.avafli.com/dashboard](https://sdk.avafli.com/dashboard)
 - **Web integration guide:** [sdk.avafli.com/web](https://sdk.avafli.com/web)

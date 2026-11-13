@@ -59,9 +59,8 @@
     <button id="presentBtn">Open now — Avafli.present()</button>
     <button id="replayBtn" class="secondary">Replay auto-open (same day)</button>
     <button id="nextDayBtn" class="secondary">Simulate next day &amp; reload (auto-open again)</button>
-    <button id="optOutBtn" class="danger">Delete my data — Avafli.optOut()</button>
     <button id="resetBtn" class="danger">Reset user (fresh install) &amp; reload</button>
-    <p class="hint">By default the experience auto-opens once a day; a publisher can narrow that with <code>autoOpen</code> and open it themselves with <code>Avafli.present()</code> (which bypasses the once-per-day mark — try it after the auto-open closed). "Replay auto-open" clears today's once-per-day mark and reloads so the auto-open engine fires again (same streak day). "Simulate next day" also clears the mock claim, so the SDK auto-opens and auto-claims the next streak day. "Delete my data" calls the right-to-delete; afterwards <code>present()</code> resolves <code>false</code> for 24 hours (the mock backend reports the block). "Reset user" clears everything (email consent, streak, impression cap, opt-out, device-id cookie).</p>
+    <p class="hint">By default the experience auto-opens once a day; a publisher can narrow that with <code>autoOpen</code> and open it themselves with <code>Avafli.present()</code> (which bypasses the once-per-day mark — try it after the auto-open closed). "Replay auto-open" clears today's once-per-day mark and reloads so the auto-open engine fires again (same streak day). "Simulate next day" also clears the mock claim, so the SDK auto-opens and auto-claims the next streak day. "Delete my data" is self-serve inside the drawer (Privacy Policy &rarr; Delete my data &amp; stop participating &rarr; confirm) — there is no host-page call; afterwards <code>present()</code> resolves <code>false</code> for 24 hours (the mock backend reports the block). "Reset user" clears everything (email consent, streak, impression cap, opt-out, device-id cookie).</p>
   </div>
 
   <div class="card">
@@ -158,7 +157,9 @@ const sdkConfig = () => ({
 });
 
 // "Delete my data" block: 24 hours in the real backend; the mock honours the
-// same optedOutUntil contract so the SDK's rejoin logic can be watched.
+// same optedOutUntil contract so the SDK's rejoin logic can be watched. The
+// only way to reach /optOut is the drawer's own Privacy Policy screen (3.3.1:
+// there is no Avafli.optOut() for the host page).
 const optedOut = () => !!state.optedOutUntil && Date.parse(state.optedOutUntil) > Date.now();
 
 const fakeJwt = () => {
@@ -251,15 +252,6 @@ Avafli.configure({
 document.getElementById('presentBtn').addEventListener('click', async () => {
   const shown = await Avafli.present();
   log('Avafli.present() →', shown, shown ? '(closed by the visitor)' : '(nothing to show: opted out / no giveaway / not configured)');
-});
-
-document.getElementById('optOutBtn').addEventListener('click', async () => {
-  try {
-    await Avafli.optOut();
-    log('Avafli.optOut() → confirmed; the experience stays silent for 24 hours');
-  } catch (e) {
-    log('Avafli.optOut() failed (nothing changed locally):', e.message);
-  }
 });
 
 // Replay = clear the SDK's once-per-day auto-open mark, then reload. On load,

@@ -1,6 +1,7 @@
 import { DailyEntryGrant, PresentationOptions } from '../../types';
 import { logger } from '../../services/logger';
-import { V2ExperienceController, V2State } from './controller';
+import { analyticsAdapter } from '../../services/analytics';
+import { DismissReason, V2ExperienceController, V2State } from './controller';
 import {
   renderCapture,
   renderCodeEntry,
@@ -64,7 +65,7 @@ export class AvafliV2Experience {
       this.mount(container);
 
       this.controller.onChange = (state) => this.renderState(state);
-      this.controller.onDismissRequest = () => this.dismiss();
+      this.controller.onDismissRequest = (reason) => this.dismiss(reason ?? 'user');
       this.controller.onComplete = (grant) => {
         this.lastGrant = grant;
         this.options.onComplete?.(grant);
@@ -88,9 +89,18 @@ export class AvafliV2Experience {
     });
   }
 
-  public dismiss(): void {
+  /**
+   * Tear the experience down. Every dismissal path funnels through here —
+   * the controller's X / GOT IT / RETURN TO APP (`'user'`), the backdrop and
+   * Escape (`'user'`), the empty / geo-blocked close buttons (`'user'`), the
+   * post-deletion auto-close (`'deleted'`) and `Avafli.dismiss()` (`'host'`)
+   * — and `avafli_modal_dismissed` is emitted here, exactly once: the guard
+   * below makes a second call on a closing drawer a no-op.
+   */
+  public dismiss(reason: DismissReason = 'user'): void {
     if (!this.host || !this.overlay) return;
-    logger.debug('Dismissing Avafli V2 experience');
+    logger.debug('Dismissing Avafli V2 experience', { reason });
+    analyticsAdapter.track('avafli_modal_dismissed', { reason });
     // A pending Day 2+ auto-reveal must not fire against a torn-down DOM.
     this.controller.cancelAutoReveal();
     // 2.9: a story typed on the post-submit share step is never lost — every

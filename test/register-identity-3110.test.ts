@@ -224,9 +224,15 @@ describe('3.1.10 register-time identity + email gate', () => {
     await configureSDK();
     expect(sessionStorage.getItem(AVAFLI_CONSTANTS.STORAGE_KEYS.UUID)).toBe('shell-1');
     await vi.waitFor(() => expect(host()).not.toBeNull());
-    // The parked link routes the open to the code screen.
+    // The parked link routes the open to the code screen. Drawers left by the
+    // earlier tests mount late (lazy UI import, after beforeEach's removal)
+    // and sit first in document order, so find the code screen across every
+    // mounted drawer rather than trusting the first host.
     const input = await vi.waitFor(() => {
-      const i = host()!.shadowRoot!.querySelector('input.wv2-code-input') as HTMLInputElement | null;
+      const i =
+        Array.from(document.querySelectorAll('[data-winr="v2"]'))
+          .map((h) => h.shadowRoot?.querySelector('input.wv2-code-input') as HTMLInputElement | null)
+          .find((el) => !!el) ?? null;
       expect(i).not.toBeNull();
       return i!;
     });

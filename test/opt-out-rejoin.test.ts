@@ -421,14 +421,21 @@ describe('3.2.0 rejoin 24 hours after "Delete my data"', () => {
     expect(host()).toBeNull();
   });
 
-  it("optOut() stores when the block lifts: the server's time, else the call's moment + 24 hours", async () => {
+  it("the in-drawer deletion stores when the block lifts: the server's time, else the call's moment + 24 hours", async () => {
     const bundle = 'com.rejoin.optout';
     localStorage.setItem(markKey(bundle), '2026-09-29'); // keep the drawer closed
     await configureSDK(bundle);
     const Avafli = await sdk();
+    // 3.3.1: there is no public optOut() any more — the erasure is reached
+    // only through the drawer's "Delete my data" (the legal overlay's delete
+    // bridge → confirmOptOut → this internal), so the test calls the internal
+    // the controller is wired to.
+    expect((Avafli as unknown as Record<string, unknown>)['optOut']).toBeUndefined();
+    const deleteFromDrawer = (Avafli as unknown as { optOutFromExperience: () => Promise<void> })
+      .optOutFromExperience;
 
     optOutAnswer = { success: true, optedOut: true, optedOutUntil: iso(NOW + DAY + 1234) };
-    await Avafli.optOut();
+    await deleteFromDrawer();
     expect(localStorage.getItem(optedOutKey(bundle))).toBe('true');
     expect(localStorage.getItem(untilKey(bundle))).toBe(iso(NOW + DAY + 1234));
     await expect(Avafli.present()).resolves.toBe(false);
@@ -436,7 +443,7 @@ describe('3.2.0 rejoin 24 hours after "Delete my data"', () => {
     // An older backend answers without the time.
     localStorage.removeItem(untilKey(bundle));
     optOutAnswer = { success: true };
-    await Avafli.optOut();
+    await deleteFromDrawer();
     expect(localStorage.getItem(untilKey(bundle))).toBe(iso(NOW + DAY));
   });
 
